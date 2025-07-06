@@ -21,7 +21,7 @@ export async function GET() {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { name, email, password, role = 'super_admin' } = body;
+    const { name, email, password } = body;
 
     // Validate required fields
     if (!name || !email || !password) {
@@ -49,11 +49,12 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Always create as super_admin role
     const user = await SuperAdminService.createSuperAdminUser({
       name,
       email,
       password,
-      role
+      role: 'super_admin'
     });
 
     // Remove password from response

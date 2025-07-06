@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { 
   Users, 
   Plus, 
@@ -21,7 +21,10 @@ import {
   Shield,
   AlertTriangle,
   CheckCircle,
-  XCircle
+  XCircle,
+  Key,
+  Eye,
+  EyeOff
 } from "lucide-react";
 import type { SuperAdminUser } from '@/lib/types';
 
@@ -33,11 +36,21 @@ export default function UserManagement() {
   const [isCreating, setIsCreating] = useState(false);
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [deletingUserId, setDeletingUserId] = useState<string | null>(null);
+  const [showPasswordDialog, setShowPasswordDialog] = useState(false);
+  const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
+  const [isChangingPassword, setIsChangingPassword] = useState(false);
+  const [showCurrentPassword, setShowCurrentPassword] = useState(false);
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [formData, setFormData] = useState({
     name: '',
     email: '',
-    password: '',
-    role: 'super_admin' as 'super_admin' | 'support'
+    password: ''
+  });
+  const [passwordData, setPasswordData] = useState({
+    currentPassword: '',
+    newPassword: '',
+    confirmPassword: ''
   });
 
   useEffect(() => {
@@ -94,8 +107,7 @@ export default function UserManagement() {
         setFormData({
           name: '',
           email: '',
-          password: '',
-          role: 'super_admin'
+          password: ''
         });
       } else {
         setError(result.error || 'Failed to create user');
@@ -159,6 +171,79 @@ export default function UserManagement() {
     }
   };
 
+  const handleChangePassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsChangingPassword(true);
+    setError(null);
+
+    // Validate passwords match
+    if (passwordData.newPassword !== passwordData.confirmPassword) {
+      setError('New passwords do not match');
+      setIsChangingPassword(false);
+      return;
+    }
+
+    // Validate password strength
+    if (passwordData.newPassword.length < 8) {
+      setError('New password must be at least 8 characters long');
+      setIsChangingPassword(false);
+      return;
+    }
+
+    if (passwordData.currentPassword === passwordData.newPassword) {
+      setError('New password must be different from current password');
+      setIsChangingPassword(false);
+      return;
+    }
+
+    try {
+      const response = await fetch(`/api/super-admin/users/${selectedUserId}/change-password`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          currentPassword: passwordData.currentPassword,
+          newPassword: passwordData.newPassword,
+        }),
+      });
+
+      const result = await response.json();
+
+      if (result.success) {
+        setShowPasswordDialog(false);
+        setSuccessMessage('Password changed successfully');
+        setTimeout(() => setSuccessMessage(null), 5000);
+        
+        // Reset form
+        setPasswordData({
+          currentPassword: '',
+          newPassword: '',
+          confirmPassword: ''
+        });
+        setSelectedUserId(null);
+      } else {
+        setError(result.error || 'Failed to change password');
+      }
+    } catch (err) {
+      setError('Failed to change password');
+      console.error('Error changing password:', err);
+    } finally {
+      setIsChangingPassword(false);
+    }
+  };
+
+  const openPasswordDialog = (userId: string) => {
+    setSelectedUserId(userId);
+    setShowPasswordDialog(true);
+    setError(null);
+    setPasswordData({
+      currentPassword: '',
+      newPassword: '',
+      confirmPassword: ''
+    });
+  };
+
   const generatePassword = () => {
     const length = 12;
     const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*";
@@ -167,14 +252,6 @@ export default function UserManagement() {
       password += charset.charAt(Math.floor(Math.random() * charset.length));
     }
     return password;
-  };
-
-  const getRoleColor = (role: string) => {
-    switch (role) {
-      case 'super_admin': return 'bg-purple-100 text-purple-800';
-      case 'support': return 'bg-blue-100 text-blue-800';
-      default: return 'bg-gray-100 text-gray-800';
-    }
   };
 
   const getStatusColor = (active: boolean) => {
@@ -216,7 +293,7 @@ export default function UserManagement() {
             <DialogHeader>
               <DialogTitle>Create New Super Admin User</DialogTitle>
               <DialogDescription>
-                Add a new user who can manage the entire platform. Maximum 3 users allowed.
+                Add a new super admin user who can manage the entire platform. Maximum 3 users allowed.
               </DialogDescription>
             </DialogHeader>
             <form onSubmit={handleCreateUser} className="space-y-4">
@@ -245,19 +322,6 @@ export default function UserManagement() {
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="role">Role</Label>
-                  <Select value={formData.role} onValueChange={(value: 'super_admin' | 'support') => setFormData(prev => ({ ...prev, role: value }))}>
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="super_admin">Super Admin (Full Access)</SelectItem>
-                      <SelectItem value="support">Support (Limited Access)</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div className="space-y-2">
                   <Label htmlFor="password">Password</Label>
                   <div className="flex space-x-2">
                     <Input
@@ -277,7 +341,7 @@ export default function UserManagement() {
                     </Button>
                   </div>
                   <p className="text-xs text-muted-foreground">
-                    Use a strong password for security. Share credentials securely with the new user.
+                    All users have full super admin access. Use a strong password for security.
                   </p>
                 </div>
               </div>
@@ -381,8 +445,8 @@ export default function UserManagement() {
                 <div className="space-y-2">
                   <div className="flex items-center space-x-2 text-sm text-muted-foreground">
                     <Shield className="h-4 w-4" />
-                    <Badge className={getRoleColor(user.role)}>
-                      {user.role === 'super_admin' ? 'Super Admin' : 'Support'}
+                    <Badge className="bg-purple-100 text-purple-800">
+                      Super Admin
                     </Badge>
                   </div>
                   <div className="flex items-center space-x-2 text-sm text-muted-foreground">
@@ -393,9 +457,22 @@ export default function UserManagement() {
 
                 <div className="flex justify-between items-center pt-4 border-t">
                   <div className="flex space-x-2">
-                    <Button variant="outline" size="sm">
-                      <Edit className="h-4 w-4" />
-                    </Button>
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button 
+                            variant="outline" 
+                            size="sm"
+                            onClick={() => openPasswordDialog(user.id)}
+                          >
+                            <Key className="h-4 w-4" />
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          <p>Change Password</p>
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
                     <AlertDialog>
                       <AlertDialogTrigger asChild>
                         <Button 
@@ -491,6 +568,148 @@ export default function UserManagement() {
           </div>
         </CardContent>
       </Card>
-    </div>
+
+      {/* Change Password Dialog */}
+      <Dialog open={showPasswordDialog} onOpenChange={setShowPasswordDialog}>
+        <DialogContent className="sm:max-w-[400px]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center space-x-2">
+              <Key className="h-5 w-5 text-blue-600" />
+              <span>Change Password</span>
+            </DialogTitle>
+            <DialogDescription>
+              Update your password for enhanced security.
+            </DialogDescription>
+          </DialogHeader>
+          
+          <form onSubmit={handleChangePassword} className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="currentPassword">Current Password *</Label>
+              <div className="relative">
+                <Input
+                  id="currentPassword"
+                  type={showCurrentPassword ? "text" : "password"}
+                  value={passwordData.currentPassword}
+                  onChange={(e) => setPasswordData(prev => ({ ...prev, currentPassword: e.target.value }))}
+                  placeholder="Enter current password"
+                  required
+                  className="pr-10"
+                />
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
+                  onClick={() => setShowCurrentPassword(!showCurrentPassword)}
+                >
+                  {showCurrentPassword ? (
+                    <EyeOff className="h-4 w-4" />
+                  ) : (
+                    <Eye className="h-4 w-4" />
+                  )}
+                </Button>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="newPassword">New Password *</Label>
+              <div className="relative">
+                <Input
+                  id="newPassword"
+                  type={showNewPassword ? "text" : "password"}
+                  value={passwordData.newPassword}
+                  onChange={(e) => setPasswordData(prev => ({ ...prev, newPassword: e.target.value }))}
+                  placeholder="Enter new password (min 8 characters)"
+                  required
+                  minLength={8}
+                  className="pr-10"
+                />
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
+                    onClick={() => setShowNewPassword(!showNewPassword)}
+                  >
+                    {showNewPassword ? (
+                      <EyeOff className="h-4 w-4" />
+                    ) : (
+                      <Eye className="h-4 w-4" />
+                    )}
+                  </Button>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="confirmPassword">Confirm New Password *</Label>
+                <div className="relative">
+                  <Input
+                    id="confirmPassword"
+                    type={showConfirmPassword ? "text" : "password"}
+                    value={passwordData.confirmPassword}
+                    onChange={(e) => setPasswordData(prev => ({ ...prev, confirmPassword: e.target.value }))}
+                    placeholder="Confirm new password"
+                    required
+                    className="pr-10"
+                  />
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
+                    onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                  >
+                    {showConfirmPassword ? (
+                      <EyeOff className="h-4 w-4" />
+                    ) : (
+                      <Eye className="h-4 w-4" />
+                    )}
+                  </Button>
+                </div>
+                {passwordData.newPassword && passwordData.confirmPassword && 
+                 passwordData.newPassword !== passwordData.confirmPassword && (
+                  <p className="text-sm text-red-600">Passwords do not match</p>
+                )}
+              </div>
+
+              {/* Password Requirements */}
+              <div className="bg-blue-50 p-3 rounded-md border border-blue-200">
+                <p className="text-sm font-medium text-blue-800 mb-1">Password Requirements:</p>
+                <ul className="text-xs text-blue-700 space-y-1">
+                  <li>• At least 8 characters long</li>
+                  <li>• Different from current password</li>
+                  <li>• Use a strong, unique password</li>
+                </ul>
+              </div>
+
+              <div className="flex space-x-2 pt-4">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setShowPasswordDialog(false)}
+                  className="flex-1"
+                  disabled={isChangingPassword}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="submit"
+                  disabled={isChangingPassword || !passwordData.currentPassword || !passwordData.newPassword || !passwordData.confirmPassword}
+                  className="flex-1"
+                >
+                  {isChangingPassword ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Changing...
+                    </>
+                  ) : (
+                    'Change Password'
+                  )}
+                </Button>
+              </div>
+            </form>
+          </DialogContent>
+        </Dialog>
+      </div>
   );
 }

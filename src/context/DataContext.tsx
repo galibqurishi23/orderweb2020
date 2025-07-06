@@ -11,7 +11,7 @@ import * as PrinterService from '@/lib/printer-service';
 import * as SettingsService from '@/lib/settings-service';
 import * as CustomerService from '@/lib/customer-service';
 import * as OrderService from '@/lib/order-service';
-import { defaultRestaurantData } from '@/data/mockData'; // For initial default before DB loads
+import { defaultRestaurantSettings } from '@/default-setting/defaultRestaurantSettings'; // For initial default before DB loads
 import { initializeDatabase } from '@/lib/db-init';
 
 
@@ -62,7 +62,7 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
     const [categories, setCategories] = useState<Category[]>([]);
     const [deliveryZones, setDeliveryZones] = useState<DeliveryZone[]>([]);
     const [printers, setPrinters] = useState<Printer[]>([]);
-    const [restaurantSettings, setRestaurantSettings] = useState<RestaurantSettings>(defaultRestaurantData);
+    const [restaurantSettings, setRestaurantSettings] = useState<RestaurantSettings>(defaultRestaurantSettings);
     const [vouchers, setVouchers] = useState<Voucher[]>([]);
     const [customers, setCustomers] = useState<Customer[]>([]);
     const [currentUser, setCurrentUser] = useState<Customer | null>(null);
@@ -94,25 +94,25 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
             if (dbSettings) {
                 // Ensure payment settings are properly merged with defaults
                const mergedSettings = {
-                   ...defaultRestaurantData,
+                   ...defaultRestaurantSettings,
                    ...dbSettings,
                    paymentSettings: {
-                       ...defaultRestaurantData.paymentSettings,
+                       ...defaultRestaurantSettings.paymentSettings,
                        ...(dbSettings.paymentSettings || {}),
                        cash: {
-                           ...defaultRestaurantData.paymentSettings.cash,
+                           ...defaultRestaurantSettings.paymentSettings.cash,
                            ...(dbSettings.paymentSettings?.cash || {}),
                        },
                        stripe: {
-                           ...defaultRestaurantData.paymentSettings.stripe,
+                           ...defaultRestaurantSettings.paymentSettings.stripe,
                            ...(dbSettings.paymentSettings?.stripe || {}),
                        },
                        globalPayments: {
-                           ...defaultRestaurantData.paymentSettings.globalPayments,
+                           ...defaultRestaurantSettings.paymentSettings.globalPayments,
                            ...(dbSettings.paymentSettings?.globalPayments || {}),
                        },
                        worldpay: {
-                           ...defaultRestaurantData.paymentSettings.worldpay,
+                           ...defaultRestaurantSettings.paymentSettings.worldpay,
                            ...(dbSettings.paymentSettings?.worldpay || {}),
                        },
                    },
@@ -120,7 +120,7 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
                setRestaurantSettings(mergedSettings);
            } else {
                // If no settings in DB, use the default settings
-               setRestaurantSettings(defaultRestaurantData);
+               setRestaurantSettings(defaultRestaurantSettings);
            }
             setCustomers(dbCustomers);
             setOrders(dbOrders);

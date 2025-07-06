@@ -33,20 +33,23 @@ export default function TenantAdminLayout({
   const pathname = usePathname();
   const { tenantData, isLoading } = useTenant();
   
+  // Extract tenant from pathname to avoid async params issue
+  const tenant = pathname.split('/')[1];
+  
   // Navigation items with tenant-aware paths
   const navItems = [
-    { href: `/${params.tenant}/admin/dashboard`, icon: LayoutDashboard, label: 'Dashboard' },
-    { href: `/${params.tenant}/admin/orders`, icon: ShoppingBag, label: 'All Orders' },
-    { href: `/${params.tenant}/admin/advance-orders`, icon: Clock, label: 'Advance Orders' },
-    { href: `/${params.tenant}/admin/menu`, icon: ChefHat, label: 'Menu' },
-    { href: `/${params.tenant}/admin/vouchers`, icon: Tag, label: 'Vouchers' },
-    { href: `/${params.tenant}/admin/zones`, icon: MapPin, label: 'Order Zones' },
-    { href: `/${params.tenant}/admin/printers`, icon: Printer, label: 'Printers' },
-    { href: `/${params.tenant}/admin/payments`, icon: CreditCard, label: 'Payments' },
-    { href: `/${params.tenant}/admin/allergens`, icon: Wheat, label: 'Allergen Icons' },
-    { href: `/${params.tenant}/admin/connect-pos`, icon: Network, label: 'Connect POS' },
-    { href: `/${params.tenant}/admin/reports`, icon: BarChart3, label: 'Reports' },
-    { href: `/${params.tenant}/admin/settings`, icon: Settings, label: 'Settings' }
+    { href: `/${tenant}/admin/dashboard`, icon: LayoutDashboard, label: 'Dashboard' },
+    { href: `/${tenant}/admin/orders`, icon: ShoppingBag, label: 'All Orders' },
+    { href: `/${tenant}/admin/advance-orders`, icon: Clock, label: 'Advance Orders' },
+    { href: `/${tenant}/admin/menu`, icon: ChefHat, label: 'Menu' },
+    { href: `/${tenant}/admin/vouchers`, icon: Tag, label: 'Vouchers' },
+    { href: `/${tenant}/admin/zones`, icon: MapPin, label: 'Order Zones' },
+    { href: `/${tenant}/admin/printers`, icon: Printer, label: 'Printers' },
+    { href: `/${tenant}/admin/payments`, icon: CreditCard, label: 'Payments' },
+    { href: `/${tenant}/admin/allergens`, icon: Wheat, label: 'Allergen Icons' },
+    { href: `/${tenant}/admin/connect-pos`, icon: Network, label: 'Connect POS' },
+    { href: `/${tenant}/admin/reports`, icon: BarChart3, label: 'Reports' },
+    { href: `/${tenant}/admin/settings`, icon: Settings, label: 'Settings' }
   ];
 
   if (isLoading) {
@@ -65,7 +68,7 @@ export default function TenantAdminLayout({
       <div className="flex h-screen bg-background items-center justify-center">
         <div className="text-center">
           <h1 className="text-2xl font-bold text-red-600 mb-2">Restaurant Not Found</h1>
-          <p className="text-gray-600">The restaurant "{params.tenant}" does not exist.</p>
+          <p className="text-gray-600">The restaurant "{tenant}" does not exist.</p>
           <Link href="/super-admin" className="text-blue-600 hover:underline mt-4 inline-block">
             Go to Super Admin
           </Link>
@@ -74,7 +77,7 @@ export default function TenantAdminLayout({
     );
   }
 
-  if (pathname === `/${params.tenant}/admin`) {
+  if (pathname === `/${tenant}/admin`) {
     return <>{children}</>;
   }
 
@@ -102,7 +105,7 @@ export default function TenantAdminLayout({
           {/* Quick links */}
           <div className="flex space-x-2 w-full">
             <Link
-              href={`/${params.tenant}`}
+              href={`/${tenant}`}
               target="_blank"
               className="flex-1 text-center text-xs text-blue-600 hover:text-blue-800 bg-blue-50 hover:bg-blue-100 px-2 py-1 rounded transition-colors"
             >
@@ -118,7 +121,7 @@ export default function TenantAdminLayout({
           
           {/* Logout button */}
           <Link
-            href={`/${params.tenant}/admin`}
+            href={`/${tenant}/admin`}
             className="flex items-center space-x-2 text-foreground hover:text-destructive transition-colors px-4 py-2 rounded-md border border-border bg-card shadow mt-2 w-full justify-center"
           >
             <LogOut className="w-4 h-4" />

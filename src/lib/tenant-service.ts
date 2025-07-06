@@ -459,6 +459,49 @@ export class SuperAdminService {
       throw error;
     }
   }
+
+  // Change super admin user password
+  static async changeSuperAdminUserPassword(
+    userId: string, 
+    currentPassword: string, 
+    newPassword: string
+  ): Promise<void> {
+    try {
+      // First, get the user and verify current password
+      const [rows] = await pool.execute(
+        'SELECT id, password FROM super_admin_users WHERE id = ? AND active = TRUE',
+        [userId]
+      );
+      const users = rows as { id: string; password: string }[];
+      
+      if (users.length === 0) {
+        throw new Error('User not found or inactive');
+      }
+      
+      const user = users[0];
+      if (!user.password) {
+        throw new Error('User has no password set');
+      }
+      
+      // Verify current password
+      const isValidPassword = await bcrypt.compare(currentPassword, user.password);
+      if (!isValidPassword) {
+        throw new Error('Invalid current password');
+      }
+      
+      // Hash new password
+      const hashedNewPassword = await bcrypt.hash(newPassword, 10);
+      
+      // Update password
+      await pool.execute(
+        'UPDATE super_admin_users SET password = ?, updated_at = NOW() WHERE id = ?',
+        [hashedNewPassword, userId]
+      );
+    } catch (error) {
+      console.error('Error changing super admin user password:', error);
+      throw error;
+    }
+  }
 }
 
 // Tenant User Management

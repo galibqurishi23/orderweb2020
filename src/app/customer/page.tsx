@@ -51,7 +51,6 @@ import { Calendar } from '@/components/ui/calendar';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { format } from 'date-fns';
 import { Badge } from '@/components/ui/badge';
-import { characteristics as characteristicsList } from '@/data/characteristicsData';
 import { getIconComponent } from '@/lib/custom-icons-service';
 import {
   Tooltip,
@@ -59,7 +58,6 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
-import { CharacteristicsReference } from '@/components/CharacteristicsReference';
 
 
 function MenuNav({ menuData }: { menuData: { category: Category }[] }) {
@@ -167,8 +165,7 @@ function MenuItemDialog({
           <DialogTitle className="font-headline text-2xl">{item.name}</DialogTitle>
           <DialogDescription>{item.description}</DialogDescription>
         </DialogHeader>
-        <div className="py-4 space-y-6 max-h-[40vh] overflow-y-auto pr-2">
-          {item.characteristics && item.characteristics.length > 0 && (
+        <div className="py-4 space-y-6 max-h-[40vh] overflow-y-auto pr-2">            {item.characteristics && item.characteristics.length > 0 && (
                 <div className="space-y-3">
                     <h4 className="font-semibold text-gray-900 flex items-center gap-2">
                         <span className="w-1 h-4 bg-gradient-to-b from-blue-500 to-green-500 rounded-full"></span>
@@ -176,16 +173,14 @@ function MenuItemDialog({
                     </h4>
                     <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                         {item.characteristics.map(charId => {
-                            const char = characteristicsList.find(c => c.id === charId);
-                            if (!char) return null;
-                            
-                            // Get the appropriate icon (custom or default)
-                            const IconComponent = getIconComponent(char.id, char.icon);
+                            // For now, since we don't have characteristics data, just show the ID
+                            // This can be enhanced later when characteristics system is re-implemented
+                            const IconComponent = getIconComponent(charId, Utensils);
                             
                             return (
-                                <div key={char.id} className="flex items-center gap-3 p-2 bg-gray-50 rounded-lg border border-gray-200 hover:bg-gray-100 transition-colors">
+                                <div key={charId} className="flex items-center gap-3 p-2 bg-gray-50 rounded-lg border border-gray-200 hover:bg-gray-100 transition-colors">
                                     <IconComponent />
-                                    <span className="text-sm font-medium text-gray-700">{char.label}</span>
+                                    <span className="text-sm font-medium text-gray-700">{charId}</span>
                                 </div>
                             );
                         })}
@@ -310,21 +305,19 @@ function MenuItem({
             <div className="flex flex-wrap gap-1">
                 <TooltipProvider>
                     {item.characteristics.map(charId => {
-                        const char = characteristicsList.find(c => c.id === charId);
-                        if (!char) return null;
-                        
-                        // Get the appropriate icon (custom or default)
-                        const IconComponent = getIconComponent(char.id, char.icon);
+                        // For now, since we don't have characteristics data, just show the ID
+                        // This can be enhanced later when characteristics system is re-implemented
+                        const IconComponent = getIconComponent(charId, Utensils);
                         
                         return (
-                            <Tooltip key={char.id}>
+                            <Tooltip key={charId}>
                                 <TooltipTrigger>
                                     <div className="transition-transform hover:scale-110">
                                         <IconComponent />
                                     </div>
                                 </TooltipTrigger>
                                 <TooltipContent>
-                                    <p>{char.label}</p>
+                                    <p>{charId}</p>
                                 </TooltipContent>
                             </Tooltip>
                         );
@@ -1069,7 +1062,6 @@ export default function DineDeskPage() {
           </div>
         </div>
       </main>
-      <CharacteristicsReference />
     </>
   );
 }

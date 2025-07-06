@@ -13,7 +13,6 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 import { useTenant } from '@/context/TenantContext';
-import { CharacteristicsReference } from '@/components/CharacteristicsReference';
 
 export default function TenantCustomerPage({ 
   params 
@@ -229,9 +228,6 @@ export default function TenantCustomerPage({
           </CardContent>
         </Card>
       </section>
-
-      {/* Characteristics Reference */}
-      <CharacteristicsReference />
     </div>
   );
 }
