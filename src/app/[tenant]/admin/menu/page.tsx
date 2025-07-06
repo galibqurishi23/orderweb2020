@@ -36,7 +36,7 @@ import { Switch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
-export default function MenuPage() {
+export default function TenantMenuPage() {
   const { menuItems, categories, saveMenuItem, deleteMenuItem, saveCategory, deleteCategory, restaurantSettings } = useData();
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('all');

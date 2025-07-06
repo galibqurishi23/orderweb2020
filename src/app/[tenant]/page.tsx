@@ -17,8 +17,9 @@ import { useTenant } from '@/context/TenantContext';
 export default function TenantCustomerPage({ 
   params 
 }: { 
-  params: { tenant: string } 
+  params: Promise<{ tenant: string }> 
 }) {
+  const resolvedParams = React.use(params);
   const { tenantData, isLoading } = useTenant();
 
   if (isLoading) {
@@ -37,7 +38,7 @@ export default function TenantCustomerPage({
       <div className="min-h-screen bg-background flex items-center justify-center">
         <div className="text-center">
           <h1 className="text-2xl font-bold text-red-600 mb-2">Restaurant Not Found</h1>
-          <p className="text-gray-600">The restaurant "{params.tenant}" does not exist.</p>
+          <p className="text-gray-600">The restaurant "{resolvedParams.tenant}" does not exist.</p>
           <Link href="/super-admin" className="text-blue-600 hover:underline mt-4 inline-block">
             Go to Super Admin
           </Link>
@@ -111,7 +112,7 @@ export default function TenantCustomerPage({
             
             <div className="flex space-x-2">
               <Button variant="outline" size="sm" asChild>
-                <Link href={`/${params.tenant}/admin`}>
+                <Link href={`/${resolvedParams.tenant}/admin`}>
                   <ExternalLink className="mr-2 w-4 h-4" />
                   Admin Panel
                 </Link>
@@ -215,7 +216,7 @@ export default function TenantCustomerPage({
             </p>
             <div className="flex justify-center space-x-4">
               <Button variant="outline" asChild>
-                <Link href={`/${params.tenant}/admin`}>
+                <Link href={`/${resolvedParams.tenant}/admin`}>
                   Go to Admin Panel
                 </Link>
               </Button>
