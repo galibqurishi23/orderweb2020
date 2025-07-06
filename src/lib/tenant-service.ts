@@ -382,6 +382,83 @@ export class SuperAdminService {
       };
     }
   }
+
+  // Get all super admin users
+  static async getAllSuperAdminUsers(): Promise<SuperAdminUser[]> {
+    try {
+      const [rows] = await pool.execute(`
+        SELECT id, email, name, role, active, created_at, updated_at 
+        FROM super_admin_users 
+        ORDER BY created_at ASC
+      `);
+      return rows as SuperAdminUser[];
+    } catch (error) {
+      console.error('Error fetching super admin users:', error);
+      throw new Error('Failed to fetch super admin users');
+    }
+  }
+
+  // Create new super admin user
+  static async createSuperAdminUser(data: {
+    name: string;
+    email: string;
+    password: string;
+    role?: 'super_admin' | 'support';
+  }): Promise<SuperAdminUser> {
+    try {
+      const id = uuidv4();
+      const hashedPassword = await bcrypt.hash(data.password, 10);
+      
+      await pool.execute(`
+        INSERT INTO super_admin_users (id, email, password, name, role, active)
+        VALUES (?, ?, ?, ?, ?, TRUE)
+      `, [id, data.email, hashedPassword, data.name, data.role || 'super_admin']);
+
+      // Fetch the created user (without password)
+      const [rows] = await pool.execute(
+        'SELECT id, email, name, role, active, created_at, updated_at FROM super_admin_users WHERE id = ?',
+        [id]
+      );
+      return (rows as SuperAdminUser[])[0];
+    } catch (error) {
+      console.error('Error creating super admin user:', error);
+      throw error;
+    }
+  }
+
+  // Update super admin user status
+  static async updateSuperAdminUserStatus(userId: string, active: boolean): Promise<void> {
+    try {
+      await pool.execute(
+        'UPDATE super_admin_users SET active = ?, updated_at = NOW() WHERE id = ?',
+        [active, userId]
+      );
+    } catch (error) {
+      console.error('Error updating super admin user status:', error);
+      throw new Error('Failed to update user status');
+    }
+  }
+
+  // Delete super admin user
+  static async deleteSuperAdminUser(userId: string): Promise<void> {
+    try {
+      // Prevent deletion if it would leave no active users
+      const [activeUsers] = await pool.execute(
+        'SELECT COUNT(*) as count FROM super_admin_users WHERE active = TRUE AND id != ?',
+        [userId]
+      );
+      const activeCount = (activeUsers as any[])[0].count;
+      
+      if (activeCount === 0) {
+        throw new Error('Cannot delete the last active super admin user');
+      }
+
+      await pool.execute('DELETE FROM super_admin_users WHERE id = ?', [userId]);
+    } catch (error) {
+      console.error('Error deleting super admin user:', error);
+      throw error;
+    }
+  }
 }
 
 // Tenant User Management
