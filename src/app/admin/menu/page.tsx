@@ -326,26 +326,84 @@ const MenuFormDialog = ({ isOpen, onClose, onSave, item, categories, currencySym
                                 </CardContent>
                             </Card>
                         </div>
-                         <div>
-                            <Label>Characteristics & Allergens</Label>
-                            <Card>
-                                <CardContent className="p-4 grid grid-cols-2 md:grid-cols-3 gap-4 max-h-60 overflow-y-auto">
-                                    {characteristicsList.map(char => (
-                                        <div key={char.id} className="flex items-center space-x-2">
-                                            <Checkbox
-                                                id={`char-${char.id}`}
-                                                checked={formData.characteristics?.includes(char.id)}
-                                                onCheckedChange={() => handleToggleCharacteristic(char.id)}
-                                            />
-                                            <label
-                                                htmlFor={`char-${char.id}`}
-                                                className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 flex items-center"
-                                            >
-                                                <char.icon />
-                                                {char.label}
-                                            </label>
+                         <div className="space-y-3">
+                            <Label className="text-lg font-semibold text-gray-900">Characteristics & Allergens</Label>
+                            <p className="text-sm text-gray-600">Select dietary requirements and allergen information</p>
+                            <Card className="border-2 border-gray-100 shadow-sm">
+                                <CardContent className="p-6">
+                                    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 max-h-80 overflow-y-auto">
+                                        {characteristicsList.map(char => {
+                                            const isSelected = formData.characteristics?.includes(char.id);
+                                            return (
+                                                <div 
+                                                    key={char.id} 
+                                                    className={`group relative cursor-pointer transition-all duration-200 ease-in-out ${
+                                                        isSelected 
+                                                            ? 'scale-105 shadow-md' 
+                                                            : 'hover:scale-102 hover:shadow-sm'
+                                                    }`}
+                                                    onClick={() => handleToggleCharacteristic(char.id)}
+                                                >
+                                                    <div className={`
+                                                        flex flex-col items-center p-3 rounded-xl border-2 transition-all duration-200
+                                                        ${isSelected 
+                                                            ? 'border-blue-300 bg-blue-50 shadow-blue-100' 
+                                                            : 'border-gray-200 bg-white hover:border-gray-300 hover:bg-gray-50'
+                                                        }
+                                                    `}>
+                                                        <div className="mb-2 transform transition-transform duration-200 group-hover:scale-110">
+                                                            <char.icon />
+                                                        </div>
+                                                        <label
+                                                            htmlFor={`char-${char.id}`}
+                                                            className={`
+                                                                text-xs font-medium text-center leading-tight cursor-pointer transition-colors duration-200
+                                                                ${isSelected 
+                                                                    ? 'text-blue-700' 
+                                                                    : 'text-gray-700 group-hover:text-gray-900'
+                                                                }
+                                                            `}
+                                                        >
+                                                            {char.label}
+                                                        </label>
+                                                        <Checkbox
+                                                            id={`char-${char.id}`}
+                                                            checked={isSelected}
+                                                            onCheckedChange={() => handleToggleCharacteristic(char.id)}
+                                                            className={`
+                                                                absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200
+                                                                ${isSelected ? 'opacity-100' : ''}
+                                                            `}
+                                                        />
+                                                        {isSelected && (
+                                                            <div className="absolute inset-0 rounded-xl border-2 border-blue-400 bg-blue-100/20 pointer-events-none">
+                                                                <div className="absolute top-1 right-1 w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div>
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                    {formData.characteristics && formData.characteristics.length > 0 && (
+                                        <div className="mt-4 pt-4 border-t border-gray-100">
+                                            <p className="text-sm text-gray-600 mb-2">Selected characteristics:</p>
+                                            <div className="flex flex-wrap gap-2">
+                                                {formData.characteristics.map(charId => {
+                                                    const char = characteristicsList.find(c => c.id === charId);
+                                                    return char ? (
+                                                        <span 
+                                                            key={charId}
+                                                            className="inline-flex items-center gap-1 px-3 py-1 bg-blue-100 text-blue-800 text-xs font-medium rounded-full border border-blue-200"
+                                                        >
+                                                            <char.icon />
+                                                            {char.label}
+                                                        </span>
+                                                    ) : null;
+                                                })}
+                                            </div>
                                         </div>
-                                    ))}
+                                    )}
                                 </CardContent>
                             </Card>
                         </div>

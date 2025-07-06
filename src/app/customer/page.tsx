@@ -52,12 +52,14 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { format } from 'date-fns';
 import { Badge } from '@/components/ui/badge';
 import { characteristics as characteristicsList } from '@/data/characteristicsData';
+import { getIconComponent } from '@/lib/custom-icons-service';
 import {
   Tooltip,
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
+import { CharacteristicsReference } from '@/components/CharacteristicsReference';
 
 
 function MenuNav({ menuData }: { menuData: { category: Category }[] }) {
@@ -167,17 +169,25 @@ function MenuItemDialog({
         </DialogHeader>
         <div className="py-4 space-y-6 max-h-[40vh] overflow-y-auto pr-2">
           {item.characteristics && item.characteristics.length > 0 && (
-                <div className="space-y-2">
-                    <h4 className="font-semibold text-muted-foreground">Dietary Information</h4>
-                    <div className="flex flex-wrap gap-x-4 gap-y-2">
+                <div className="space-y-3">
+                    <h4 className="font-semibold text-gray-900 flex items-center gap-2">
+                        <span className="w-1 h-4 bg-gradient-to-b from-blue-500 to-green-500 rounded-full"></span>
+                        Dietary Information
+                    </h4>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                         {item.characteristics.map(charId => {
                             const char = characteristicsList.find(c => c.id === charId);
-                            return char ? (
-                                <div key={char.id} className="flex items-center gap-2 text-sm">
-                                    <char.icon className="w-5 h-5 text-primary" />
-                                    <span>{char.label}</span>
+                            if (!char) return null;
+                            
+                            // Get the appropriate icon (custom or default)
+                            const IconComponent = getIconComponent(char.id, char.icon);
+                            
+                            return (
+                                <div key={char.id} className="flex items-center gap-3 p-2 bg-gray-50 rounded-lg border border-gray-200 hover:bg-gray-100 transition-colors">
+                                    <IconComponent />
+                                    <span className="text-sm font-medium text-gray-700">{char.label}</span>
                                 </div>
-                            ) : null;
+                            );
                         })}
                     </div>
                 </div>
@@ -296,27 +306,32 @@ function MenuItem({
                 <p className="text-md font-bold text-primary">
                   {pricePrefix}{currencySymbol}{typeof displayPrice === 'number' ? displayPrice.toFixed(2) : displayPrice}
                 </p>
-                {item.characteristics && item.characteristics.length > 0 && (
-                    <div className="flex flex-wrap gap-2">
-                        <TooltipProvider>
-                            {item.characteristics.map(charId => {
-                                const char = characteristicsList.find(c => c.id === charId);
-                                return char ? (
-                                    <Tooltip key={char.id}>
-                                        <TooltipTrigger>
-                                            <span className="flex items-center justify-center w-6 h-6 rounded-full border bg-muted">
-                                                <char.icon className="w-4 h-4 text-muted-foreground" />
-                                            </span>
-                                        </TooltipTrigger>
-                                        <TooltipContent>
-                                            <p>{char.label}</p>
-                                        </TooltipContent>
-                                    </Tooltip>
-                                ) : null;
-                            })}
-                        </TooltipProvider>
-                    </div>
-                )}
+        {item.characteristics && item.characteristics.length > 0 && (
+            <div className="flex flex-wrap gap-1">
+                <TooltipProvider>
+                    {item.characteristics.map(charId => {
+                        const char = characteristicsList.find(c => c.id === charId);
+                        if (!char) return null;
+                        
+                        // Get the appropriate icon (custom or default)
+                        const IconComponent = getIconComponent(char.id, char.icon);
+                        
+                        return (
+                            <Tooltip key={char.id}>
+                                <TooltipTrigger>
+                                    <div className="transition-transform hover:scale-110">
+                                        <IconComponent />
+                                    </div>
+                                </TooltipTrigger>
+                                <TooltipContent>
+                                    <p>{char.label}</p>
+                                </TooltipContent>
+                            </Tooltip>
+                        );
+                    })}
+                </TooltipProvider>
+            </div>
+        )}
               </div>
           </div>
         </div>
@@ -1054,6 +1069,7 @@ export default function DineDeskPage() {
           </div>
         </div>
       </main>
+      <CharacteristicsReference />
     </>
   );
 }

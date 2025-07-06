@@ -15,7 +15,8 @@ import {
   Tag,
   Clock,
   CreditCard,
-  Network
+  Network,
+  Wheat
 } from 'lucide-react';
 import { DineDeskLogo } from '@/components/icons/logo';
 import AdminLogo from '@/components/icons/admin-logo';
@@ -31,6 +32,7 @@ const navItems = [
     { href: '/admin/zones', icon: MapPin, label: 'Order Zones' },
     { href: '/admin/printers', icon: Printer, label: 'Printers' },
     { href: '/admin/payments', icon: CreditCard, label: 'Payments' },
+    { href: '/admin/allergens', icon: Wheat, label: 'Allergen Icons' },
     { href: '/admin/connect-pos', icon: Network, label: 'Connect POS' },
     { href: '/admin/reports', icon: BarChart3, label: 'Reports' },
     { href: '/admin/settings', icon: Settings, label: 'Settings' }
