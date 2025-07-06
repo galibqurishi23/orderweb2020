@@ -4,7 +4,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { TrendingUp, ShoppingBag, Clock, Star, PoundSterling, Calendar } from 'lucide-react';
 import { useData } from '@/context/DataContext';
 import type { OrderStatus } from '@/lib/types';
-import { dashboardStats } from '@/data/mockData';
+import { emptyDashboardStats } from '@/data/mockData';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
@@ -67,7 +67,7 @@ export default function Dashboard() {
         todayOrders: todayOrders.length,
         pendingOrders: orders.filter(order => order.status === 'pending').length,
         advanceOrders: orders.filter(order => order.isAdvanceOrder).length,
-        revenue: dashboardStats.revenue, // Keep mock data for chart for now
+        revenue: emptyDashboardStats.revenue, // Keep mock data for chart for now
     };
     
     const recentOrders = [...orders]
@@ -135,7 +135,7 @@ export default function Dashboard() {
                  <CardTitle className="text-2xl font-semibold">Weekly Revenue</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4 pt-2">
-                {stats.revenue.weekly.map((amount, index) => {
+                {stats.revenue.weekly.map((amount: number, index: number) => {
                 const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
                 const maxAmount = Math.max(...stats.revenue.weekly);
                 const width = (amount / maxAmount) * 100;

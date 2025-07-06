@@ -11,7 +11,7 @@ import * as PrinterService from '@/lib/printer-service';
 import * as SettingsService from '@/lib/settings-service';
 import * as CustomerService from '@/lib/customer-service';
 import * as OrderService from '@/lib/order-service';
-import { mockRestaurantSettings } from '@/data/mockData'; // For initial default before DB loads
+import { defaultRestaurantData } from '@/data/mockData'; // For initial default before DB loads
 import { initializeDatabase } from '@/lib/db-init';
 
 
@@ -62,7 +62,7 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
     const [categories, setCategories] = useState<Category[]>([]);
     const [deliveryZones, setDeliveryZones] = useState<DeliveryZone[]>([]);
     const [printers, setPrinters] = useState<Printer[]>([]);
-    const [restaurantSettings, setRestaurantSettings] = useState<RestaurantSettings>(mockRestaurantSettings);
+    const [restaurantSettings, setRestaurantSettings] = useState<RestaurantSettings>(defaultRestaurantData);
     const [vouchers, setVouchers] = useState<Voucher[]>([]);
     const [customers, setCustomers] = useState<Customer[]>([]);
     const [currentUser, setCurrentUser] = useState<Customer | null>(null);
@@ -94,33 +94,33 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
             if (dbSettings) {
                 // Ensure payment settings are properly merged with defaults
                const mergedSettings = {
-                   ...mockRestaurantSettings,
+                   ...defaultRestaurantData,
                    ...dbSettings,
                    paymentSettings: {
-                       ...mockRestaurantSettings.paymentSettings,
+                       ...defaultRestaurantData.paymentSettings,
                        ...(dbSettings.paymentSettings || {}),
                        cash: {
-                           ...mockRestaurantSettings.paymentSettings.cash,
+                           ...defaultRestaurantData.paymentSettings.cash,
                            ...(dbSettings.paymentSettings?.cash || {}),
                        },
                        stripe: {
-                           ...mockRestaurantSettings.paymentSettings.stripe,
+                           ...defaultRestaurantData.paymentSettings.stripe,
                            ...(dbSettings.paymentSettings?.stripe || {}),
                        },
                        globalPayments: {
-                           ...mockRestaurantSettings.paymentSettings.globalPayments,
+                           ...defaultRestaurantData.paymentSettings.globalPayments,
                            ...(dbSettings.paymentSettings?.globalPayments || {}),
                        },
                        worldpay: {
-                           ...mockRestaurantSettings.paymentSettings.worldpay,
+                           ...defaultRestaurantData.paymentSettings.worldpay,
                            ...(dbSettings.paymentSettings?.worldpay || {}),
                        },
                    },
                };
                setRestaurantSettings(mergedSettings);
            } else {
-               // If no settings in DB, use the mock settings
-               setRestaurantSettings(mockRestaurantSettings);
+               // If no settings in DB, use the default settings
+               setRestaurantSettings(defaultRestaurantData);
            }
             setCustomers(dbCustomers);
             setOrders(dbOrders);

@@ -1,15 +1,14 @@
 import { defaultRestaurantSettings } from '@/default-setting/defaultRestaurantSettings';
+import type { OrderThrottlingSettings } from '@/lib/types';
 
-// Mock data is now only used as a fallback or for initial seeding.
-// The primary data source is the MariaDB database.
-
-export const dashboardStats = {
-  todaySales: 1250.75,
-  todayOrders: 82,
-  pendingOrders: 12,
-  advanceOrders: 25,
+// Data structure templates for initial setup
+export const emptyDashboardStats = {
+  todaySales: 0,
+  todayOrders: 0,
+  pendingOrders: 0,
+  advanceOrders: 0,
   revenue: {
-    weekly: [1100, 1300, 1500, 1200, 1800, 2100, 1900],
+    weekly: [0, 0, 0, 0, 0, 0, 0],
   },
 };
 
@@ -23,5 +22,5 @@ const defaultOrderThrottling: OrderThrottlingSettings = {
     sunday:    { interval: 15, ordersPerInterval: 10, enabled: false },
 };
 
-// This serves as a default structure if the database is unavailable.
-export const mockRestaurantSettings = defaultRestaurantSettings;
+// Default structure for new restaurants
+export const defaultRestaurantData = defaultRestaurantSettings;

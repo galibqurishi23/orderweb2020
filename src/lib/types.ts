@@ -224,3 +224,59 @@ export interface Voucher {
     usageLimit?: number;
     usedCount: number;
 }
+
+// Multi-tenant types
+export interface Tenant {
+  id: string;
+  slug: string;
+  name: string;
+  email: string;
+  phone?: string;
+  address?: string;
+  status: 'active' | 'suspended' | 'trial' | 'cancelled';
+  subscription_plan: 'starter' | 'professional' | 'enterprise';
+  subscription_status: 'active' | 'past_due' | 'cancelled' | 'trialing';
+  trial_ends_at?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface TenantUser {
+  id: string;
+  tenant_id: string;
+  email: string;
+  password?: string; // Optional for security
+  name: string;
+  role: 'owner' | 'manager' | 'staff';
+  permissions?: any;
+  active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface SuperAdminUser {
+  id: string;
+  email: string;
+  password?: string; // Optional for security
+  name: string;
+  role: 'super_admin' | 'support';
+  active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface TenantStats {
+  totalOrders: number;
+  todayOrders: number;
+  pendingOrders: number;
+  totalRevenue: number;
+  todayRevenue: number;
+}
+
+export interface PlatformStats {
+  totalTenants: number;
+  activeTenants: number;
+  trialTenants: number;
+  totalRevenue: number;
+  monthlyRevenue: number;
+}
