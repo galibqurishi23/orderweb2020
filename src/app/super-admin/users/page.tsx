@@ -494,14 +494,14 @@ export default function UserManagement() {
                             <span>Delete Super Admin User</span>
                           </AlertDialogTitle>
                           <AlertDialogDescription className="space-y-2">
-                            <p>
+                            <div>
                               Are you sure you want to delete <strong>{user.name}</strong>?
-                            </p>
+                            </div>
                             <div className="bg-red-50 p-3 rounded-md border border-red-200">
-                              <p className="text-red-800 text-sm font-medium">⚠️ This action cannot be undone!</p>
-                              <p className="text-red-700 text-sm mt-1">
+                              <div className="text-red-800 text-sm font-medium">⚠️ This action cannot be undone!</div>
+                              <div className="text-red-700 text-sm mt-1">
                                 This user will permanently lose access to the super admin panel.
-                              </p>
+                              </div>
                             </div>
                           </AlertDialogDescription>
                         </AlertDialogHeader>

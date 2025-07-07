@@ -2,7 +2,10 @@
 
 import fs from 'fs/promises';
 import path from 'path';
-import pool from './db';
+import db from './db';
+
+// Determine if we're using SQLite or MySQL
+const dbType = process.env.DATABASE_TYPE || 'sqlite';
 
 /**
  * Checks if the database is already initialized.
@@ -10,9 +13,18 @@ import pool from './db';
  */
 async function isDatabaseInitialized(): Promise<boolean> {
   try {
-    // Check if a key table (e.g., restaurant_settings) exists.
-    const [rows] = await pool.query("SHOW TABLES LIKE 'restaurant_settings'");
-    return (rows as any[]).length > 0;
+    if (dbType === 'sqlite') {
+      // For SQLite, check if restaurant_settings table exists
+      const [rows] = await db.query(`
+        SELECT name FROM sqlite_master
+        WHERE type='table' AND name='restaurant_settings'
+      `);
+      return (rows as any[]).length > 0;
+    } else {
+      // For MySQL
+      const [rows] = await db.query("SHOW TABLES LIKE 'restaurant_settings'");
+      return (rows as any[]).length > 0;
+    }
   } catch (error) {
     console.error('Error checking database initialization:', error);
     return false;
@@ -25,11 +37,39 @@ async function isDatabaseInitialized(): Promise<boolean> {
 async function runInitializationScript(): Promise<void> {
   try {
     console.log('Database not initialized. Running setup script...');
-    const sqlFilePath = path.join(process.cwd(), 'init.sql');
+    
+    // Choose the appropriate schema file based on database type
+    let sqlFilePath;
+    if (dbType === 'sqlite') {
+      sqlFilePath = path.join(process.cwd(), 'init-sqlite.sql');
+      console.log('Using SQLite schema file');
+    } else {
+      sqlFilePath = path.join(process.cwd(), 'init.sql');
+      console.log('Using MySQL schema file');
+    }
+    
     const sqlScript = await fs.readFile(sqlFilePath, 'utf-8');
     
-    // Execute the entire script. The `multipleStatements: true` in db.ts allows this.
-    await pool.query(sqlScript);
+    if (dbType === 'sqlite') {
+      // For SQLite, execute statement by statement
+      const statements = sqlScript
+        .replace(/^\s*--.*$/gm, '') // Remove comments
+        .split(';')
+        .filter(statement => statement.trim().length > 0);
+      
+      for (const statement of statements) {
+        try {
+          await db.execute(statement);
+        } catch (err) {
+          console.error('Failed to execute statement:', statement);
+          console.error('Error:', err);
+          // Continue to next statement rather than failing completely
+        }
+      }
+    } else {
+      // For MySQL, execute the script as a whole
+      await db.query(sqlScript);
+    }
     
     console.log('Database initialization complete.');
   } catch (error) {

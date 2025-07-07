@@ -25,10 +25,8 @@ import { useTenant } from '@/context/TenantContext';
 
 export default function TenantAdminLayout({
   children,
-  params,
 }: {
   children: React.ReactNode;
-  params: { tenant: string };
 }) {
   const pathname = usePathname();
   const { tenantData, isLoading } = useTenant();
@@ -110,12 +108,6 @@ export default function TenantAdminLayout({
               className="flex-1 text-center text-xs text-blue-600 hover:text-blue-800 bg-blue-50 hover:bg-blue-100 px-2 py-1 rounded transition-colors"
             >
               View Store
-            </Link>
-            <Link
-              href="/super-admin"
-              className="flex-1 text-center text-xs text-purple-600 hover:text-purple-800 bg-purple-50 hover:bg-purple-100 px-2 py-1 rounded transition-colors"
-            >
-              Super Admin
             </Link>
           </div>
           

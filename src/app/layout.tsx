@@ -1,9 +1,14 @@
-'use client';
-
 import './globals.css';
 import { Toaster } from '@/components/ui/toaster';
 import { DataProvider } from '@/context/DataContext';
 import { TenantProvider } from '@/context/TenantContext';
+import { ErrorBoundary } from '@/components/ErrorBoundary';
+import type { Metadata } from 'next';
+
+export const metadata: Metadata = {
+  title: 'OrderWeb - Restaurant Management Platform',
+  description: 'Multi-tenant restaurant ordering and management platform',
+}
 
 export default function RootLayout({
   children,
@@ -18,12 +23,14 @@ export default function RootLayout({
         <link href="https://fonts.googleapis.com/css2?family=Alegreya:wght@400;700&family=Belleza&display=swap" rel="stylesheet" />
       </head>
       <body className="font-body antialiased">
-        <TenantProvider>
-          <DataProvider>
-            {children}
-            <Toaster />
-          </DataProvider>
-        </TenantProvider>
+        <ErrorBoundary>
+          <TenantProvider>
+            <DataProvider>
+              {children}
+              <Toaster />
+            </DataProvider>
+          </TenantProvider>
+        </ErrorBoundary>
       </body>
     </html>
   );

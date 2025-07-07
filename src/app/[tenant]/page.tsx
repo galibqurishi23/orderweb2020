@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { Suspense } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -14,12 +14,7 @@ import {
 import Link from 'next/link';
 import { useTenant } from '@/context/TenantContext';
 
-export default function TenantCustomerPage({ 
-  params 
-}: { 
-  params: Promise<{ tenant: string }> 
-}) {
-  const resolvedParams = React.use(params);
+function TenantCustomerContent({ tenant }: { tenant: string }) {
   const { tenantData, isLoading } = useTenant();
 
   if (isLoading) {
@@ -38,7 +33,7 @@ export default function TenantCustomerPage({
       <div className="min-h-screen bg-background flex items-center justify-center">
         <div className="text-center">
           <h1 className="text-2xl font-bold text-red-600 mb-2">Restaurant Not Found</h1>
-          <p className="text-gray-600">The restaurant "{resolvedParams.tenant}" does not exist.</p>
+          <p className="text-gray-600">The restaurant "{tenant}" does not exist.</p>
           <Link href="/super-admin" className="text-blue-600 hover:underline mt-4 inline-block">
             Go to Super Admin
           </Link>
@@ -112,7 +107,7 @@ export default function TenantCustomerPage({
             
             <div className="flex space-x-2">
               <Button variant="outline" size="sm" asChild>
-                <Link href={`/${resolvedParams.tenant}/admin`}>
+                <Link href={`/${tenant}/admin`}>
                   <ExternalLink className="mr-2 w-4 h-4" />
                   Admin Panel
                 </Link>
@@ -193,7 +188,7 @@ export default function TenantCustomerPage({
                 
                 <div className="flex items-center justify-between">
                   <span className="text-xl font-bold text-primary">
-                    ${item.price}
+                    {tenantData.settings?.currency === 'GBP' || !tenantData.settings?.currency ? '£' : '$'}{item.price.toFixed(2)}
                   </span>
                   <Button size="sm">
                     Add to Cart
@@ -214,15 +209,10 @@ export default function TenantCustomerPage({
               This is a preview of your tenant-specific customer interface. 
               The full menu system with ordering capabilities will be integrated next.
             </p>
-            <div className="flex justify-center space-x-4">
+            <div className="flex justify-center">
               <Button variant="outline" asChild>
-                <Link href={`/${resolvedParams.tenant}/admin`}>
+                <Link href={`/${tenant}/admin`}>
                   Go to Admin Panel
-                </Link>
-              </Button>
-              <Button asChild>
-                <Link href="/super-admin">
-                  Super Admin Panel
                 </Link>
               </Button>
             </div>
@@ -230,5 +220,26 @@ export default function TenantCustomerPage({
         </Card>
       </section>
     </div>
+  );
+}
+
+export default function TenantCustomerPage({ 
+  params 
+}: { 
+  params: Promise<{ tenant: string }> 
+}) {
+  const resolvedParams = React.use(params);
+  
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
+          <p>Loading restaurant...</p>
+        </div>
+      </div>
+    }>
+      <TenantCustomerContent tenant={resolvedParams.tenant} />
+    </Suspense>
   );
 }

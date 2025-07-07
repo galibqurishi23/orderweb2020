@@ -11,7 +11,7 @@ interface TenantContextType {
 }
 
 interface TenantData {
-  id: number;
+  id: string;
   name: string;
   slug: string;
   status: 'active' | 'pending' | 'inactive';
@@ -54,30 +54,71 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
     if (segments.length >= 1) {
       const potentialTenant = segments[0];
       
-      // Tenant data will be fetched from database in production
-      const mockTenants: TenantData[] = [];
-      
-      const tenant = mockTenants.find(t => t.slug === potentialTenant);
-      
-      if (tenant) {
-        setTenantSlug(potentialTenant);
-        setTenantData(tenant);
-        
-        // Determine context type
-        if (segments.length >= 2 && segments[1] === 'admin') {
-          setContextType('admin');
-        } else {
-          setContextType('customer');
-        }
-      } else {
-        // Not a valid tenant
+      // Skip special routes that aren't tenants
+      const specialRoutes = ['admin', 'customer', 'super-admin', 'api'];
+      if (specialRoutes.includes(potentialTenant)) {
         setTenantSlug(null);
         setTenantData(null);
         setContextType(null);
+        setIsLoading(false);
+        return;
       }
+      
+      // Fetch tenant data from API
+      setIsLoading(true);
+      setTenantSlug(potentialTenant);
+      
+      // Add timestamp to prevent caching
+      const timestamp = new Date().getTime();
+      fetch(`/api/tenant/info?slug=${potentialTenant}&t=${timestamp}`, {
+        headers: {
+          'Cache-Control': 'no-cache',
+          'Pragma': 'no-cache'
+        }
+      })
+        .then(response => {
+          if (response.ok) {
+            return response.json();
+          } else if (response.status === 404) {
+            // Tenant not found
+            console.error(`Tenant not found: ${potentialTenant}`);
+            setTenantSlug(null);
+            setTenantData(null);
+            setContextType(null);
+            return null;
+          } else {
+            console.error(`Failed to fetch tenant: ${response.status}`);
+            throw new Error(`Failed to fetch tenant: ${response.status}`);
+          }
+        })
+        .then(tenantData => {
+          if (tenantData) {
+            console.log(`Tenant data loaded for ${potentialTenant}:`, tenantData);
+            setTenantSlug(potentialTenant);
+            setTenantData(tenantData);
+            
+            // Determine context type
+            if (segments.length >= 2 && segments[1] === 'admin') {
+              console.log(`Setting context type to admin for ${potentialTenant}`);
+              setContextType('admin');
+            } else {
+              console.log(`Setting context type to customer for ${potentialTenant}`);
+              setContextType('customer');
+            }
+          }
+        })
+        .catch(error => {
+          console.error('Error fetching tenant data:', error);
+          setTenantSlug(null);
+          setTenantData(null);
+          setContextType(null);
+        })
+        .finally(() => {
+          setIsLoading(false);
+        });
+    } else {
+      setIsLoading(false);
     }
-    
-    setIsLoading(false);
   }, [pathname]);
 
   return (

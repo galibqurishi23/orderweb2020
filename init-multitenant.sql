@@ -274,7 +274,6 @@ INSERT INTO platform_settings (id, settings_json) VALUES (1, '{
 ON DUPLICATE KEY UPDATE settings_json=VALUES(settings_json);
 
 -- Indexes for performance
-CREATE INDEX idx_tenants_slug ON tenants(slug);
 CREATE INDEX idx_tenants_status ON tenants(status);
 CREATE INDEX idx_tenant_users_tenant_id ON tenant_users(tenant_id);
 CREATE INDEX idx_categories_tenant_id ON categories(tenant_id);

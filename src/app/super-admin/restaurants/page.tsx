@@ -449,6 +449,22 @@ export default function RestaurantsPage() {
 
                 <div className="flex justify-between items-center pt-4 border-t">
                   <div className="flex space-x-2">
+                    {restaurant.status === 'active' && (
+                      <div className="flex space-x-2 mr-4">
+                        <Button asChild variant="outline" size="sm" className="text-xs">
+                          <Link href={`/${restaurant.slug}/admin`} target="_blank">
+                            <ExternalLink className="h-3 w-3 mr-1" />
+                            Admin Interface
+                          </Link>
+                        </Button>
+                        <Button asChild variant="outline" size="sm" className="text-xs">
+                          <Link href={`/${restaurant.slug}`} target="_blank">
+                            <ExternalLink className="h-3 w-3 mr-1" />
+                            Customer Interface
+                          </Link>
+                        </Button>
+                      </div>
+                    )}
                     <Button variant="outline" size="sm">
                       <Edit className="h-4 w-4" />
                     </Button>
@@ -472,22 +488,24 @@ export default function RestaurantsPage() {
                             <AlertTriangle className="h-5 w-5 text-red-500" />
                             <span>Delete Restaurant</span>
                           </AlertDialogTitle>
-                          <AlertDialogDescription className="space-y-2">
-                            <p>
-                              Are you sure you want to delete <strong>{restaurant.name}</strong>?
-                            </p>
-                            <div className="bg-red-50 p-3 rounded-md border border-red-200">
-                              <p className="text-red-800 text-sm font-medium">⚠️ This action cannot be undone!</p>
-                              <p className="text-red-700 text-sm mt-1">
-                                This will permanently delete:
+                          <AlertDialogDescription asChild>
+                            <div className="space-y-2 pt-2">
+                              <p>
+                                Are you sure you want to delete <strong>{restaurant.name}</strong>?
                               </p>
-                              <ul className="text-red-700 text-sm mt-1 list-disc list-inside space-y-1">
-                                <li>All restaurant data and settings</li>
-                                <li>All menu items and categories</li>
-                                <li>All orders and customer data</li>
-                                <li>All user accounts for this restaurant</li>
-                                <li>All billing and transaction history</li>
-                              </ul>
+                              <div className="bg-red-50 p-3 rounded-md border border-red-200">
+                                <div className="text-red-800 text-sm font-medium">⚠️ This action cannot be undone!</div>
+                                <p className="text-red-700 text-sm mt-1">
+                                  This will permanently delete:
+                                </p>
+                                <ul className="text-red-700 text-sm mt-1 list-disc list-inside space-y-1">
+                                  <li>All restaurant data and settings</li>
+                                  <li>All menu items and categories</li>
+                                  <li>All orders and customer data</li>
+                                  <li>All user accounts for this restaurant</li>
+                                  <li>All billing and transaction history</li>
+                                </ul>
+                              </div>
                             </div>
                           </AlertDialogDescription>
                         </AlertDialogHeader>

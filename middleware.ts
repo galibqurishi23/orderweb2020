@@ -55,14 +55,13 @@ export function middleware(request: NextRequest) {
 
 function isSystemRoute(segment: string): boolean {
   const systemRoutes = [
-    'admin',      // Global admin (if no tenant)
-    'customer',   // Global customer (if no tenant)
-    'api',
-    'auth',
-    'login',
-    'register',
-    '_next',
-    'favicon.ico'
+    'super-admin', // Super admin routes
+    'api',        // API routes
+    'auth',       // Auth routes
+    'login',      // Login routes
+    'register',   // Register routes
+    '_next',      // Next.js internal routes
+    'favicon.ico' // Favicon
   ];
   
   return systemRoutes.includes(segment);
