@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { OrderService } from '@/lib/tenant-service';
+import { getTenantOrderStats } from '@/lib/tenant-service';
 
 export async function GET(request: NextRequest) {
   try {
@@ -13,7 +13,7 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const stats = await OrderService.getTenantOrderStats(tenantId);
+    const stats = await getTenantOrderStats(tenantId);
     
     return NextResponse.json({
       success: true,

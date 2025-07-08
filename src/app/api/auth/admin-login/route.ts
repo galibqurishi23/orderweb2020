@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import bcrypt from 'bcryptjs';
 import { cookies } from 'next/headers';
-import { TenantService } from '@/lib/tenant-service';
+import { getTenantBySlug } from '@/lib/tenant-service';
 import db from '@/lib/db';
 
 export async function POST(request: NextRequest) {
@@ -16,7 +16,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Get tenant by slug
-    const tenant = await TenantService.getTenantBySlug(tenantSlug);
+    const tenant = await getTenantBySlug(tenantSlug);
     if (!tenant) {
       return NextResponse.json(
         { success: false, error: 'Restaurant not found' },

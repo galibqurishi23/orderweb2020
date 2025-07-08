@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { SuperAdminService } from '@/lib/tenant-service';
+import { getPlatformStats } from '@/lib/tenant-service';
 
 export async function GET() {
   try {
-    const stats = await SuperAdminService.getPlatformStats();
+    const stats = await getPlatformStats();
     
     return NextResponse.json({
       success: true,

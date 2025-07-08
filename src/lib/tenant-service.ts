@@ -236,3 +236,261 @@ export async function updateTenantSettings(tenantId: string, settings: any): Pro
     throw new Error('Failed to update tenant settings');
   }
 }
+
+// Update tenant status
+export async function updateTenantStatus(tenantId: string, status: string): Promise<void> {
+  try {
+    await pool.execute(
+      'UPDATE tenants SET status = ?, updated_at = NOW() WHERE id = ?',
+      [status, tenantId]
+    );
+  } catch (error) {
+    console.error('Error updating tenant status:', error);
+    throw new Error('Failed to update tenant status');
+  }
+}
+
+// Delete tenant
+export async function deleteTenant(tenantId: string): Promise<void> {
+  try {
+    const connection = await pool.getConnection();
+    try {
+      await connection.beginTransaction();
+      
+      // Delete related data first (due to foreign key constraints)
+      await connection.execute('DELETE FROM tenant_settings WHERE tenant_id = ?', [tenantId]);
+      await connection.execute('DELETE FROM tenant_users WHERE tenant_id = ?', [tenantId]);
+      
+      // Then delete the tenant
+      await connection.execute('DELETE FROM tenants WHERE id = ?', [tenantId]);
+      
+      await connection.commit();
+    } catch (error) {
+      await connection.rollback();
+      throw error;
+    } finally {
+      connection.release();
+    }
+  } catch (error) {
+    console.error('Error deleting tenant:', error);
+    throw new Error('Failed to delete tenant');
+  }
+}
+
+// Get platform statistics (Super Admin)
+export async function getPlatformStats(): Promise<{
+  totalTenants: number;
+  activeTenants: number;
+  trialTenants: number;
+  totalRevenue: number;
+  monthlyRevenue: number;
+}> {
+  try {
+    // Get tenant counts
+    const [tenantCounts] = await pool.execute(`
+      SELECT 
+        COUNT(*) as totalTenants,
+        SUM(CASE WHEN status = 'active' THEN 1 ELSE 0 END) as activeTenants,
+        SUM(CASE WHEN status = 'trial' THEN 1 ELSE 0 END) as trialTenants
+      FROM tenants
+    `);
+
+    const counts = (tenantCounts as any[])[0];
+
+    // For now, we'll return mock revenue data since we don't have a billing system implemented
+    // In a real implementation, you would calculate this from actual billing/subscription data
+    const stats = {
+      totalTenants: counts.totalTenants || 0,
+      activeTenants: counts.activeTenants || 0,
+      trialTenants: counts.trialTenants || 0,
+      totalRevenue: 0, // TODO: Implement when billing system is added
+      monthlyRevenue: 0 // TODO: Implement when billing system is added
+    };
+
+    return stats;
+  } catch (error) {
+    console.error('Error fetching platform stats:', error);
+    throw new Error('Failed to fetch platform statistics');
+  }
+}
+
+// Super Admin User Management Functions
+
+// Get all super admin users
+export async function getAllSuperAdminUsers(): Promise<SuperAdminUser[]> {
+  try {
+    const [rows] = await pool.execute(`
+      SELECT id, email, name, role, active, created_at, updated_at
+      FROM super_admin_users 
+      ORDER BY created_at DESC
+    `);
+    return rows as SuperAdminUser[];
+  } catch (error) {
+    console.error('Error fetching super admin users:', error);
+    throw new Error('Failed to fetch super admin users');
+  }
+}
+
+// Create super admin user
+export async function createSuperAdminUser(data: {
+  email: string;
+  name: string;
+  password: string;
+  role?: 'super_admin' | 'support';
+}): Promise<SuperAdminUser> {
+  try {
+    const hashedPassword = await bcrypt.hash(data.password, 10);
+    const userId = uuidv4();
+    const now = new Date().toISOString().slice(0, 19).replace('T', ' ');
+    
+    await pool.execute(
+      `INSERT INTO super_admin_users (
+        id, email, password, name, role, active, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        userId,
+        data.email,
+        hashedPassword,
+        data.name,
+        data.role || 'super_admin',
+        true,
+        now,
+        now
+      ]
+    );
+    
+    return {
+      id: userId,
+      email: data.email,
+      name: data.name,
+      role: data.role || 'super_admin',
+      active: true,
+      created_at: now,
+      updated_at: now
+    };
+  } catch (error) {
+    console.error('Error creating super admin user:', error);
+    throw new Error('Failed to create super admin user');
+  }
+}
+
+// Update super admin user status
+export async function updateSuperAdminUserStatus(userId: string, active: boolean): Promise<void> {
+  try {
+    await pool.execute(
+      'UPDATE super_admin_users SET active = ?, updated_at = NOW() WHERE id = ?',
+      [active, userId]
+    );
+  } catch (error) {
+    console.error('Error updating super admin user status:', error);
+    throw new Error('Failed to update super admin user status');
+  }
+}
+
+// Delete super admin user
+export async function deleteSuperAdminUser(userId: string): Promise<void> {
+  try {
+    await pool.execute(
+      'DELETE FROM super_admin_users WHERE id = ?',
+      [userId]
+    );
+  } catch (error) {
+    console.error('Error deleting super admin user:', error);
+    throw new Error('Failed to delete super admin user');
+  }
+}
+
+// Change super admin user password
+export async function changeSuperAdminUserPassword(
+  userId: string, 
+  currentPassword: string, 
+  newPassword: string
+): Promise<void> {
+  try {
+    // First verify the current password
+    const [rows] = await pool.execute(
+      'SELECT password FROM super_admin_users WHERE id = ?',
+      [userId]
+    );
+    
+    const users = rows as any[];
+    if (users.length === 0) {
+      throw new Error('User not found');
+    }
+    
+    const isValidPassword = await bcrypt.compare(currentPassword, users[0].password);
+    if (!isValidPassword) {
+      throw new Error('Current password is incorrect');
+    }
+    
+    // Hash and update the new password
+    const hashedNewPassword = await bcrypt.hash(newPassword, 10);
+    await pool.execute(
+      'UPDATE super_admin_users SET password = ?, updated_at = NOW() WHERE id = ?',
+      [hashedNewPassword, userId]
+    );
+  } catch (error) {
+    console.error('Error changing super admin user password:', error);
+    throw error; // Re-throw to preserve the original error message
+  }
+}
+
+// Order Service for tenant statistics
+export async function getTenantOrderStats(tenantId: string): Promise<{
+  totalOrders: number;
+  todayOrders: number;
+  pendingOrders: number;
+  totalRevenue: number;
+  todayRevenue: number;
+}> {
+  try {
+    const today = new Date();
+    const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+    
+    // Get total orders count
+    const [totalOrdersResult] = await pool.execute(
+      'SELECT COUNT(*) as count FROM orders WHERE tenant_id = ?',
+      [tenantId]
+    );
+    const totalOrders = (totalOrdersResult as any[])[0].count;
+    
+    // Get today's orders count
+    const [todayOrdersResult] = await pool.execute(
+      'SELECT COUNT(*) as count FROM orders WHERE tenant_id = ? AND createdAt >= ?',
+      [tenantId, todayStart]
+    );
+    const todayOrders = (todayOrdersResult as any[])[0].count;
+    
+    // Get pending orders count
+    const [pendingOrdersResult] = await pool.execute(
+      'SELECT COUNT(*) as count FROM orders WHERE tenant_id = ? AND status = ?',
+      [tenantId, 'pending']
+    );
+    const pendingOrders = (pendingOrdersResult as any[])[0].count;
+    
+    // Get total revenue
+    const [totalRevenueResult] = await pool.execute(
+      'SELECT SUM(total) as total FROM orders WHERE tenant_id = ? AND status != ?',
+      [tenantId, 'cancelled']
+    );
+    const totalRevenue = (totalRevenueResult as any[])[0].total || 0;
+    
+    // Get today's revenue
+    const [todayRevenueResult] = await pool.execute(
+      'SELECT SUM(total) as total FROM orders WHERE tenant_id = ? AND createdAt >= ? AND status != ?',
+      [tenantId, todayStart, 'cancelled']
+    );
+    const todayRevenue = (todayRevenueResult as any[])[0].total || 0;
+    
+    return {
+      totalOrders,
+      todayOrders,
+      pendingOrders,
+      totalRevenue: parseFloat(totalRevenue.toString()),
+      todayRevenue: parseFloat(todayRevenue.toString())
+    };
+  } catch (error) {
+    console.error('Error fetching tenant order stats:', error);
+    throw new Error('Failed to fetch tenant order statistics');
+  }
+}

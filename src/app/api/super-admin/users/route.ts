@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { SuperAdminService } from '@/lib/tenant-service';
+import { getAllSuperAdminUsers, createSuperAdminUser } from '@/lib/tenant-service';
 
 export async function GET() {
   try {
-    const users = await SuperAdminService.getAllSuperAdminUsers();
+    const users = await getAllSuperAdminUsers();
     
     return NextResponse.json({
       success: true,
@@ -41,7 +41,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Check current user count (max 3 users)
-    const currentUsers = await SuperAdminService.getAllSuperAdminUsers();
+    const currentUsers = await getAllSuperAdminUsers();
     if (currentUsers.length >= 3) {
       return NextResponse.json(
         { success: false, error: 'Maximum of 3 super admin users allowed' },
@@ -50,7 +50,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Always create as super_admin role
-    const user = await SuperAdminService.createSuperAdminUser({
+    const user = await createSuperAdminUser({
       name,
       email,
       password,

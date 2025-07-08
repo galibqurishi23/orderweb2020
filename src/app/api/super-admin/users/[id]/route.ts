@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { SuperAdminService } from '@/lib/tenant-service';
+import { updateSuperAdminUserStatus, deleteSuperAdminUser } from '@/lib/tenant-service';
 
 interface Params {
   id: string;
@@ -21,7 +21,7 @@ export async function PATCH(
       );
     }
 
-    await SuperAdminService.updateSuperAdminUserStatus(id, active);
+    await updateSuperAdminUserStatus(id, active);
 
     return NextResponse.json({
       success: true,
@@ -50,7 +50,7 @@ export async function DELETE(
       );
     }
 
-    await SuperAdminService.deleteSuperAdminUser(id);
+    await deleteSuperAdminUser(id);
 
     return NextResponse.json({
       success: true,

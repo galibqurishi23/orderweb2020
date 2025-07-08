@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { SuperAdminService } from '@/lib/tenant-service';
+import { changeSuperAdminUserPassword } from '@/lib/tenant-service';
 
 interface Params {
   id: string;
@@ -37,7 +37,7 @@ export async function PATCH(
     }
 
     // Change password
-    await SuperAdminService.changeSuperAdminUserPassword(id, currentPassword, newPassword);
+    await changeSuperAdminUserPassword(id, currentPassword, newPassword);
 
     return NextResponse.json({
       success: true,

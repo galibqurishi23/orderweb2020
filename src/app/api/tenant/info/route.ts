@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { TenantService } from '@/lib/tenant-service';
+import { getTenantBySlug } from '@/lib/tenant-service';
 import pool from '@/lib/db';
 
 export async function GET(request: NextRequest) {
@@ -11,7 +11,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Slug parameter is required' }, { status: 400 });
     }
 
-    const tenant = await TenantService.getTenantBySlug(slug);
+    const tenant = await getTenantBySlug(slug);
 
     if (!tenant) {
       return NextResponse.json({ error: 'Tenant not found' }, { status: 404 });

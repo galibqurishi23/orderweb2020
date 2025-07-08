@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { TenantService } from '@/lib/tenant-service';
+import { getAllTenants, createTenant } from '@/lib/tenant-service';
 
 export async function GET() {
   try {
-    const tenants = await TenantService.getAllTenants();
+    const tenants = await getAllTenants();
     
     return NextResponse.json({
       success: true,
@@ -39,15 +39,15 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const result = await TenantService.createTenant({
+    const result = await createTenant({
       name,
       slug,
       email,
       phone,
       address,
-      ownerName,
-      ownerUsername,
-      ownerPassword
+      adminName: ownerName,
+      adminEmail: ownerUsername,
+      adminPassword: ownerPassword
     });
 
     return NextResponse.json({

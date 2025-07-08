@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import bcrypt from 'bcryptjs';
-import { TenantService } from '@/lib/tenant-service';
+import { updateTenantStatus, deleteTenant } from '@/lib/tenant-service';
 import db from '@/lib/db';
 
 interface Params {
@@ -24,7 +24,7 @@ export async function PATCH(
       );
     }
 
-    await TenantService.updateTenantStatus(id, status);
+    await updateTenantStatus(id, status);
 
     return NextResponse.json({
       success: true,
@@ -54,7 +54,7 @@ export async function DELETE(
       );
     }
 
-    await TenantService.deleteTenant(id);
+    await deleteTenant(id);
 
     return NextResponse.json({
       success: true,
