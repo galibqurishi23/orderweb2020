@@ -18,6 +18,23 @@ const nextConfig: NextConfig = {
       },
     ],
   },
+  webpack: (config, { isServer }) => {
+    if (!isServer) {
+      // Don't resolve 'fs', 'net', etc. on the client-side
+      config.resolve.fallback = {
+        fs: false,
+        net: false,
+        tls: false,
+        crypto: false,
+        dns: false,
+        timers: false,
+        stream: false,
+        constants: false,
+        module: false,
+      };
+    }
+    return config;
+  },
 };
 
 export default nextConfig;

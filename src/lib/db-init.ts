@@ -1,4 +1,5 @@
 'use server';
+// This file contains server-only code for database initialization
 
 import fs from 'fs/promises';
 import path from 'path';

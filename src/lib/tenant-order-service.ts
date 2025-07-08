@@ -4,7 +4,7 @@ import pool from './db';
 import type { Order, OrderStatus } from './types';
 import { v4 as uuidv4 } from 'uuid';
 import { generateOrderNumber } from './order-utils';
-import { TenantService } from './tenant-service';
+import { getTenantSettings } from './tenant-service';
 
 export async function getTenantOrders(tenantId: string): Promise<Order[]> {
     const [orderRows] = await pool.query(
@@ -55,7 +55,7 @@ export async function createTenantOrder(tenantId: string, orderData: Omit<Order,
     const createdAt = new Date();
     
     // Get tenant settings to generate proper order number
-    const tenantSettings = await TenantService.getTenantSettings(tenantId);
+    const tenantSettings = await getTenantSettings(tenantId);
     let restaurantSettings = tenantSettings;
     
     // If settings is JSON string, parse it

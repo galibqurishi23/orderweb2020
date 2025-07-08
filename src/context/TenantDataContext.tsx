@@ -8,7 +8,7 @@ import type {
 import * as TenantMenuService from '@/lib/tenant-menu-service';
 import * as TenantCustomerService from '@/lib/tenant-customer-service';
 import * as TenantOrderService from '@/lib/tenant-order-service';
-import { TenantService } from '@/lib/tenant-service';
+import { getTenantSettingsAction } from '@/lib/server-actions';
 import { defaultRestaurantSettings } from '@/default-setting/defaultRestaurantSettings';
 import { useTenant } from './TenantContext';
 
@@ -71,7 +71,7 @@ export const TenantDataProvider = ({ children }: { children: ReactNode }) => {
                 TenantMenuService.getTenantMenuItems(tenantData.id),
                 TenantCustomerService.getTenantCustomers(tenantData.id),
                 TenantOrderService.getTenantOrders(tenantData.id),
-                TenantService.getTenantSettings(tenantData.id)
+                getTenantSettingsAction(tenantData.id)
             ]);
             
             setCategories(dbCategories);
