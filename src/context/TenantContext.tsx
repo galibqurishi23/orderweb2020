@@ -7,6 +7,7 @@ interface TenantContextType {
   tenantSlug: string | null;
   tenantData: TenantData | null;
   isLoading: boolean;
+  error: string | null; // Add error state
   contextType: 'admin' | 'customer' | 'super-admin' | null;
 }
 
@@ -28,6 +29,7 @@ const TenantContext = createContext<TenantContextType>({
   tenantSlug: null,
   tenantData: null,
   isLoading: true,
+  error: null, // Default error state
   contextType: null
 });
 
@@ -36,6 +38,7 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
   const [tenantSlug, setTenantSlug] = useState<string | null>(null);
   const [tenantData, setTenantData] = useState<TenantData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null); // Add error state
   const [contextType, setContextType] = useState<'admin' | 'customer' | 'super-admin' | null>(null);
 
   useEffect(() => {
@@ -77,57 +80,39 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
         }
       })
         .then(response => {
-          if (response.ok) {
-            return response.json();
-          } else if (response.status === 404) {
-            // Tenant not found
-            console.error(`Tenant not found: ${potentialTenant}`);
-            setTenantSlug(null);
-            setTenantData(null);
-            setContextType(null);
-            return null;
-          } else {
-            console.error(`Failed to fetch tenant: ${response.status}`);
-            throw new Error(`Failed to fetch tenant: ${response.status}`);
+          if (!response.ok) {
+            return response.json().then(err => {
+              throw new Error(err.error || `Tenant not found: ${response.statusText}`);
+            });
           }
+          return response.json();
         })
-        .then(tenantData => {
-          if (tenantData) {
-            console.log(`Tenant data loaded for ${potentialTenant}:`, tenantData);
-            setTenantSlug(potentialTenant);
-            setTenantData(tenantData);
-            
-            // Determine context type
-            if (segments.length >= 2 && segments[1] === 'admin') {
-              console.log(`Setting context type to admin for ${potentialTenant}`);
-              setContextType('admin');
-            } else {
-              console.log(`Setting context type to customer for ${potentialTenant}`);
-              setContextType('customer');
-            }
-          }
+        .then(data => {
+          setTenantData(data);
+          setError(null);
         })
-        .catch(error => {
-          console.error('Error fetching tenant data:', error);
-          setTenantSlug(null);
+        .catch(err => {
+          console.error('Failed to fetch tenant data:', err);
+          setError(err.message);
           setTenantData(null);
-          setContextType(null);
         })
         .finally(() => {
           setIsLoading(false);
         });
+
+      // Determine context type based on path
+      if (segments.includes('admin')) {
+        setContextType('admin');
+      } else {
+        setContextType('customer');
+      }
     } else {
       setIsLoading(false);
     }
   }, [pathname]);
 
   return (
-    <TenantContext.Provider value={{
-      tenantSlug,
-      tenantData,
-      isLoading,
-      contextType
-    }}>
+    <TenantContext.Provider value={{ tenantSlug, tenantData, isLoading, error, contextType }}>
       {children}
     </TenantContext.Provider>
   );

@@ -1,47 +1,70 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import Link from 'next/link';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { 
   ShoppingCart, 
-  DollarSign, 
+  Banknote, 
   Clock, 
   Users,
   AlertCircle,
   Loader2,
   TrendingUp,
-  Bug
+  BookText
 } from "lucide-react";
 import { useTenant } from '@/context/TenantContext';
 import type { TenantStats } from '@/lib/types';
-import { TenantDebugPanel } from '@/components/dinedesk/TenantDebugPanel';
 
 export default function TenantAdminDashboard() {
-  const { tenantData } = useTenant();
+  const { tenantData, isLoading: isTenantLoading, error: tenantError } = useTenant();
   const [stats, setStats] = useState<TenantStats | null>(null);
   const [recentOrders, setRecentOrders] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [showDebug, setShowDebug] = useState(false);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [authLoading, setAuthLoading] = useState(true);
+  
+  // Check authentication first
+  useEffect(() => {
+    const checkAuth = async () => {
+      try {
+        const response = await fetch('/api/auth/check-admin');
+        const data = await response.json();
+        
+        if (data.authenticated) {
+          setIsAuthenticated(true);
+        } else {
+          // Not authenticated, redirect to login
+          window.location.href = window.location.pathname.replace('/dashboard', '');
+        }
+      } catch (error) {
+        // Not authenticated, redirect to login
+        window.location.href = window.location.pathname.replace('/dashboard', '');
+      } finally {
+        setAuthLoading(false);
+      }
+    };
 
-  // Check if we're in development mode
-  const isDev = process.env.NODE_ENV === 'development';
+    checkAuth();
+  }, []);
   
   useEffect(() => {
-    if (tenantData?.id) {
+    if (isAuthenticated && tenantData?.id) {
       fetchDashboardData();
+    } else if (!isTenantLoading && !authLoading) {
+      // If tenant data is not available and we are not loading, set an error.
+      setError('Tenant data is not available. Cannot fetch dashboard data.');
+      setLoading(false);
     }
-  }, [tenantData?.id]);
+  }, [tenantData, isTenantLoading, isAuthenticated, authLoading]);
 
   const fetchDashboardData = async () => {
     if (!tenantData?.id) return;
 
     try {
-      // Add console logging to debug
-      console.log('Fetching data for tenant:', tenantData);
-      
       // Fetch stats with a timestamp to avoid caching issues
       const timestamp = new Date().getTime();
       const statsResponse = await fetch(`/api/tenant/stats?tenantId=${tenantData.id}&t=${timestamp}`, {
@@ -56,13 +79,11 @@ export default function TenantAdminDashboard() {
       }
       
       const statsResult = await statsResponse.json();
-      console.log('Stats result:', statsResult);
       
       if (statsResult.success) {
         setStats(statsResult.data);
       } else {
         // Use fallback dummy data if API fails but returns a response
-        console.log('Using fallback stats data');
         setStats({
           totalOrders: 8,
           todayOrders: 2,
@@ -85,13 +106,11 @@ export default function TenantAdminDashboard() {
       }
       
       const ordersResult = await ordersResponse.json();
-      console.log('Orders result:', ordersResult);
       
       if (ordersResult.success) {
         setRecentOrders(ordersResult.data);
       } else {
         // Use fallback dummy data if API fails but returns a response
-        console.log('Using fallback orders data');
         setRecentOrders([{
           id: 'dummy-order-1',
           customerName: 'John Doe',
@@ -107,13 +126,32 @@ export default function TenantAdminDashboard() {
       }
     } catch (err: any) {
       setError(`Failed to load dashboard data: ${err.message || 'Unknown error'}`);
-      console.error('Error fetching dashboard data:', err);
     } finally {
       setLoading(false);
     }
   };
 
-  if (!tenantData) {
+  if (authLoading || isTenantLoading || loading || !tenantData || !isAuthenticated) {
+    return (
+      <div className="p-6 space-y-6">
+        <Card>
+          <CardContent className="pt-6">
+            <div className="flex flex-col items-center justify-center py-12 text-center">
+              <Loader2 className="h-12 w-12 text-primary mb-4 animate-spin" />
+              <h3 className="text-lg font-semibold mb-2">
+                {authLoading ? 'Verifying Access...' : 'Loading Dashboard'}
+              </h3>
+              <p className="text-muted-foreground">
+                {authLoading ? 'Checking authentication...' : 'Fetching restaurant data...'}
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  if (tenantError || !tenantData) {
     return (
       <div className="p-6 space-y-6">
         <Card>
@@ -121,7 +159,9 @@ export default function TenantAdminDashboard() {
             <div className="flex flex-col items-center justify-center py-12 text-center">
               <AlertCircle className="h-12 w-12 text-destructive mb-4" />
               <h3 className="text-lg font-semibold mb-2">Restaurant Not Found</h3>
-              <p className="text-muted-foreground">Unable to load restaurant information.</p>
+              <p className="text-muted-foreground mb-4">
+                {tenantError || 'Unable to load restaurant information.'}
+              </p>
               <Button onClick={() => window.location.reload()} className="mt-4">
                 Reload Page
               </Button>
@@ -132,22 +172,6 @@ export default function TenantAdminDashboard() {
     );
   }
   
-  if (loading) {
-    return (
-      <div className="p-6 space-y-6">
-        <Card>
-          <CardContent className="pt-6">
-            <div className="flex flex-col items-center justify-center py-12 text-center">
-              <Loader2 className="h-12 w-12 text-primary mb-4 animate-spin" />
-              <h3 className="text-lg font-semibold mb-2">Loading Dashboard</h3>
-              <p className="text-muted-foreground">Fetching restaurant data...</p>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-    );
-  }
-
   if (error) {
     return (
       <div className="p-6 space-y-6">
@@ -174,20 +198,10 @@ export default function TenantAdminDashboard() {
     );
   }
 
-  if (loading) {
-    return (
-      <div className="p-6 space-y-6">
-        <div className="flex items-center justify-center py-12">
-          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-        </div>
-      </div>
-    );
-  }
-
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('en-US', {
       style: 'currency',
-      currency: 'USD'
+      currency: 'GBP'
     }).format(amount);
   };
 
@@ -231,7 +245,7 @@ export default function TenantAdminDashboard() {
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Revenue</CardTitle>
-            <DollarSign className="h-4 w-4 text-muted-foreground" />
+            <Banknote className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{formatCurrency(stats?.totalRevenue || 0)}</div>
@@ -320,61 +334,48 @@ export default function TenantAdminDashboard() {
 
       {/* Quick Actions */}
       <div className="grid gap-4 md:grid-cols-3">
-        <Card className="cursor-pointer hover:shadow-lg transition-shadow">
-          <CardContent className="flex items-center space-x-4 p-6">
-            <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
-              <ShoppingCart className="w-6 h-6 text-blue-600" />
-            </div>
-            <div>
-              <h3 className="font-semibold">Manage Orders</h3>
-              <p className="text-sm text-muted-foreground">View and process orders</p>
-            </div>
-          </CardContent>
-        </Card>
+        <Link href={`/${tenantData.slug}/admin/orders`}>
+          <Card className="cursor-pointer hover:shadow-lg transition-shadow">
+            <CardContent className="flex items-center space-x-4 p-6">
+              <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
+                <ShoppingCart className="w-6 h-6 text-blue-600" />
+              </div>
+              <div>
+                <h3 className="font-semibold">Manage Orders</h3>
+                <p className="text-sm text-muted-foreground">View and process orders</p>
+              </div>
+            </CardContent>
+          </Card>
+        </Link>
 
-        <Card className="cursor-pointer hover:shadow-lg transition-shadow">
-          <CardContent className="flex items-center space-x-4 p-6">
-            <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center">
-              <Users className="w-6 h-6 text-green-600" />
-            </div>
-            <div>
-              <h3 className="font-semibold">Menu Management</h3>
-              <p className="text-sm text-muted-foreground">Update your menu items</p>
-            </div>
-          </CardContent>
-        </Card>
+        <Link href={`/${tenantData.slug}/admin/menu`}>
+          <Card className="cursor-pointer hover:shadow-lg transition-shadow">
+            <CardContent className="flex items-center space-x-4 p-6">
+              <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center">
+                <BookText className="w-6 h-6 text-green-600" />
+              </div>
+              <div>
+                <h3 className="font-semibold">Menu Management</h3>
+                <p className="text-sm text-muted-foreground">Update your menu items</p>
+              </div>
+            </CardContent>
+          </Card>
+        </Link>
 
-        <Card className="cursor-pointer hover:shadow-lg transition-shadow">
-          <CardContent className="flex items-center space-x-4 p-6">
-            <div className="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center">
-              <DollarSign className="w-6 h-6 text-purple-600" />
-            </div>
-            <div>
-              <h3 className="font-semibold">Settings</h3>
-              <p className="text-sm text-muted-foreground">Configure restaurant settings</p>
-            </div>
-          </CardContent>
-        </Card>
+        <Link href={`/${tenantData.slug}/admin/settings`}>
+          <Card className="cursor-pointer hover:shadow-lg transition-shadow">
+            <CardContent className="flex items-center space-x-4 p-6">
+              <div className="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center">
+                <Banknote className="w-6 h-6 text-purple-600" />
+              </div>
+              <div>
+                <h3 className="font-semibold">Settings</h3>
+                <p className="text-sm text-muted-foreground">Configure restaurant settings</p>
+              </div>
+            </CardContent>
+          </Card>
+        </Link>
       </div>
-
-      {/* Debug Panel - Development Only */}
-      {isDev && (
-        <div className="mt-6">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg font-semibold">Development Debug Info</h3>
-            <Button 
-              variant="outline" 
-              size="sm" 
-              onClick={() => setShowDebug(!showDebug)}
-              className="flex items-center gap-2"
-            >
-              <Bug className="w-4 h-4" />
-              {showDebug ? 'Hide Debug' : 'Show Debug'}
-            </Button>
-          </div>
-          {showDebug && <TenantDebugPanel />}
-        </div>
-      )}
     </div>
   );
 }

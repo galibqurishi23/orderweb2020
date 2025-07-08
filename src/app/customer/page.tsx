@@ -45,6 +45,7 @@ import {
   Search,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { getCurrencySymbol } from '@/lib/currency-utils';
 import { Textarea } from '@/components/ui/textarea';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
@@ -943,9 +944,7 @@ export default function DineDeskPage() {
   const [searchQuery, setSearchQuery] = React.useState('');
 
   const currencySymbol = React.useMemo(() => {
-    if (restaurantSettings.currency === 'USD') return '$';
-    if (restaurantSettings.currency === 'EUR') return '€';
-    return '£';
+    return getCurrencySymbol(restaurantSettings.currency);
   }, [restaurantSettings.currency]);
 
   const filteredMenuItems = React.useMemo(() => {

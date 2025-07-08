@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useMemo } from 'react';
+import { getCurrencySymbol } from '@/lib/currency-utils';
 import { Tag, Plus, Edit, Trash2, Save, X, Check, Ban } from 'lucide-react';
 import { useData } from '@/context/DataContext';
 import type { Voucher } from '@/lib/types';
@@ -38,7 +39,7 @@ import {
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
-import { PoundSterling, Percent } from 'lucide-react';
+import { Percent, Banknote } from 'lucide-react';
 
 
 const VoucherCard = ({ voucher, onEdit, onDelete, onToggle, currencySymbol }: { voucher: Voucher; onEdit: (v: Voucher) => void; onDelete: (id: string) => void; onToggle: (id: string) => void; currencySymbol: string; }) => {
@@ -51,7 +52,7 @@ const VoucherCard = ({ voucher, onEdit, onDelete, onToggle, currencySymbol }: { 
                 <div className="flex items-start justify-between">
                     <div className="flex items-center gap-4">
                         <span className="w-12 h-12 bg-primary/10 rounded-lg flex items-center justify-center">
-                            {voucher.type === 'percentage' ? <Percent className="w-6 h-6 text-primary" /> : <PoundSterling className="w-6 h-6 text-primary" />}
+                            {voucher.type === 'percentage' ? <Percent className="w-6 h-6 text-primary" /> : <Banknote className="w-6 h-6 text-primary" />}
                         </span>
                         <div>
                             <CardTitle className="font-mono text-xl">{voucher.code}</CardTitle>
@@ -172,7 +173,7 @@ const VoucherFormDialog = ({ isOpen, onClose, onSave, voucher, currencySymbol }:
                             <div>
                                 <RadioGroupItem value="amount" id="r-amount" className="peer sr-only" />
                                 <Label htmlFor="r-amount" className="flex flex-col items-center justify-between rounded-md border-2 border-muted bg-popover p-4 hover:bg-accent hover:text-accent-foreground peer-data-[state=checked]:border-primary [&:has([data-state=checked])]:border-primary">
-                                    <PoundSterling className="mb-3 h-6 w-6" />
+                                    <Banknote className="mb-3 h-6 w-6" />
                                     Fixed Amount
                                 </Label>
                             </div>
@@ -225,9 +226,7 @@ export default function VouchersPage() {
     const { toast } = useToast();
 
     const currencySymbol = useMemo(() => {
-        if (restaurantSettings.currency === 'USD') return '$';
-        if (restaurantSettings.currency === 'EUR') return '€';
-        return '£';
+        return getCurrencySymbol(restaurantSettings.currency);
     }, [restaurantSettings.currency]);
 
     const handleAddNew = () => {

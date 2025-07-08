@@ -17,13 +17,13 @@ export const defaultRestaurantSettings = {
   orderPrefix: 'ORD',
   advanceOrderPrefix: 'ADV',
   openingHours: {
-    monday: { morningOpen: '09:00', morningClose: '14:00', eveningOpen: '17:00', eveningClose: '22:00', closed: false },
-    tuesday: { morningOpen: '09:00', morningClose: '14:00', eveningOpen: '17:00', eveningClose: '22:00', closed: false },
-    wednesday: { morningOpen: '09:00', morningClose: '14:00', eveningOpen: '17:00', eveningClose: '22:00', closed: false },
-    thursday: { morningOpen: '09:00', morningClose: '14:00', eveningOpen: '17:00', eveningClose: '22:00', closed: false },
-    friday: { morningOpen: '09:00', morningClose: '14:00', eveningOpen: '17:00', eveningClose: '23:00', closed: false },
-    saturday: { morningOpen: '10:00', morningClose: '15:00', eveningOpen: '17:00', eveningClose: '23:00', closed: false },
-    sunday: { morningOpen: '11:00', morningClose: '16:00', eveningOpen: '', eveningClose: '', closed: false }
+    monday: { timeMode: 'split', morningOpen: '09:00', morningClose: '14:00', eveningOpen: '17:00', eveningClose: '22:00', closed: false },
+    tuesday: { timeMode: 'split', morningOpen: '09:00', morningClose: '14:00', eveningOpen: '17:00', eveningClose: '22:00', closed: false },
+    wednesday: { timeMode: 'split', morningOpen: '09:00', morningClose: '14:00', eveningOpen: '17:00', eveningClose: '22:00', closed: false },
+    thursday: { timeMode: 'split', morningOpen: '09:00', morningClose: '14:00', eveningOpen: '17:00', eveningClose: '22:00', closed: false },
+    friday: { timeMode: 'split', morningOpen: '09:00', morningClose: '14:00', eveningOpen: '17:00', eveningClose: '23:00', closed: false },
+    saturday: { timeMode: 'split', morningOpen: '10:00', morningClose: '15:00', eveningOpen: '17:00', eveningClose: '23:00', closed: false },
+    sunday: { timeMode: 'split', morningOpen: '11:00', morningClose: '16:00', eveningOpen: '', eveningClose: '', closed: false }
   },
   orderThrottling: {
     monday: { interval: 15, ordersPerInterval: 10, enabled: false },

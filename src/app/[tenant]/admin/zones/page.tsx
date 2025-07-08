@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useRef, useMemo, useEffect } from 'react';
+import { getCurrencySymbol } from '@/lib/currency-utils';
 import { MapPin, Edit, Trash2, Plus, Save, X, Upload, Map as MapIcon, Clock, Settings, ThumbsUp, ThumbsDown } from 'lucide-react';
 import { useData } from '@/context/DataContext';
 import type { DeliveryZone, OrderThrottlingSettings } from '@/lib/types';
@@ -248,9 +249,7 @@ export default function DeliveryZonesPage() {
     }, [restaurantSettings.orderThrottling]);
 
     const currencySymbol = useMemo(() => {
-        if (restaurantSettings.currency === 'USD') return '$';
-        if (restaurantSettings.currency === 'EUR') return '€';
-        return '£';
+        return getCurrencySymbol(restaurantSettings.currency);
     }, [restaurantSettings.currency]);
 
     const handleAddNew = () => {

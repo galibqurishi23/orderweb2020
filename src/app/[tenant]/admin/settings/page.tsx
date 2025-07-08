@@ -282,6 +282,35 @@ export default function SettingsPage() {
             }
         }));
     };
+
+    const handleTimeModeChange = (dayKey: string, mode: 'single' | 'split') => {
+        setSettings(prev => ({
+            ...prev,
+            openingHours: {
+                ...prev.openingHours,
+                [dayKey]: {
+                    ...prev.openingHours[dayKey],
+                    timeMode: mode,
+                    // Clear fields that don't apply to the new mode
+                    ...(mode === 'single' ? {
+                        morningOpen: undefined,
+                        morningClose: undefined,
+                        eveningOpen: undefined,
+                        eveningClose: undefined,
+                        openTime: prev.openingHours[dayKey].openTime || '09:00',
+                        closeTime: prev.openingHours[dayKey].closeTime || '22:00'
+                    } : {
+                        openTime: undefined,
+                        closeTime: undefined,
+                        morningOpen: prev.openingHours[dayKey].morningOpen || '09:00',
+                        morningClose: prev.openingHours[dayKey].morningClose || '14:00',
+                        eveningOpen: prev.openingHours[dayKey].eveningOpen || '17:00',
+                        eveningClose: prev.openingHours[dayKey].eveningClose || '22:00'
+                    })
+                }
+            }
+        }));
+    };
     
     const handleOrderTypeSettingChange = (field: keyof RestaurantSettings['orderTypeSettings'], value: boolean) => {
         setSettings(prev => ({
@@ -298,12 +327,20 @@ export default function SettingsPage() {
         let newHours = { ...settings.openingHours };
         if (preset === 'standard') {
             daysOfWeek.forEach(day => {
-                newHours[day.key] = { morningOpen: '09:00', morningClose: '14:00', eveningOpen: '17:00', eveningClose: '22:00', closed: false };
+                newHours[day.key] = { 
+                    timeMode: 'split', 
+                    morningOpen: '09:00', 
+                    morningClose: '14:00', 
+                    eveningOpen: '17:00', 
+                    eveningClose: '22:00', 
+                    closed: false 
+                };
             });
         } else {
              daysOfWeek.forEach(day => {
                 const isWeekend = day.key === 'saturday' || day.key === 'sunday';
                 newHours[day.key] = { 
+                    timeMode: 'split',
                     morningOpen: isWeekend ? '10:00' : '09:00', 
                     morningClose: isWeekend ? '15:00' : '14:00', 
                     eveningOpen: isWeekend ? '18:00' : '17:00', 
@@ -332,7 +369,9 @@ export default function SettingsPage() {
           if (img.width !== requiredWidth || img.height !== requiredHeight) {
             onError(`Image dimensions must be exactly ${requiredWidth}x${requiredHeight}px.`);
           } else {
-            onSuccess(e.target.result as string);
+            if (e.target?.result) {
+              onSuccess(e.target.result as string);
+            }
           }
         };
         img.onerror = () => onError('Invalid image file.');
@@ -603,40 +642,113 @@ export default function SettingsPage() {
                     <Card>
                         <CardHeader>
                             <CardTitle>Opening Hours</CardTitle>
-                            <CardDescription>Set morning and evening slots. Orders will only be accepted during these times.</CardDescription>
+                            <CardDescription>Configure your restaurant's opening hours. Choose between single time slots or split morning/evening sessions.</CardDescription>
                         </CardHeader>
                         <CardContent className="space-y-4">
-                            {daysOfWeek.map(day => (
-                                <Card key={day.key} className={cn(settings.openingHours[day.key].closed && "bg-muted/50")}>
-                                    <CardHeader className="flex flex-row items-center justify-between p-4">
-                                        <h4 className="font-semibold">{day.label}</h4>
-                                        <div className="flex items-center space-x-2">
-                                            <Label htmlFor={`closed-${day.key}`} className="text-sm">Closed</Label>
-                                            <Switch id={`closed-${day.key}`} checked={settings.openingHours[day.key].closed} onCheckedChange={(checked) => handleHoursChange(day.key, 'closed', checked)} />
-                                        </div>
-                                    </CardHeader>
-                                    {!settings.openingHours[day.key].closed && (
-                                        <CardContent className="p-4 pt-0 grid grid-cols-1 md:grid-cols-2 gap-6">
-                                            <div className="space-y-2">
-                                                <Label>Morning Slot</Label>
-                                                <div className="flex items-center gap-2">
-                                                    <Input type="time" value={settings.openingHours[day.key].morningOpen} onChange={e => handleHoursChange(day.key, 'morningOpen', e.target.value)} />
-                                                    <span>-</span>
-                                                    <Input type="time" value={settings.openingHours[day.key].morningClose} onChange={e => handleHoursChange(day.key, 'morningClose', e.target.value)} />
-                                                </div>
+                            {daysOfWeek.map(day => {
+                                const dayHours = settings.openingHours[day.key];
+                                return (
+                                    <Card key={day.key} className={cn(dayHours.closed && "bg-muted/50")}>
+                                        <CardHeader className="flex flex-row items-center justify-between p-4">
+                                            <h4 className="font-semibold">{day.label}</h4>
+                                            <div className="flex items-center space-x-2">
+                                                <Label htmlFor={`closed-${day.key}`} className="text-sm">Closed Today</Label>
+                                                <Switch 
+                                                    id={`closed-${day.key}`} 
+                                                    checked={dayHours.closed} 
+                                                    onCheckedChange={(checked) => handleHoursChange(day.key, 'closed', checked)} 
+                                                />
                                             </div>
-                                            <div className="space-y-2">
-                                                <Label>Evening Slot</Label>
-                                                <div className="flex items-center gap-2">
-                                                    <Input type="time" value={settings.openingHours[day.key].eveningOpen} onChange={e => handleHoursChange(day.key, 'eveningOpen', e.target.value)} />
-                                                    <span>-</span>
-                                                    <Input type="time" value={settings.openingHours[day.key].eveningClose} onChange={e => handleHoursChange(day.key, 'eveningClose', e.target.value)} />
+                                        </CardHeader>
+                                        {!dayHours.closed && (
+                                            <CardContent className="p-4 pt-0 space-y-4">
+                                                {/* Time Mode Selection */}
+                                                <div className="space-y-2">
+                                                    <Label className="text-sm font-medium">Time Format</Label>
+                                                    <div className="flex gap-2">
+                                                        <Button
+                                                            type="button"
+                                                            variant={dayHours.timeMode === 'single' ? 'default' : 'outline'}
+                                                            size="sm"
+                                                            onClick={() => handleTimeModeChange(day.key, 'single')}
+                                                        >
+                                                            Single Time
+                                                        </Button>
+                                                        <Button
+                                                            type="button"
+                                                            variant={dayHours.timeMode === 'split' ? 'default' : 'outline'}
+                                                            size="sm"
+                                                            onClick={() => handleTimeModeChange(day.key, 'split')}
+                                                        >
+                                                            Morning & Evening
+                                                        </Button>
+                                                    </div>
                                                 </div>
-                                            </div>
-                                        </CardContent>
-                                    )}
-                                </Card>
-                            ))}
+
+                                                {/* Single Time Mode */}
+                                                {dayHours.timeMode === 'single' && (
+                                                    <div className="space-y-2">
+                                                        <Label>Opening Hours</Label>
+                                                        <div className="flex items-center gap-2">
+                                                            <Input 
+                                                                type="time" 
+                                                                value={dayHours.openTime || '09:00'} 
+                                                                onChange={e => handleHoursChange(day.key, 'openTime', e.target.value)} 
+                                                                className="flex-1"
+                                                            />
+                                                            <span className="text-muted-foreground">to</span>
+                                                            <Input 
+                                                                type="time" 
+                                                                value={dayHours.closeTime || '22:00'} 
+                                                                onChange={e => handleHoursChange(day.key, 'closeTime', e.target.value)} 
+                                                                className="flex-1"
+                                                            />
+                                                        </div>
+                                                    </div>
+                                                )}
+
+                                                {/* Split Time Mode */}
+                                                {dayHours.timeMode === 'split' && (
+                                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                                        <div className="space-y-2">
+                                                            <Label>Morning Slot</Label>
+                                                            <div className="flex items-center gap-2">
+                                                                <Input 
+                                                                    type="time" 
+                                                                    value={dayHours.morningOpen || '09:00'} 
+                                                                    onChange={e => handleHoursChange(day.key, 'morningOpen', e.target.value)} 
+                                                                />
+                                                                <span>-</span>
+                                                                <Input 
+                                                                    type="time" 
+                                                                    value={dayHours.morningClose || '14:00'} 
+                                                                    onChange={e => handleHoursChange(day.key, 'morningClose', e.target.value)} 
+                                                                />
+                                                            </div>
+                                                        </div>
+                                                        <div className="space-y-2">
+                                                            <Label>Evening Slot</Label>
+                                                            <div className="flex items-center gap-2">
+                                                                <Input 
+                                                                    type="time" 
+                                                                    value={dayHours.eveningOpen || '17:00'} 
+                                                                    onChange={e => handleHoursChange(day.key, 'eveningOpen', e.target.value)} 
+                                                                />
+                                                                <span>-</span>
+                                                                <Input 
+                                                                    type="time" 
+                                                                    value={dayHours.eveningClose || '22:00'} 
+                                                                    onChange={e => handleHoursChange(day.key, 'eveningClose', e.target.value)} 
+                                                                />
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                )}
+                                            </CardContent>
+                                        )}
+                                    </Card>
+                                );
+                            })}
                         </CardContent>
                         <CardFooter>
                             <div className="flex flex-wrap gap-2">

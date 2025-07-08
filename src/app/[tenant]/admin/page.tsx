@@ -1,10 +1,213 @@
-import { redirect } from 'next/navigation'
+'use client';
 
-export default async function TenantAdminPage({ 
+import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Loader2, Lock, User, AlertCircle, Eye, EyeOff } from "lucide-react";
+import { useTenant } from '@/context/TenantContext';
+import AdminLogo from '@/components/icons/admin-logo';
+
+export default function TenantAdminLoginPage({ 
   params 
 }: { 
   params: Promise<{ tenant: string }>
 }) {
-  const { tenant } = await params
-  redirect(`/${tenant}/admin/dashboard`)
+  const router = useRouter();
+  const { tenantData, isLoading: isTenantLoading } = useTenant();
+  const [tenantSlug, setTenantSlug] = useState<string>('');
+  const [credentials, setCredentials] = useState({
+    username: '',
+    password: ''
+  });
+  const [isLogging, setIsLogging] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [showPassword, setShowPassword] = useState(false);
+
+  useEffect(() => {
+    // Get tenant slug from params
+    params.then(({ tenant }) => {
+      setTenantSlug(tenant);
+    });
+
+    // Check if already authenticated
+    const checkAuth = async () => {
+      try {
+        const response = await fetch('/api/auth/check-admin');
+        if (response.ok) {
+          const data = await response.json();
+          if (data.authenticated && data.tenantSlug === tenantSlug) {
+            router.push(`/${tenantSlug}/admin/dashboard`);
+          }
+        }
+      } catch (error) {
+        // Not authenticated, stay on login page
+      }
+    };
+
+    if (tenantSlug) {
+      checkAuth();
+    }
+  }, [tenantSlug, router]);
+
+  const handleLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsLogging(true);
+    setError(null);
+
+    try {
+      const response = await fetch('/api/auth/admin-login', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          username: credentials.username,
+          password: credentials.password,
+          tenantSlug
+        }),
+      });
+
+      const result = await response.json();
+
+      if (result.success) {
+        // Successful login, redirect to dashboard
+        router.push(`/${tenantSlug}/admin/dashboard`);
+      } else {
+        setError(result.error || 'Login failed');
+      }
+    } catch (err) {
+      setError('Network error. Please try again.');
+    } finally {
+      setIsLogging(false);
+    }
+  };
+
+  if (isTenantLoading) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4 text-blue-600" />
+          <p className="text-gray-600">Loading restaurant...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!tenantData) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <Card className="w-full max-w-md">
+          <CardContent className="pt-6">
+            <div className="text-center">
+              <AlertCircle className="h-12 w-12 text-red-500 mx-auto mb-4" />
+              <h2 className="text-xl font-semibold text-gray-900 mb-2">Restaurant Not Found</h2>
+              <p className="text-gray-600">The restaurant "{tenantSlug}" does not exist.</p>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4">
+      <Card className="w-full max-w-md shadow-xl">
+        <CardHeader className="text-center">
+          <div className="flex justify-center mb-4">
+            <AdminLogo />
+          </div>
+          <CardTitle className="text-2xl font-bold text-gray-900">
+            {tenantData.name}
+          </CardTitle>
+          <p className="text-gray-600">Admin Portal</p>
+        </CardHeader>
+        
+        <CardContent>
+          <form onSubmit={handleLogin} className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="username" className="text-gray-700">Username</Label>
+              <div className="relative">
+                <User className="absolute left-3 top-3 w-4 h-4 text-gray-400" />
+                <Input
+                  id="username"
+                  type="text"
+                  placeholder="admin"
+                  value={credentials.username}
+                  onChange={(e) => setCredentials({...credentials, username: e.target.value})}
+                  className="pl-10"
+                  required
+                  disabled={isLogging}
+                />
+              </div>
+            </div>
+            
+            <div className="space-y-2">
+              <Label htmlFor="password" className="text-gray-700">Password</Label>
+              <div className="relative">
+                <Lock className="absolute left-3 top-3 w-4 h-4 text-gray-400" />
+                <Input
+                  id="password"
+                  type={showPassword ? "text" : "password"}
+                  placeholder="••••••••"
+                  value={credentials.password}
+                  onChange={(e) => setCredentials({...credentials, password: e.target.value})}
+                  className="pl-10 pr-10"
+                  required
+                  disabled={isLogging}
+                />
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
+                  onClick={() => setShowPassword(!showPassword)}
+                  disabled={isLogging}
+                >
+                  {showPassword ? (
+                    <EyeOff className="h-4 w-4 text-gray-400" />
+                  ) : (
+                    <Eye className="h-4 w-4 text-gray-400" />
+                  )}
+                </Button>
+              </div>
+            </div>
+            
+            {error && (
+              <Alert variant="destructive" className="border-red-300 bg-red-50">
+                <AlertCircle className="h-5 w-5 text-red-600" />
+                <AlertDescription className="text-red-800 font-medium">
+                  ❌ {error}
+                </AlertDescription>
+              </Alert>
+            )}
+            
+            <Button 
+              type="submit" 
+              className="w-full bg-blue-600 hover:bg-blue-700"
+              disabled={isLogging}
+            >
+              {isLogging ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Signing In...
+                </>
+              ) : (
+                'Sign In to Admin Panel'
+              )}
+            </Button>
+          </form>
+          
+          <div className="mt-6 pt-4 border-t border-gray-200">
+            <p className="text-xs text-gray-500 text-center">
+              Authorized restaurant administrators only
+            </p>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  );
 }

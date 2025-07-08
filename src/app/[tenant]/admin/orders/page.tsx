@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useMemo, useRef, useEffect } from 'react';
+import { getCurrencySymbol } from '@/lib/currency-utils';
 import { ShoppingBag, Printer, Eye, CheckCircle, Search } from 'lucide-react';
 import { useData } from '@/context/DataContext';
 import type { Order, OrderStatus } from '@/lib/types';
@@ -48,9 +49,7 @@ export default function TenantOrdersPage() {
   }, []);
 
   const currencySymbol = useMemo(() => {
-    if (restaurantSettings.currency === 'USD') return '$';
-    if (restaurantSettings.currency === 'EUR') return '€';
-    return '£';
+    return getCurrencySymbol(restaurantSettings.currency);
   }, [restaurantSettings.currency]);
 
   const componentToPrintRef = useRef(null);

@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useMemo, useEffect } from 'react';
+import { getCurrencySymbol } from '@/lib/currency-utils';
 import { useRouter } from 'next/navigation';
 import { useData } from '@/context/DataContext';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
@@ -37,9 +38,7 @@ function OrderHistory() {
     }, []);
 
     const currencySymbol = useMemo(() => {
-        if (restaurantSettings.currency === 'USD') return '$';
-        if (restaurantSettings.currency === 'EUR') return '€';
-        return '£';
+        return getCurrencySymbol(restaurantSettings.currency);
     }, [restaurantSettings.currency]);
 
     const sixMonthsAgo = subMonths(new Date(), 6);

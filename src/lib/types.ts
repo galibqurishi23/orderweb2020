@@ -61,10 +61,11 @@ export interface PlacedOrderItem {
     specialInstructions?: string;
 }
 
-export type OrderStatus = 'pending' | 'confirmed' | 'preparing' | 'ready' | 'delivered' | 'cancelled';
+export type OrderStatus = 'confirmed' | 'cancelled';
 
 export interface Order {
     id: string;
+    orderNumber: string; // Auto-generated order number with prefix (e.g., "BIS-1234")
     createdAt: Date;
     customerName: string;
     customerPhone: string;
@@ -96,11 +97,12 @@ export interface Address {
 
 export interface Customer {
     id: string;
+    tenant_id?: string; // For multi-tenant support
     name: string;
     email: string;
-    phone: string;
-    password?: string; // Only for mock data simulation
-    addresses: Address[];
+    phone?: string;
+    password?: string; // Only for mock data simulation or authentication
+    addresses?: Address[];
 }
 
 
@@ -127,11 +129,16 @@ export interface Printer {
 }
 
 export interface OpeningHoursPerDay {
+  closed: boolean;
+  timeMode: 'single' | 'split'; // New field to choose between single time or split morning/evening
+  // Single time mode fields
+  openTime?: string;
+  closeTime?: string;
+  // Split time mode fields (existing)
   morningOpen?: string;
   morningClose?: string;
   eveningOpen?: string;
   eveningClose?: string;
-  closed: boolean;
 }
 
 export interface OpeningHours {

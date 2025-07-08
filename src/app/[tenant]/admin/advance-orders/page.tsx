@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useRef, useEffect, useMemo } from 'react';
+import { getCurrencySymbol } from '@/lib/currency-utils';
 import { Clock, Calendar, Eye, CheckCircle, XCircle, Printer } from 'lucide-react';
 import type { Order, OrderStatus } from '@/lib/types';
 import { useData } from '@/context/DataContext';
@@ -47,9 +48,7 @@ export default function AdvanceOrdersPage() {
   }, []);
 
   const currencySymbol = useMemo(() => {
-    if (restaurantSettings.currency === 'USD') return '$';
-    if (restaurantSettings.currency === 'EUR') return '€';
-    return '£';
+    return getCurrencySymbol(restaurantSettings.currency);
   }, [restaurantSettings.currency]);
 
   const componentToPrintRef = useRef(null);

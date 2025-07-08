@@ -20,7 +20,17 @@ import {
   Calendar,
   Mail,
   Phone,
-  AlertTriangle
+  AlertTriangle,
+  MapPin,
+  Users,
+  TrendingUp,
+  Eye,
+  EyeOff,
+  Settings,
+  Shield,
+  Key,
+  User,
+  Building
 } from "lucide-react";
 import Link from 'next/link';
 import type { Tenant } from '@/lib/types';
@@ -31,8 +41,13 @@ export default function RestaurantsPage() {
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [isCreating, setIsCreating] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
   const [showCreateDialog, setShowCreateDialog] = useState(false);
+  const [showEditDialog, setShowEditDialog] = useState(false);
   const [deletingRestaurantId, setDeletingRestaurantId] = useState<string | null>(null);
+  const [editingRestaurant, setEditingRestaurant] = useState<any>(null);
+  const [showCreatePassword, setShowCreatePassword] = useState(false);
+  const [showEditPassword, setShowEditPassword] = useState(false);
   const [formData, setFormData] = useState({
     name: '',
     slug: '',
@@ -40,7 +55,18 @@ export default function RestaurantsPage() {
     phone: '',
     address: '',
     ownerName: '',
+    ownerUsername: '',
     ownerPassword: ''
+  });
+  const [editFormData, setEditFormData] = useState({
+    name: '',
+    slug: '',
+    email: '',
+    phone: '',
+    address: '',
+    adminName: '',
+    adminUsername: '',
+    adminPassword: ''
   });
 
   useEffect(() => {
@@ -88,7 +114,7 @@ export default function RestaurantsPage() {
         // Show success message with admin login details
         setSuccessMessage(
           `✅ Restaurant "${formData.name}" created successfully! ` +
-          `Admin login details have been sent to ${formData.email}. ` +
+          `Admin can login with username: ${formData.ownerUsername}. ` +
           `Dashboard URL: /${formData.slug}/admin`
         );
         
@@ -102,6 +128,7 @@ export default function RestaurantsPage() {
           phone: '',
           address: '',
           ownerName: '',
+          ownerUsername: '',
           ownerPassword: ''
         });
       } else {
@@ -112,6 +139,71 @@ export default function RestaurantsPage() {
       console.error('Error creating restaurant:', err);
     } finally {
       setIsCreating(false);
+    }
+  };
+
+  const handleEditRestaurant = async (restaurantId: string) => {
+    try {
+      const response = await fetch(`/api/super-admin/tenants/${restaurantId}`);
+      const result = await response.json();
+      
+      if (result.success) {
+        setEditingRestaurant(result.data);
+        setEditFormData({
+          name: result.data.name || '',
+          slug: result.data.slug || '',
+          email: result.data.email || '',
+          phone: result.data.phone || '',
+          address: result.data.address || '',
+          adminName: result.data.admin_name || '',
+          adminUsername: result.data.admin_username || '',
+          adminPassword: ''
+        });
+        setShowEditDialog(true);
+      } else {
+        setError(result.error || 'Failed to fetch restaurant details');
+      }
+    } catch (err) {
+      setError('Failed to fetch restaurant details');
+      console.error('Error fetching restaurant details:', err);
+    }
+  };
+
+  const handleUpdateRestaurant = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsEditing(true);
+    setError(null);
+
+    try {
+      const response = await fetch(`/api/super-admin/tenants/${editingRestaurant.id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(editFormData),
+      });
+
+      const result = await response.json();
+
+      if (result.success) {
+        await fetchRestaurants(); // Refresh the list
+        setShowEditDialog(false);
+        setEditingRestaurant(null);
+        
+        setSuccessMessage(
+          `✅ Restaurant "${editFormData.name}" updated successfully!`
+        );
+        
+        // Clear success message after 5 seconds
+        setTimeout(() => setSuccessMessage(null), 5000);
+      } else {
+        setError(result.error || 'Failed to update restaurant');
+      }
+    } catch (err) {
+      setError('Failed to update restaurant');
+      console.error('Error updating restaurant:', err);
+    } finally {
+      setIsEditing(false);
     }
   };
 
@@ -129,6 +221,8 @@ export default function RestaurantsPage() {
 
       if (result.success) {
         await fetchRestaurants(); // Refresh the list
+        setSuccessMessage(`Restaurant status updated to ${status}`);
+        setTimeout(() => setSuccessMessage(null), 3000);
       } else {
         setError(result.error || 'Failed to update restaurant status');
       }
@@ -151,6 +245,8 @@ export default function RestaurantsPage() {
       if (result.success) {
         await fetchRestaurants(); // Refresh the list
         setError(null); // Clear any previous errors
+        setSuccessMessage('Restaurant deleted successfully');
+        setTimeout(() => setSuccessMessage(null), 3000);
       } else {
         setError(result.error || 'Failed to delete restaurant');
       }
@@ -193,366 +289,691 @@ export default function RestaurantsPage() {
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case 'active': return 'bg-green-100 text-green-800';
-      case 'trial': return 'bg-blue-100 text-blue-800';
-      case 'suspended': return 'bg-red-100 text-red-800';
-      case 'cancelled': return 'bg-gray-100 text-gray-800';
-      default: return 'bg-gray-100 text-gray-800';
+      case 'active': return 'bg-emerald-100 text-emerald-800 border-emerald-200';
+      case 'trial': return 'bg-blue-100 text-blue-800 border-blue-200';
+      case 'suspended': return 'bg-red-100 text-red-800 border-red-200';
+      case 'cancelled': return 'bg-gray-100 text-gray-800 border-gray-200';
+      default: return 'bg-gray-100 text-gray-800 border-gray-200';
+    }
+  };
+
+  const getStatusIcon = (status: string) => {
+    switch (status) {
+      case 'active': return '🟢';
+      case 'trial': return '🔵';
+      case 'suspended': return '🔴';
+      case 'cancelled': return '⚫';
+      default: return '⚪';
     }
   };
 
   if (loading) {
     return (
-      <div className="p-6 space-y-6">
-        <div className="flex items-center justify-center py-12">
-          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50 p-6">
+        <div className="max-w-7xl mx-auto">
+          <div className="flex items-center justify-center py-20">
+            <div className="text-center">
+              <Loader2 className="h-12 w-12 animate-spin mx-auto text-blue-600 mb-4" />
+              <h3 className="text-lg font-semibold text-gray-900 mb-2">Loading restaurants...</h3>
+              <p className="text-gray-600">Please wait while we fetch your restaurant data.</p>
+            </div>
+          </div>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold">Restaurants</h1>
-          <p className="text-muted-foreground">
-            Manage all restaurants on your platform
-          </p>
-        </div>
-        
-        <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
-          <DialogTrigger asChild>
-            <Button className="bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700">
-              <Plus className="mr-2 h-4 w-4" />
-              Add Restaurant
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="sm:max-w-[600px]">
-            <DialogHeader>
-              <DialogTitle>Create New Restaurant</DialogTitle>
-              <DialogDescription>
-                Add a new restaurant to your platform. An owner account will be created automatically.
-              </DialogDescription>
-            </DialogHeader>
-            <form onSubmit={handleCreateRestaurant} className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="name">Restaurant Name</Label>
-                  <Input
-                    id="name"
-                    value={formData.name}
-                    onChange={(e) => handleNameChange(e.target.value)}
-                    placeholder="e.g., Mario's Pizza"
-                    required
-                  />
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50">
+      <div className="max-w-7xl mx-auto p-6 space-y-8">
+        {/* Modern Header */}
+        <div className="relative overflow-hidden bg-white rounded-2xl shadow-sm border border-gray-200">
+          <div className="absolute inset-0 bg-gradient-to-r from-blue-50 to-indigo-50"></div>
+          <div className="relative p-8">
+            <div className="flex flex-col lg:flex-row lg:items-center justify-between">
+              <div className="mb-6 lg:mb-0">
+                <div className="flex items-center space-x-3 mb-3">
+                  <div className="p-2 bg-blue-600 rounded-lg">
+                    <Building className="h-6 w-6 text-white" />
+                  </div>
+                  <h1 className="text-3xl font-bold text-gray-900">Restaurant Management</h1>
                 </div>
-                <div className="space-y-2">
-                  <Label htmlFor="slug">URL Slug</Label>
-                  <Input
-                    id="slug"
-                    value={formData.slug}
-                    onChange={(e) => setFormData(prev => ({ ...prev, slug: e.target.value }))}
-                    placeholder="e.g., marios-pizza"
-                    required
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    URL: yoursite.com/{formData.slug}
-                  </p>
+                <p className="text-gray-600 text-lg">
+                  Manage all restaurants on your platform with powerful tools and analytics
+                </p>
+                <div className="mt-4 flex items-center space-x-6 text-sm text-gray-500">
+                  <div className="flex items-center space-x-2">
+                    <Store className="h-4 w-4" />
+                    <span>{restaurants.length} restaurants</span>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <TrendingUp className="h-4 w-4" />
+                    <span>{restaurants.filter(r => r.status === 'active').length} active</span>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <Users className="h-4 w-4" />
+                    <span>{restaurants.filter(r => r.status === 'trial').length} in trial</span>
+                  </div>
                 </div>
               </div>
               
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="email">Restaurant Email</Label>
-                  <Input
-                    id="email"
-                    type="email"
-                    value={formData.email}
-                    onChange={(e) => setFormData(prev => ({ ...prev, email: e.target.value }))}
-                    placeholder="contact@restaurant.com"
-                    required
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="phone">Phone</Label>
-                  <Input
-                    id="phone"
-                    value={formData.phone}
-                    onChange={(e) => setFormData(prev => ({ ...prev, phone: e.target.value }))}
-                    placeholder="+1 (555) 123-4567"
-                  />
-                </div>
-              </div>
+              <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
+                <DialogTrigger asChild>
+                  <Button size="lg" className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 shadow-lg">
+                    <Plus className="mr-2 h-5 w-5" />
+                    Add New Restaurant
+                  </Button>
+                </DialogTrigger>
+                <DialogContent className="sm:max-w-[700px] max-h-[90vh] overflow-y-auto">
+                  <DialogHeader>
+                    <DialogTitle className="text-2xl font-bold">Create New Restaurant</DialogTitle>
+                    <DialogDescription className="text-gray-600">
+                      Add a new restaurant to your platform. An admin account will be created automatically.
+                    </DialogDescription>
+                  </DialogHeader>
+                  <form onSubmit={handleCreateRestaurant} className="space-y-6">
+                    {/* Restaurant Details Section */}
+                    <div className="bg-gray-50 rounded-lg p-6">
+                      <h4 className="font-semibold mb-4 text-gray-800 flex items-center">
+                        <Store className="h-5 w-5 mr-2" />
+                        Restaurant Details
+                      </h4>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <Label htmlFor="name">Restaurant Name *</Label>
+                          <Input
+                            id="name"
+                            value={formData.name}
+                            onChange={(e) => handleNameChange(e.target.value)}
+                            placeholder="e.g., Mario's Italian Bistro"
+                            required
+                            className="border-gray-300"
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="slug">URL Slug *</Label>
+                          <Input
+                            id="slug"
+                            value={formData.slug}
+                            onChange={(e) => setFormData(prev => ({ ...prev, slug: e.target.value }))}
+                            placeholder="e.g., marios-bistro"
+                            required
+                            className="border-gray-300"
+                          />
+                          <p className="text-xs text-gray-500">
+                            URL: yoursite.com/<strong>{formData.slug || 'restaurant-slug'}</strong>
+                          </p>
+                        </div>
+                      </div>
+                      
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+                        <div className="space-y-2">
+                          <Label htmlFor="email">Restaurant Email *</Label>
+                          <Input
+                            id="email"
+                            type="email"
+                            value={formData.email}
+                            onChange={(e) => setFormData(prev => ({ ...prev, email: e.target.value }))}
+                            placeholder="contact@restaurant.com"
+                            required
+                            className="border-gray-300"
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="phone">Phone Number</Label>
+                          <Input
+                            id="phone"
+                            value={formData.phone}
+                            onChange={(e) => setFormData(prev => ({ ...prev, phone: e.target.value }))}
+                            placeholder="+1 (555) 123-4567"
+                            className="border-gray-300"
+                          />
+                        </div>
+                      </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="address">Address</Label>
-                <Textarea
-                  id="address"
-                  value={formData.address}
-                  onChange={(e) => setFormData(prev => ({ ...prev, address: e.target.value }))}
-                  placeholder="123 Main St, City, State 12345"
-                  rows={2}
-                />
-              </div>
+                      <div className="space-y-2 mt-4">
+                        <Label htmlFor="address">Address</Label>
+                        <Textarea
+                          id="address"
+                          value={formData.address}
+                          onChange={(e) => setFormData(prev => ({ ...prev, address: e.target.value }))}
+                          placeholder="123 Main St, City, State 12345"
+                          rows={2}
+                          className="border-gray-300"
+                        />
+                      </div>
+                    </div>
 
-              <div className="border-t pt-4">
-                <h4 className="font-medium mb-3">Owner Account</h4>
-                <div className="grid grid-cols-2 gap-4">
+                    {/* Admin Account Section */}
+                    <div className="bg-blue-50 rounded-lg p-6 border border-blue-200">
+                      <h4 className="font-semibold mb-4 text-blue-800 flex items-center">
+                        <Shield className="h-5 w-5 mr-2" />
+                        Admin Account Credentials
+                      </h4>
+                      <div className="space-y-4">
+                        <div className="space-y-2">
+                          <Label htmlFor="ownerName">Admin Full Name *</Label>
+                          <Input
+                            id="ownerName"
+                            value={formData.ownerName}
+                            onChange={(e) => setFormData(prev => ({ ...prev, ownerName: e.target.value }))}
+                            placeholder="e.g., John Doe"
+                            required
+                            className="border-blue-300 bg-white"
+                          />
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <div className="space-y-2">
+                            <Label htmlFor="ownerUsername">Admin Username *</Label>
+                            <Input
+                              id="ownerUsername"
+                              value={formData.ownerUsername}
+                              onChange={(e) => setFormData(prev => ({ ...prev, ownerUsername: e.target.value }))}
+                              placeholder="e.g., admin or johndoe"
+                              required
+                              className="border-blue-300 bg-white"
+                            />
+                            <p className="text-xs text-blue-600">
+                              <Key className="h-3 w-3 inline mr-1" />
+                              This username will be used to login to the admin panel
+                            </p>
+                          </div>
+                          <div className="space-y-2">
+                            <Label htmlFor="ownerPassword">Admin Password *</Label>
+                            <div className="flex space-x-2">
+                              <div className="relative flex-1">
+                                <Input
+                                  id="ownerPassword"
+                                  type={showCreatePassword ? "text" : "password"}
+                                  value={formData.ownerPassword}
+                                  onChange={(e) => setFormData(prev => ({ ...prev, ownerPassword: e.target.value }))}
+                                  placeholder="Secure password"
+                                  required
+                                  className="border-blue-300 bg-white pr-10"
+                                />
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="sm"
+                                  className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
+                                  onClick={() => setShowCreatePassword(!showCreatePassword)}
+                                >
+                                  {showCreatePassword ? (
+                                    <EyeOff className="h-4 w-4 text-gray-400" />
+                                  ) : (
+                                    <Eye className="h-4 w-4 text-gray-400" />
+                                  )}
+                                </Button>
+                              </div>
+                              <Button
+                                type="button"
+                                variant="outline"
+                                onClick={() => setFormData(prev => ({ ...prev, ownerPassword: generatePassword() }))}
+                                className="border-blue-300 text-blue-600 hover:bg-blue-50"
+                              >
+                                Generate
+                              </Button>
+                            </div>
+                            <p className="text-xs text-blue-600">
+                              <User className="h-3 w-3 inline mr-1" />
+                              Admin will use these credentials to access the restaurant panel
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {error && (
+                      <div className="flex items-center space-x-2 text-red-600 text-sm bg-red-50 p-3 rounded-lg border border-red-200">
+                        <AlertCircle className="h-4 w-4" />
+                        <span>{error}</span>
+                      </div>
+                    )}
+
+                    <div className="flex justify-end space-x-3 pt-4 border-t">
+                      <Button type="button" variant="outline" onClick={() => setShowCreateDialog(false)}>
+                        Cancel
+                      </Button>
+                      <Button type="submit" disabled={isCreating} className="bg-blue-600 hover:bg-blue-700">
+                        {isCreating ? (
+                          <>
+                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                            Creating Restaurant...
+                          </>
+                        ) : (
+                          <>
+                            <Plus className="mr-2 h-4 w-4" />
+                            Create Restaurant
+                          </>
+                        )}
+                      </Button>
+                    </div>
+                  </form>
+                </DialogContent>
+              </Dialog>
+            </div>
+          </div>
+        </div>
+
+        {/* Success Message */}
+        {successMessage && (
+          <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4 shadow-sm">
+            <div className="flex items-start space-x-3">
+              <div className="p-1 bg-emerald-100 rounded-full">
+                <AlertCircle className="h-4 w-4 text-emerald-600" />
+              </div>
+              <div>
+                <p className="font-semibold text-emerald-800">Success!</p>
+                <p className="text-emerald-700 text-sm mt-1">{successMessage}</p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Error Message */}
+        {error && !showCreateDialog && !showEditDialog && (
+          <div className="bg-red-50 border border-red-200 rounded-xl p-4 shadow-sm">
+            <div className="flex items-center space-x-3">
+              <AlertCircle className="h-5 w-5 text-red-600" />
+              <div>
+                <p className="font-semibold text-red-800">Error</p>
+                <p className="text-red-700 text-sm">{error}</p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Edit Restaurant Dialog */}
+        <Dialog open={showEditDialog} onOpenChange={setShowEditDialog}>
+          <DialogContent className="sm:max-w-[700px] max-h-[90vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle className="text-2xl font-bold">Edit Restaurant</DialogTitle>
+              <DialogDescription className="text-gray-600">
+                Update restaurant details and admin credentials.
+              </DialogDescription>
+            </DialogHeader>
+            <form onSubmit={handleUpdateRestaurant} className="space-y-6">
+              {/* Restaurant Details Section */}
+              <div className="bg-gray-50 rounded-lg p-6">
+                <h4 className="font-semibold mb-4 text-gray-800 flex items-center">
+                  <Store className="h-5 w-5 mr-2" />
+                  Restaurant Details
+                </h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <Label htmlFor="ownerName">Owner Name</Label>
+                    <Label htmlFor="edit-name">Restaurant Name *</Label>
                     <Input
-                      id="ownerName"
-                      value={formData.ownerName}
-                      onChange={(e) => setFormData(prev => ({ ...prev, ownerName: e.target.value }))}
-                      placeholder="John Doe"
+                      id="edit-name"
+                      value={editFormData.name}
+                      onChange={(e) => setEditFormData(prev => ({ ...prev, name: e.target.value }))}
+                      placeholder="e.g., Mario's Italian Bistro"
                       required
+                      className="border-gray-300"
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="ownerPassword">Password</Label>
-                    <div className="flex space-x-2">
-                      <Input
-                        id="ownerPassword"
-                        type="password"
-                        value={formData.ownerPassword}
-                        onChange={(e) => setFormData(prev => ({ ...prev, ownerPassword: e.target.value }))}
-                        placeholder="Secure password"
-                        required
-                      />
-                      <Button
-                        type="button"
-                        variant="outline"
-                        onClick={() => setFormData(prev => ({ ...prev, ownerPassword: generatePassword() }))}
-                      >
-                        Generate
-                      </Button>
-                    </div>
-                    <p className="text-xs text-muted-foreground">
-                      A secure password will be auto-generated. The admin will receive login details via email.
+                    <Label htmlFor="edit-slug">URL Slug *</Label>
+                    <Input
+                      id="edit-slug"
+                      value={editFormData.slug}
+                      onChange={(e) => setEditFormData(prev => ({ ...prev, slug: e.target.value }))}
+                      placeholder="e.g., marios-bistro"
+                      required
+                      className="border-gray-300"
+                    />
+                    <p className="text-xs text-gray-500">
+                      URL: yoursite.com/<strong>{editFormData.slug || 'restaurant-slug'}</strong>
                     </p>
+                  </div>
+                </div>
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="edit-email">Restaurant Email *</Label>
+                    <Input
+                      id="edit-email"
+                      type="email"
+                      value={editFormData.email}
+                      onChange={(e) => setEditFormData(prev => ({ ...prev, email: e.target.value }))}
+                      placeholder="contact@restaurant.com"
+                      required
+                      className="border-gray-300"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="edit-phone">Phone Number</Label>
+                    <Input
+                      id="edit-phone"
+                      value={editFormData.phone}
+                      onChange={(e) => setEditFormData(prev => ({ ...prev, phone: e.target.value }))}
+                      placeholder="+1 (555) 123-4567"
+                      className="border-gray-300"
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-2 mt-4">
+                  <Label htmlFor="edit-address">Address</Label>
+                  <Textarea
+                    id="edit-address"
+                    value={editFormData.address}
+                    onChange={(e) => setEditFormData(prev => ({ ...prev, address: e.target.value }))}
+                    placeholder="123 Main St, City, State 12345"
+                    rows={2}
+                    className="border-gray-300"
+                  />
+                </div>
+              </div>
+
+              {/* Admin Account Section */}
+              <div className="bg-blue-50 rounded-lg p-6 border border-blue-200">
+                <h4 className="font-semibold mb-4 text-blue-800 flex items-center">
+                  <Shield className="h-5 w-5 mr-2" />
+                  Admin Account Credentials
+                </h4>
+                
+                {/* Current Login Info */}
+                {editingRestaurant && (
+                  <div className="mb-4 p-3 bg-blue-100 rounded-lg border border-blue-300">
+                    <p className="text-sm font-medium text-blue-800 mb-1">Current Admin Login:</p>
+                    <div className="text-sm text-blue-700">
+                      <span className="font-medium">Username:</span> {editingRestaurant.admin_username || 'Not set'} 
+                      <span className="mx-2">•</span>
+                      <span className="font-medium">URL:</span> /{editingRestaurant.slug}/admin
+                    </div>
+                  </div>
+                )}
+                
+                <div className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="edit-adminName">Admin Full Name</Label>
+                    <Input
+                      id="edit-adminName"
+                      value={editFormData.adminName}
+                      onChange={(e) => setEditFormData(prev => ({ ...prev, adminName: e.target.value }))}
+                      placeholder="e.g., John Doe"
+                      className="border-blue-300 bg-white"
+                    />
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="edit-adminUsername">Admin Username</Label>
+                      <Input
+                        id="edit-adminUsername"
+                        value={editFormData.adminUsername}
+                        onChange={(e) => setEditFormData(prev => ({ ...prev, adminUsername: e.target.value }))}
+                        placeholder="e.g., admin or johndoe"
+                        className="border-blue-300 bg-white"
+                      />
+                      <p className="text-xs text-blue-600">
+                        <Key className="h-3 w-3 inline mr-1" />
+                        This username is used to login to the admin panel
+                      </p>
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="edit-adminPassword">New Password (Optional)</Label>
+                      <div className="flex space-x-2">
+                        <div className="relative flex-1">
+                          <Input
+                            id="edit-adminPassword"
+                            type={showEditPassword ? "text" : "password"}
+                            value={editFormData.adminPassword}
+                            onChange={(e) => setEditFormData(prev => ({ ...prev, adminPassword: e.target.value }))}
+                            placeholder="Leave empty to keep current password"
+                            className="border-blue-300 bg-white pr-10"
+                          />
+                          {editFormData.adminPassword && (
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
+                              onClick={() => setShowEditPassword(!showEditPassword)}
+                            >
+                              {showEditPassword ? (
+                                <EyeOff className="h-4 w-4 text-gray-400" />
+                              ) : (
+                                <Eye className="h-4 w-4 text-gray-400" />
+                              )}
+                            </Button>
+                          )}
+                        </div>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          onClick={() => setEditFormData(prev => ({ ...prev, adminPassword: generatePassword() }))}
+                          className="border-blue-300 text-blue-600 hover:bg-blue-50"
+                        >
+                          Generate
+                        </Button>
+                      </div>
+                      <p className="text-xs text-blue-600">
+                        <User className="h-3 w-3 inline mr-1" />
+                        Leave empty to keep the current password
+                      </p>
+                    </div>
                   </div>
                 </div>
               </div>
 
               {error && (
-                <div className="flex items-center space-x-2 text-red-600 text-sm">
+                <div className="flex items-center space-x-2 text-red-600 text-sm bg-red-50 p-3 rounded-lg border border-red-200">
                   <AlertCircle className="h-4 w-4" />
                   <span>{error}</span>
                 </div>
               )}
 
-              <div className="flex justify-end space-x-2 pt-4">
-                <Button type="button" variant="outline" onClick={() => setShowCreateDialog(false)}>
+              <div className="flex justify-end space-x-3 pt-4 border-t">
+                <Button type="button" variant="outline" onClick={() => {setShowEditDialog(false); setEditingRestaurant(null);}}>
                   Cancel
                 </Button>
-                <Button type="submit" disabled={isCreating}>
-                  {isCreating ? (
+                <Button type="submit" disabled={isEditing} className="bg-blue-600 hover:bg-blue-700">
+                  {isEditing ? (
                     <>
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Creating...
+                      Updating Restaurant...
                     </>
                   ) : (
-                    'Create Restaurant'
+                    <>
+                      <Settings className="mr-2 h-4 w-4" />
+                      Update Restaurant
+                    </>
                   )}
                 </Button>
               </div>
             </form>
           </DialogContent>
         </Dialog>
-      </div>
 
-      {/* Success Message */}
-      {successMessage && (
-        <Card className="border-green-200 bg-green-50">
-          <CardContent className="pt-6">
-            <div className="flex items-start space-x-2 text-green-700">
-              <AlertCircle className="h-4 w-4 mt-0.5 text-green-600" />
-              <div>
-                <p className="font-medium">Restaurant Created Successfully!</p>
-                <p className="text-sm mt-1">{successMessage}</p>
+        {/* Restaurants List */}
+        {restaurants.length === 0 ? (
+          <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-12">
+            <div className="text-center">
+              <div className="p-4 bg-gray-100 rounded-full inline-block mb-6">
+                <Store className="h-12 w-12 text-gray-400" />
               </div>
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Error Message */}
-      {error && !showCreateDialog && (
-        <Card className="border-red-200 bg-red-50">
-          <CardContent className="pt-6">
-            <div className="flex items-center space-x-2 text-red-600">
-              <AlertCircle className="h-4 w-4" />
-              <span>{error}</span>
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Restaurants List */}
-      {restaurants.length === 0 ? (
-        <Card>
-          <CardContent className="pt-6">
-            <div className="flex flex-col items-center justify-center py-12 text-center">
-              <Store className="h-12 w-12 text-muted-foreground mb-4" />
-              <h3 className="text-lg font-semibold mb-2">No restaurants yet</h3>
-              <p className="text-muted-foreground max-w-sm mb-4">
-                Create your first restaurant to start building your platform.
+              <h3 className="text-2xl font-semibold text-gray-900 mb-3">No restaurants yet</h3>
+              <p className="text-gray-600 max-w-md mx-auto mb-8">
+                Create your first restaurant to start building your multi-tenant platform. Each restaurant will have its own admin dashboard and customer interface.
               </p>
-              <Button onClick={() => setShowCreateDialog(true)}>
-                <Plus className="mr-2 h-4 w-4" />
+              <Button onClick={() => setShowCreateDialog(true)} size="lg" className="bg-blue-600 hover:bg-blue-700">
+                <Plus className="mr-2 h-5 w-5" />
                 Create Your First Restaurant
               </Button>
             </div>
-          </CardContent>
-        </Card>
-      ) : (
-        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-          {restaurants.map((restaurant) => (
-            <Card key={restaurant.id} className="hover:shadow-lg transition-shadow">
-              <CardHeader>
-                <div className="flex items-center justify-between">
-                  <CardTitle className="text-xl">{restaurant.name}</CardTitle>
-                  <Badge className={getStatusColor(restaurant.status)}>
-                    {restaurant.status}
-                  </Badge>
-                </div>
-                <CardDescription>
-                  /{restaurant.slug}
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="space-y-2">
-                  <div className="flex items-center space-x-2 text-sm text-muted-foreground">
-                    <Mail className="h-4 w-4" />
-                    <span>{restaurant.email}</span>
-                  </div>
-                  {restaurant.phone && (
-                    <div className="flex items-center space-x-2 text-sm text-muted-foreground">
-                      <Phone className="h-4 w-4" />
-                      <span>{restaurant.phone}</span>
+          </div>
+        ) : (
+          <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
+            {restaurants.map((restaurant) => (
+              <Card key={restaurant.id} className="group hover:shadow-xl transition-all duration-300 bg-white rounded-2xl border border-gray-200 overflow-hidden">
+                <CardHeader className="pb-3">
+                  <div className="flex items-start justify-between">
+                    <div className="flex-1">
+                      <CardTitle className="text-xl font-bold text-gray-900 group-hover:text-blue-600 transition-colors">
+                        {restaurant.name}
+                      </CardTitle>
+                      <CardDescription className="text-gray-500 font-medium">
+                        /{restaurant.slug}
+                      </CardDescription>
                     </div>
-                  )}
-                  <div className="flex items-center space-x-2 text-sm text-muted-foreground">
-                    <Calendar className="h-4 w-4" />
-                    <span>Created {new Date(restaurant.created_at).toLocaleDateString()}</span>
+                    <Badge className={`${getStatusColor(restaurant.status)} font-medium`}>
+                      {getStatusIcon(restaurant.status)} {restaurant.status}
+                    </Badge>
                   </div>
-                </div>
+                </CardHeader>
+                
+                <CardContent className="space-y-4">
+                  {/* Contact Information */}
+                  <div className="space-y-2">
+                    <div className="flex items-center space-x-3 text-sm text-gray-600">
+                      <Mail className="h-4 w-4 text-gray-400" />
+                      <span className="truncate">{restaurant.email}</span>
+                    </div>
+                    {restaurant.phone && (
+                      <div className="flex items-center space-x-3 text-sm text-gray-600">
+                        <Phone className="h-4 w-4 text-gray-400" />
+                        <span>{restaurant.phone}</span>
+                      </div>
+                    )}
+                    {restaurant.address && (
+                      <div className="flex items-start space-x-3 text-sm text-gray-600">
+                        <MapPin className="h-4 w-4 text-gray-400 mt-0.5" />
+                        <span className="line-clamp-2">{restaurant.address}</span>
+                      </div>
+                    )}
+                    <div className="flex items-center space-x-3 text-sm text-gray-500">
+                      <Calendar className="h-4 w-4 text-gray-400" />
+                      <span>Created {new Date(restaurant.created_at).toLocaleDateString()}</span>
+                    </div>
+                  </div>
 
-                <div className="flex flex-wrap gap-2">
-                  <Badge variant="outline">{restaurant.subscription_plan}</Badge>
-                  <Badge variant={restaurant.subscription_status === 'active' ? 'default' : 'secondary'}>
-                    {restaurant.subscription_status}
-                  </Badge>
-                </div>
+                  {/* Subscription Info */}
+                  <div className="flex flex-wrap gap-2 pt-2 border-t border-gray-100">
+                    <Badge variant="outline" className="text-xs">
+                      {restaurant.subscription_plan}
+                    </Badge>
+                    <Badge variant={restaurant.subscription_status === 'active' ? 'default' : 'secondary'} className="text-xs">
+                      {restaurant.subscription_status}
+                    </Badge>
+                  </div>
 
-                <div className="flex justify-between items-center pt-4 border-t">
-                  <div className="flex space-x-2">
+                  {/* Action Buttons */}
+                  <div className="pt-4 border-t border-gray-100">
+                    {/* Quick Links */}
                     {restaurant.status === 'active' && (
-                      <div className="flex space-x-2 mr-4">
-                        <Button asChild variant="outline" size="sm" className="text-xs">
-                          <Link href={`/${restaurant.slug}/admin`} target="_blank">
+                      <div className="grid grid-cols-2 gap-2 mb-3">
+                        <Button asChild variant="outline" size="sm" className="text-xs h-8">
+                          <Link href={`/${restaurant.slug}/admin`} target="_blank" className="flex items-center">
                             <ExternalLink className="h-3 w-3 mr-1" />
-                            Admin Interface
+                            Admin
                           </Link>
                         </Button>
-                        <Button asChild variant="outline" size="sm" className="text-xs">
-                          <Link href={`/${restaurant.slug}`} target="_blank">
-                            <ExternalLink className="h-3 w-3 mr-1" />
-                            Customer Interface
+                        <Button asChild variant="outline" size="sm" className="text-xs h-8">
+                          <Link href={`/${restaurant.slug}`} target="_blank" className="flex items-center">
+                            <Eye className="h-3 w-3 mr-1" />
+                            View Store
                           </Link>
                         </Button>
                       </div>
                     )}
-                    <Button variant="outline" size="sm">
-                      <Edit className="h-4 w-4" />
-                    </Button>
-                    <AlertDialog>
-                      <AlertDialogTrigger asChild>
+
+                    {/* Management Actions */}
+                    <div className="flex justify-between items-center">
+                      <div className="flex space-x-2">
                         <Button 
                           variant="outline" 
                           size="sm"
-                          disabled={deletingRestaurantId === restaurant.id}
+                          onClick={() => handleEditRestaurant(restaurant.id)}
+                          className="h-8 w-8 p-0"
                         >
-                          {deletingRestaurantId === restaurant.id ? (
-                            <Loader2 className="h-4 w-4 animate-spin" />
-                          ) : (
-                            <Trash2 className="h-4 w-4" />
-                          )}
+                          <Edit className="h-3 w-3" />
                         </Button>
-                      </AlertDialogTrigger>
-                      <AlertDialogContent>
-                        <AlertDialogHeader>
-                          <AlertDialogTitle className="flex items-center space-x-2">
-                            <AlertTriangle className="h-5 w-5 text-red-500" />
-                            <span>Delete Restaurant</span>
-                          </AlertDialogTitle>
-                          <AlertDialogDescription asChild>
-                            <div className="space-y-2 pt-2">
-                              <p>
-                                Are you sure you want to delete <strong>{restaurant.name}</strong>?
-                              </p>
-                              <div className="bg-red-50 p-3 rounded-md border border-red-200">
-                                <div className="text-red-800 text-sm font-medium">⚠️ This action cannot be undone!</div>
-                                <p className="text-red-700 text-sm mt-1">
-                                  This will permanently delete:
-                                </p>
-                                <ul className="text-red-700 text-sm mt-1 list-disc list-inside space-y-1">
-                                  <li>All restaurant data and settings</li>
-                                  <li>All menu items and categories</li>
-                                  <li>All orders and customer data</li>
-                                  <li>All user accounts for this restaurant</li>
-                                  <li>All billing and transaction history</li>
-                                </ul>
-                              </div>
-                            </div>
-                          </AlertDialogDescription>
-                        </AlertDialogHeader>
-                        <AlertDialogFooter>
-                          <AlertDialogCancel>Cancel</AlertDialogCancel>
-                          <AlertDialogAction
-                            onClick={() => deleteRestaurant(restaurant.id)}
-                            className="bg-red-600 hover:bg-red-700"
-                          >
-                            Delete Restaurant
-                          </AlertDialogAction>
-                        </AlertDialogFooter>
-                      </AlertDialogContent>
-                    </AlertDialog>
-                  </div>
-                  <Link href={`/${restaurant.slug}`} target="_blank">
-                    <Button variant="outline" size="sm">
-                      <ExternalLink className="h-4 w-4" />
-                    </Button>
-                  </Link>
-                </div>
+                        <AlertDialog>
+                          <AlertDialogTrigger asChild>
+                            <Button 
+                              variant="outline" 
+                              size="sm"
+                              disabled={deletingRestaurantId === restaurant.id}
+                              className="h-8 w-8 p-0 hover:bg-red-50 hover:border-red-200 hover:text-red-600"
+                            >
+                              {deletingRestaurantId === restaurant.id ? (
+                                <Loader2 className="h-3 w-3 animate-spin" />
+                              ) : (
+                                <Trash2 className="h-3 w-3" />
+                              )}
+                            </Button>
+                          </AlertDialogTrigger>
+                          <AlertDialogContent>
+                            <AlertDialogHeader>
+                              <AlertDialogTitle className="flex items-center space-x-2">
+                                <AlertTriangle className="h-5 w-5 text-red-500" />
+                                <span>Delete Restaurant</span>
+                              </AlertDialogTitle>
+                              <AlertDialogDescription asChild>
+                                <div className="space-y-3 pt-2">
+                                  <p>
+                                    Are you sure you want to delete <strong>{restaurant.name}</strong>?
+                                  </p>
+                                  <div className="bg-red-50 p-4 rounded-lg border border-red-200">
+                                    <div className="text-red-800 text-sm font-semibold mb-2">⚠️ This action cannot be undone!</div>
+                                    <p className="text-red-700 text-sm mb-2">
+                                      This will permanently delete:
+                                    </p>
+                                    <ul className="text-red-700 text-sm space-y-1 list-disc list-inside">
+                                      <li>All restaurant data and settings</li>
+                                      <li>All menu items and categories</li>
+                                      <li>All orders and customer data</li>
+                                      <li>All user accounts for this restaurant</li>
+                                      <li>All billing and transaction history</li>
+                                    </ul>
+                                  </div>
+                                </div>
+                              </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                              <AlertDialogCancel>Cancel</AlertDialogCancel>
+                              <AlertDialogAction
+                                onClick={() => deleteRestaurant(restaurant.id)}
+                                className="bg-red-600 hover:bg-red-700"
+                              >
+                                Delete Restaurant
+                              </AlertDialogAction>
+                            </AlertDialogFooter>
+                          </AlertDialogContent>
+                        </AlertDialog>
+                      </div>
 
-                <div className="flex space-x-2 pt-2">
-                  {restaurant.status !== 'active' && (
-                    <Button 
-                      size="sm" 
-                      variant="default"
-                      onClick={() => updateTenantStatus(restaurant.id, 'active')}
-                    >
-                      Activate
-                    </Button>
-                  )}
-                  {restaurant.status === 'active' && (
-                    <Button 
-                      size="sm" 
-                      variant="secondary"
-                      onClick={() => updateTenantStatus(restaurant.id, 'suspended')}
-                    >
-                      Suspend
-                    </Button>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-      )}
+                      {/* Status Toggle Buttons */}
+                      <div className="flex space-x-2">
+                        {restaurant.status !== 'active' && (
+                          <Button 
+                            size="sm" 
+                            variant="default"
+                            onClick={() => updateTenantStatus(restaurant.id, 'active')}
+                            className="text-xs h-8 bg-emerald-600 hover:bg-emerald-700"
+                          >
+                            Activate
+                          </Button>
+                        )}
+                        {restaurant.status === 'active' && (
+                          <Button 
+                            size="sm" 
+                            variant="outline"
+                            onClick={() => updateTenantStatus(restaurant.id, 'suspended')}
+                            className="text-xs h-8 border-orange-300 text-orange-600 hover:bg-orange-50"
+                          >
+                            Suspend
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

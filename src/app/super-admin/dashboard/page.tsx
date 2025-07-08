@@ -21,30 +21,58 @@ export default function SuperAdminDashboard() {
   const [stats, setStats] = useState<PlatformStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [authLoading, setAuthLoading] = useState(true);
 
+  // Check authentication first
   useEffect(() => {
-    async function fetchStats() {
+    const checkAuth = async () => {
       try {
-        const response = await fetch('/api/super-admin/stats');
-        const result = await response.json();
+        const response = await fetch('/api/auth/check-super-admin');
+        const data = await response.json();
         
-        if (result.success) {
-          setStats(result.data);
+        if (data.authenticated) {
+          setIsAuthenticated(true);
         } else {
-          setError(result.error || 'Failed to fetch statistics');
+          // Not authenticated, redirect to login
+          window.location.href = '/super-admin';
         }
-      } catch (err) {
-        setError('Failed to connect to server');
-        console.error('Error fetching platform stats:', err);
+      } catch (error) {
+        // Not authenticated, redirect to login
+        window.location.href = '/super-admin';
       } finally {
-        setLoading(false);
+        setAuthLoading(false);
       }
-    }
+    };
 
-    fetchStats();
+    checkAuth();
   }, []);
 
-  if (loading) {
+  useEffect(() => {
+    if (isAuthenticated) {
+      async function fetchStats() {
+        try {
+          const response = await fetch('/api/super-admin/stats');
+          const result = await response.json();
+          
+          if (result.success) {
+            setStats(result.data);
+          } else {
+            setError(result.error || 'Failed to fetch statistics');
+          }
+        } catch (err) {
+          setError('Failed to connect to server');
+          console.error('Error fetching platform stats:', err);
+        } finally {
+          setLoading(false);
+        }
+      }
+
+      fetchStats();
+    }
+  }, [isAuthenticated]);
+
+  if (authLoading || loading || !isAuthenticated) {
     return (
       <div className="p-6 space-y-6">
         <div className="flex items-center justify-center py-12">

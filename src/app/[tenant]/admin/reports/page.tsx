@@ -1,7 +1,8 @@
 'use client';
 
 import React, { useState, useMemo, useEffect } from 'react';
-import { BarChart3, Calendar as CalendarIcon, Download, PoundSterling, ShoppingBag, BarChart2, PieChart as PieChartIcon } from "lucide-react";
+import { getCurrencySymbol } from '@/lib/currency-utils';
+import { BarChart3, Calendar as CalendarIcon, Download, Banknote, ShoppingBag, BarChart2, PieChart as PieChartIcon } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from '@/components/ui/button';
 import { DateRange } from "react-day-picker";
@@ -89,9 +90,7 @@ export default function ReportsPage() {
     }, []);
 
     const currencySymbol = useMemo(() => {
-        if (restaurantSettings.currency === 'USD') return '$';
-        if (restaurantSettings.currency === 'EUR') return '€';
-        return '£';
+        return getCurrencySymbol(restaurantSettings.currency);
     }, [restaurantSettings.currency]);
 
     const filteredOrders = useMemo(() => {
@@ -239,7 +238,7 @@ export default function ReportsPage() {
                     <Card>
                         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                             <CardTitle className="text-sm font-medium">Total Revenue</CardTitle>
-                            <PoundSterling className="h-4 w-4 text-muted-foreground" />
+                            <Banknote className="h-4 w-4 text-muted-foreground" />
                         </CardHeader>
                         <CardContent>
                             <div className="text-2xl font-bold">{currencySymbol}{reportData.totalRevenue.toFixed(2)}</div>
@@ -259,7 +258,7 @@ export default function ReportsPage() {
                     <Card>
                         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                             <CardTitle className="text-sm font-medium">Average Order Value</CardTitle>
-                            <PoundSterling className="h-4 w-4 text-muted-foreground" />
+                            <Banknote className="h-4 w-4 text-muted-foreground" />
                         </CardHeader>
                         <CardContent>
                             <div className="text-2xl font-bold">{currencySymbol}{reportData.averageOrderValue.toFixed(2)}</div>

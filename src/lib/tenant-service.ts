@@ -100,6 +100,7 @@ export class TenantService {
     phone?: string;
     address?: string;
     ownerName: string;
+    ownerUsername: string;
     ownerPassword: string;
   }): Promise<{ tenant: Tenant; owner: TenantUser }> {
     const connection = await pool.getConnection();
@@ -178,9 +179,9 @@ export class TenantService {
       // Create owner/admin user
       const hashedPassword = await bcrypt.hash(data.ownerPassword, 10);
       await connection.execute(`
-        INSERT INTO tenant_users (id, tenant_id, email, password, name, role, active)
-        VALUES (?, ?, ?, ?, ?, 'owner', TRUE)
-      `, [ownerId, tenantId, data.email, hashedPassword, data.ownerName]);
+        INSERT INTO tenant_users (id, tenant_id, email, username, password, name, role, active)
+        VALUES (?, ?, ?, ?, ?, ?, 'owner', TRUE)
+      `, [ownerId, tenantId, data.email, data.ownerUsername, hashedPassword, data.ownerName]);
 
       // Initialize empty menu structure (tenant starts with no menu items)
       // This is intentional - new restaurants start with completely empty menus
