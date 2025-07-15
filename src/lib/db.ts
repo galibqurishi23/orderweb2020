@@ -33,7 +33,9 @@ if (typeof window === 'undefined') {
     try {
       if (mysqlPool) {
         const connection = await mysqlPool.getConnection();
-        console.log('✅ Database connected successfully');
+        if (process.env.NODE_ENV === 'development') {
+          console.log('✅ Database connected successfully');
+        }
         connection.release();
       }
     } catch (error) {

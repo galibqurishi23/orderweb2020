@@ -177,11 +177,42 @@ export default function SettingsPage() {
     
     // Sync local state when context data changes
     React.useEffect(() => {
-        setSettings(restaurantSettings);
+        // Ensure all opening hours have proper defaults
+        const settingsWithDefaults = {
+            ...restaurantSettings,
+            currency: 'GBP', // Always use GBP
+            openingHours: {
+                ...restaurantSettings.openingHours,
+                monday: ensureHoursDefaults(restaurantSettings.openingHours?.monday),
+                tuesday: ensureHoursDefaults(restaurantSettings.openingHours?.tuesday),
+                wednesday: ensureHoursDefaults(restaurantSettings.openingHours?.wednesday),
+                thursday: ensureHoursDefaults(restaurantSettings.openingHours?.thursday),
+                friday: ensureHoursDefaults(restaurantSettings.openingHours?.friday),
+                saturday: ensureHoursDefaults(restaurantSettings.openingHours?.saturday),
+                sunday: ensureHoursDefaults(restaurantSettings.openingHours?.sunday),
+            }
+        };
+        setSettings(settingsWithDefaults);
     }, [restaurantSettings]);
+    
+    // Helper function to ensure hours have all required defaults
+    const ensureHoursDefaults = (hours: any) => ({
+        closed: hours?.closed ?? false,
+        timeMode: hours?.timeMode ?? 'single',
+        openTime: hours?.openTime ?? '09:00',
+        closeTime: hours?.closeTime ?? '22:00',
+        morningOpen: hours?.morningOpen ?? '09:00',
+        morningClose: hours?.morningClose ?? '14:00',
+        eveningOpen: hours?.eveningOpen ?? '17:00',
+        eveningClose: hours?.eveningClose ?? '22:00',
+    });
 
     const handleSave = () => {
-        saveSettings(settings);
+        const settingsToSave = {
+            ...settings,
+            currency: 'GBP' // Always force GBP
+        };
+        saveSettings(settingsToSave);
         toast({
             title: "Settings Saved",
             description: "Your restaurant settings have been successfully updated.",
@@ -189,7 +220,11 @@ export default function SettingsPage() {
     };
 
     const handleInputChange = (field: keyof RestaurantSettings, value: any) => {
-        setSettings(prev => ({ ...prev, [field]: value }));
+        setSettings(prev => ({ 
+            ...prev, 
+            [field]: value,
+            currency: 'GBP' // Always force GBP
+        }));
     };
 
     const handleThemeChange = (field: keyof ThemeSettings, value: string) => {
@@ -333,10 +368,11 @@ export default function SettingsPage() {
     const handleHoursChange = (dayKey: string, field: keyof OpeningHoursPerDay, value: string | boolean) => {
         setSettings(prev => ({
             ...prev,
+            currency: 'GBP', // Always force GBP
             openingHours: {
                 ...prev.openingHours,
                 [dayKey]: {
-                    ...prev.openingHours[dayKey],
+                    ...ensureHoursDefaults(prev.openingHours[dayKey]),
                     [field]: value,
                 }
             }
@@ -346,10 +382,11 @@ export default function SettingsPage() {
     const handleTimeModeChange = (dayKey: string, mode: 'single' | 'split') => {
         setSettings(prev => ({
             ...prev,
+            currency: 'GBP', // Always force GBP
             openingHours: {
                 ...prev.openingHours,
                 [dayKey]: {
-                    ...prev.openingHours[dayKey],
+                    ...ensureHoursDefaults(prev.openingHours[dayKey]),
                     timeMode: mode,
                     // Clear fields that don't apply to the new mode
                     ...(mode === 'single' ? {
@@ -357,15 +394,15 @@ export default function SettingsPage() {
                         morningClose: undefined,
                         eveningOpen: undefined,
                         eveningClose: undefined,
-                        openTime: prev.openingHours[dayKey].openTime || '09:00',
-                        closeTime: prev.openingHours[dayKey].closeTime || '22:00'
+                        openTime: prev.openingHours[dayKey]?.openTime || '09:00',
+                        closeTime: prev.openingHours[dayKey]?.closeTime || '22:00'
                     } : {
                         openTime: undefined,
                         closeTime: undefined,
-                        morningOpen: prev.openingHours[dayKey].morningOpen || '09:00',
-                        morningClose: prev.openingHours[dayKey].morningClose || '14:00',
-                        eveningOpen: prev.openingHours[dayKey].eveningOpen || '17:00',
-                        eveningClose: prev.openingHours[dayKey].eveningClose || '22:00'
+                        morningOpen: prev.openingHours[dayKey]?.morningOpen || '09:00',
+                        morningClose: prev.openingHours[dayKey]?.morningClose || '14:00',
+                        eveningOpen: prev.openingHours[dayKey]?.eveningOpen || '17:00',
+                        eveningClose: prev.openingHours[dayKey]?.eveningClose || '22:00'
                     })
                 }
             }
@@ -409,7 +446,11 @@ export default function SettingsPage() {
                 };
             });
         }
-        setSettings(prev => ({ ...prev, openingHours: newHours }));
+        setSettings(prev => ({ 
+            ...prev, 
+            openingHours: newHours,
+            currency: 'GBP' // Always force GBP
+        }));
         toast({ title: 'Preset Applied', description: 'Opening hours have been updated.' });
     };
 
@@ -480,25 +521,14 @@ export default function SettingsPage() {
                                     <Input id="name" value={settings.name} onChange={e => handleInputChange('name', e.target.value)} />
                                 </div>
                                 <div>
-                                    <Label htmlFor="currency">Currency</Label>
-                                     <Select value={settings.currency} onValueChange={(value) => handleInputChange('currency', value)}>
-                                        <SelectTrigger id="currency"><SelectValue/></SelectTrigger>
-                                        <SelectContent>
-                                            <SelectItem value="GBP">British Pound (£)</SelectItem>
-                                            <SelectItem value="USD">US Dollar ($)</SelectItem>
-                                            <SelectItem value="EUR">Euro (€)</SelectItem>
-                                        </SelectContent>
-                                    </Select>
+                                    <Label htmlFor="taxRate">Tax Rate (%)</Label>
+                                    <Input id="taxRate" type="number" value={settings.taxRate * 100} onChange={e => handleInputChange('taxRate', parseFloat(e.target.value) / 100 || 0)} />
                                 </div>
                                 <div className="md:col-span-2">
                                      <Label htmlFor="description">Description</Label>
                                      <Textarea id="description" value={settings.description} onChange={e => handleInputChange('description', e.target.value)} />
                                 </div>
                                 <div>
-                                    <Label htmlFor="taxRate">Tax Rate (%)</Label>
-                                    <Input id="taxRate" type="number" value={settings.taxRate * 100} onChange={e => handleInputChange('taxRate', parseFloat(e.target.value) / 100 || 0)} />
-                                </div>
-                                 <div>
                                     <Label htmlFor="website">Website</Label>
                                     <Input id="website" type="url" value={settings.website} onChange={e => handleInputChange('website', e.target.value)} placeholder="https://example.com" />
                                 </div>
@@ -704,9 +734,9 @@ export default function SettingsPage() {
                             <CardTitle>Opening Hours</CardTitle>
                             <CardDescription>Configure your restaurant's opening hours. Choose between single time slots or split morning/evening sessions.</CardDescription>
                         </CardHeader>
-                        <CardContent className="space-y-4">
+                                        <CardContent className="space-y-4">
                             {daysOfWeek.map(day => {
-                                const dayHours = settings.openingHours[day.key];
+                                const dayHours = settings.openingHours[day.key] || ensureHoursDefaults(null);
                                 return (
                                     <Card key={day.key} className={cn(dayHours.closed && "bg-muted/50")}>
                                         <CardHeader className="flex flex-row items-center justify-between p-4">
@@ -715,7 +745,7 @@ export default function SettingsPage() {
                                                 <Label htmlFor={`closed-${day.key}`} className="text-sm">Closed Today</Label>
                                                 <Switch 
                                                     id={`closed-${day.key}`} 
-                                                    checked={dayHours.closed} 
+                                                    checked={dayHours.closed || false} 
                                                     onCheckedChange={(checked) => handleHoursChange(day.key, 'closed', checked)} 
                                                 />
                                             </div>
@@ -752,14 +782,14 @@ export default function SettingsPage() {
                                                         <div className="flex items-center gap-2">
                                                             <Input 
                                                                 type="time" 
-                                                                value={dayHours.openTime || '09:00'} 
+                                                                value={dayHours.openTime ?? '09:00'} 
                                                                 onChange={e => handleHoursChange(day.key, 'openTime', e.target.value)} 
                                                                 className="flex-1"
                                                             />
                                                             <span className="text-muted-foreground">to</span>
                                                             <Input 
                                                                 type="time" 
-                                                                value={dayHours.closeTime || '22:00'} 
+                                                                value={dayHours.closeTime ?? '22:00'} 
                                                                 onChange={e => handleHoursChange(day.key, 'closeTime', e.target.value)} 
                                                                 className="flex-1"
                                                             />
@@ -775,13 +805,13 @@ export default function SettingsPage() {
                                                             <div className="flex items-center gap-2">
                                                                 <Input 
                                                                     type="time" 
-                                                                    value={dayHours.morningOpen || '09:00'} 
+                                                                    value={dayHours.morningOpen ?? '09:00'} 
                                                                     onChange={e => handleHoursChange(day.key, 'morningOpen', e.target.value)} 
                                                                 />
                                                                 <span>-</span>
                                                                 <Input 
                                                                     type="time" 
-                                                                    value={dayHours.morningClose || '14:00'} 
+                                                                    value={dayHours.morningClose ?? '14:00'} 
                                                                     onChange={e => handleHoursChange(day.key, 'morningClose', e.target.value)} 
                                                                 />
                                                             </div>
@@ -791,13 +821,13 @@ export default function SettingsPage() {
                                                             <div className="flex items-center gap-2">
                                                                 <Input 
                                                                     type="time" 
-                                                                    value={dayHours.eveningOpen || '17:00'} 
+                                                                    value={dayHours.eveningOpen ?? '17:00'} 
                                                                     onChange={e => handleHoursChange(day.key, 'eveningOpen', e.target.value)} 
                                                                 />
                                                                 <span>-</span>
                                                                 <Input 
                                                                     type="time" 
-                                                                    value={dayHours.eveningClose || '22:00'} 
+                                                                    value={dayHours.eveningClose ?? '22:00'} 
                                                                     onChange={e => handleHoursChange(day.key, 'eveningClose', e.target.value)} 
                                                                 />
                                                             </div>

@@ -89,8 +89,11 @@ export default function TenantMenuPage() {
   const [sortBy, setSortBy] = useState<'name' | 'price' | 'category'>('name');
   const [isItemDialogOpen, setIsItemDialogOpen] = useState(false);
   const [isCategoryDialogOpen, setIsCategoryDialogOpen] = useState(false);
+  const [isAddonDialogOpen, setIsAddonDialogOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<MenuItem | null>(null);
   const [editingCategory, setEditingCategory] = useState<Category | null>(null);
+  const [editingAddon, setEditingAddon] = useState<Addon | null>(null);
+  const [currentTab, setCurrentTab] = useState('items');
   const { toast } = useToast();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -115,85 +118,51 @@ export default function TenantMenuPage() {
 
   const [categoryForm, setCategoryForm] = useState<Partial<Category>>({
     name: '',
+    description: '',
     active: true,
     order: 0,
     parentId: undefined
   });
 
-  const filteredAndSortedItems = useMemo(() => {
-    let filtered = menuItems || [];
+  const [addonForm, setAddonForm] = useState<Partial<Addon>>({
+    name: '',
+    price: 0,
+    type: 'extra',
+    required: false,
+    multiple: false,
+    maxSelections: 1,
+    options: []
+  });
 
-    // Filter by category
-    if (selectedCategory !== 'all') {
-      if (selectedCategory === 'uncategorized') {
-        filtered = filtered.filter(item => !item.categoryId);
-      } else {
-        filtered = filtered.filter(item => item.categoryId === selectedCategory);
-      }
-    }
-
-    // Filter by search query
-    if (searchQuery) {
-      const lowercasedQuery = searchQuery.toLowerCase();
-      filtered = filtered.filter(item =>
-        item.name.toLowerCase().includes(lowercasedQuery) ||
-        item.description?.toLowerCase().includes(lowercasedQuery)
-      );
-    }
-
-    // Sort items
-    filtered.sort((a, b) => {
-      switch (sortBy) {
-        case 'name':
-          return a.name.localeCompare(b.name);
-        case 'price':
-          return a.price - b.price;
-        case 'category':
-          const categoryA = categories?.find(c => c.id === a.categoryId)?.name || '';
-          const categoryB = categories?.find(c => c.id === b.categoryId)?.name || '';
-          return categoryA.localeCompare(categoryB);
-        default:
-          return 0;
-      }
-    });
-
-    return filtered;
-  }, [menuItems, selectedCategory, searchQuery, sortBy, categories]);
-
-  // Get hierarchical categories display
-  const getHierarchicalCategories = () => {
-    const parentCategories = categories?.filter(cat => !cat.parentId) || [];
-    return parentCategories.map(parent => ({
-      ...parent,
-      subcategories: categories?.filter(cat => cat.parentId === parent.id) || []
-    }));
-  };
-
-  // Get filtered categories (excluding self and children when editing)
-  const getFilteredCategories = (excludeId?: string) => {
-    return categories?.filter(cat => cat.id !== excludeId) || [];
-  };
-
-  // Image upload handler
+  // Helper functions for image upload
   const handleImageUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file) {
+      if (file.size > 5 * 1024 * 1024) { // 5MB limit
+        toast({ 
+          title: "File too large", 
+          description: "Please select an image smaller than 5MB", 
+          variant: "destructive" 
+        });
+        return;
+      }
+      
       const reader = new FileReader();
       reader.onload = (e) => {
-        const result = e.target?.result as string;
-        setItemForm({ ...itemForm, image: result });
+        const base64 = e.target?.result as string;
+        setItemForm({...itemForm, image: base64});
       };
       reader.readAsDataURL(file);
     }
   };
 
   const removeImage = () => {
-    setItemForm({ ...itemForm, image: '' });
+    setItemForm({...itemForm, image: ''});
   };
 
-  // Set menu item handlers
+  // Helper functions for set menu management
   const addSetMenuItem = () => {
-    const newSetItem: SetMenuItem = {
+    const newSetMenuItem: SetMenuItem = {
       id: `set_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
       menuItemId: '',
       quantity: 1,
@@ -203,14 +172,14 @@ export default function TenantMenuPage() {
     };
     setItemForm({
       ...itemForm,
-      setMenuItems: [...(itemForm.setMenuItems || []), newSetItem]
+      setMenuItems: [...(itemForm.setMenuItems || []), newSetMenuItem]
     });
   };
 
   const removeSetMenuItem = (setItemId: string) => {
     setItemForm({
       ...itemForm,
-      setMenuItems: itemForm.setMenuItems?.filter(item => item.id !== setItemId)
+      setMenuItems: itemForm.setMenuItems?.filter(item => item.id !== setItemId) || []
     });
   };
 
@@ -219,11 +188,11 @@ export default function TenantMenuPage() {
       ...itemForm,
       setMenuItems: itemForm.setMenuItems?.map(item => 
         item.id === setItemId ? { ...item, ...updates } : item
-      )
+      ) || []
     });
   };
 
-  // Add-on handlers
+  // Helper functions for addon management
   const addAddon = () => {
     const newAddon: Addon = {
       id: `addon_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
@@ -232,6 +201,7 @@ export default function TenantMenuPage() {
       type: 'extra',
       required: false,
       multiple: false,
+      maxSelections: 1,
       options: []
     };
     setItemForm({
@@ -243,7 +213,7 @@ export default function TenantMenuPage() {
   const removeAddon = (addonId: string) => {
     setItemForm({
       ...itemForm,
-      addons: itemForm.addons?.filter(addon => addon.id !== addonId)
+      addons: itemForm.addons?.filter(addon => addon.id !== addonId) || []
     });
   };
 
@@ -252,7 +222,7 @@ export default function TenantMenuPage() {
       ...itemForm,
       addons: itemForm.addons?.map(addon => 
         addon.id === addonId ? { ...addon, ...updates } : addon
-      )
+      ) || []
     });
   };
 
@@ -270,7 +240,7 @@ export default function TenantMenuPage() {
         addon.id === addonId 
           ? { ...addon, options: [...(addon.options || []), newOption] }
           : addon
-      )
+      ) || []
     });
   };
 
@@ -279,9 +249,9 @@ export default function TenantMenuPage() {
       ...itemForm,
       addons: itemForm.addons?.map(addon => 
         addon.id === addonId 
-          ? { ...addon, options: addon.options?.filter(option => option.id !== optionId) }
+          ? { ...addon, options: addon.options?.filter(option => option.id !== optionId) || [] }
           : addon
-      )
+      ) || []
     });
   };
 
@@ -294,11 +264,25 @@ export default function TenantMenuPage() {
               ...addon, 
               options: addon.options?.map(option => 
                 option.id === optionId ? { ...option, ...updates } : option
-              ) 
+              ) || []
             }
           : addon
-      )
+      ) || []
     });
+  };
+
+  // Get filtered categories for sub-category selection
+  const getFilteredCategories = (excludeId?: string) => {
+    return categories?.filter(cat => cat.id !== excludeId) || [];
+  };
+
+  // Get hierarchical categories display
+  const getHierarchicalCategories = () => {
+    const parentCategories = categories?.filter(cat => !cat.parentId) || [];
+    return parentCategories.map(parent => ({
+      ...parent,
+      subcategories: categories?.filter(cat => cat.parentId === parent.id) || []
+    }));
   };
 
   // Form reset functions
@@ -323,6 +307,7 @@ export default function TenantMenuPage() {
   const resetCategoryForm = () => {
     setCategoryForm({
       name: '',
+      description: '',
       active: true,
       order: categories?.length || 0,
       parentId: undefined
@@ -392,6 +377,7 @@ export default function TenantMenuPage() {
       const categoryToSave: Category = {
         id: editingCategory?.id || `cat_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
         name: categoryForm.name!,
+        description: categoryForm.description || '',
         active: categoryForm.active ?? true,
         order: Number(categoryForm.order) || 0,
         parentId: categoryForm.parentId,
@@ -443,6 +429,7 @@ export default function TenantMenuPage() {
     setEditingCategory(category);
     setCategoryForm({
       name: category.name,
+      description: category.description,
       active: category.active,
       order: category.order,
       parentId: category.parentId,
@@ -489,6 +476,7 @@ export default function TenantMenuPage() {
     }
   };
 
+  // Loading state
   if (isLoading) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
@@ -511,7 +499,7 @@ export default function TenantMenuPage() {
           <div>
             <h1 className="text-3xl font-bold">Menu Management</h1>
             <p className="text-muted-foreground">
-              Manage your restaurant's menu items and categories with enhanced features
+              Manage your restaurant's menu items and categories
             </p>
           </div>
         </div>
@@ -539,19 +527,19 @@ export default function TenantMenuPage() {
           <Card>
             <CardContent className="p-4">
               <div className="flex items-center gap-2">
-                <Utensils className="w-4 h-4 text-purple-600" />
-                <span className="text-sm text-muted-foreground">Set Menus</span>
+                <CheckCircle className="w-4 h-4 text-emerald-600" />
+                <span className="text-sm text-muted-foreground">Available</span>
               </div>
-              <p className="text-2xl font-bold">{menuItems?.filter(item => item.isSetMenu).length || 0}</p>
+              <p className="text-2xl font-bold">{menuItems?.filter(item => item.available).length || 0}</p>
             </CardContent>
           </Card>
           <Card>
             <CardContent className="p-4">
               <div className="flex items-center gap-2">
-                <CheckCircle className="w-4 h-4 text-emerald-600" />
-                <span className="text-sm text-muted-foreground">Available</span>
+                <XCircle className="w-4 h-4 text-red-600" />
+                <span className="text-sm text-muted-foreground">Unavailable</span>
               </div>
-              <p className="text-2xl font-bold">{menuItems?.filter(item => item.available).length || 0}</p>
+              <p className="text-2xl font-bold">{menuItems?.filter(item => !item.available).length || 0}</p>
             </CardContent>
           </Card>
         </div>
@@ -576,7 +564,7 @@ export default function TenantMenuPage() {
               <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
                 <div>
                   <CardTitle>Menu Items</CardTitle>
-                  <CardDescription>Manage your food items, set menus, and add-ons</CardDescription>
+                  <CardDescription>Manage your food and drink items</CardDescription>
                 </div>
                 
                 {/* Controls */}
@@ -600,369 +588,483 @@ export default function TenantMenuPage() {
                       <SelectContent>
                         <SelectItem value="all">All Categories</SelectItem>
                         <SelectItem value="uncategorized">Uncategorized</SelectItem>
-                        {getHierarchicalCategories().map(parent => (
-                          <div key={parent.id}>
-                            <SelectItem value={parent.id}>
-                              {parent.name}
-                            </SelectItem>
-                            {parent.subcategories.map(sub => (
-                              <SelectItem key={sub.id} value={sub.id}>
-                                └ {sub.name}
-                              </SelectItem>
-                            ))}
-                          </div>
+                        {categories?.map(category => (
+                          <SelectItem key={category.id} value={category.id}>
+                            {category.name}
+                          </SelectItem>
                         ))}
+                      </SelectContent>
+                    </Select>
+                    
+                    <Select value={sortBy} onValueChange={(value: 'name' | 'price' | 'category') => setSortBy(value)}>
+                      <SelectTrigger className="w-32">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="name">Name</SelectItem>
+                        <SelectItem value="price">Price</SelectItem>
+                        <SelectItem value="category">Category</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
                   
-                  {/* Add Button */}
-                  <Dialog open={isItemDialogOpen} onOpenChange={setIsItemDialogOpen}>
-                    <DialogTrigger asChild>
-                      <Button onClick={resetItemForm} className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700">
-                        <Plus className="mr-2 h-4 w-4" />
-                        Add Item
-                      </Button>
-                    </DialogTrigger>
-                    <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
-                      <DialogHeader>
-                        <DialogTitle className="flex items-center gap-2">
-                          <Package className="w-5 h-5" />
-                          {editingItem ? 'Edit Menu Item' : 'Add New Menu Item'}
-                        </DialogTitle>
-                      </DialogHeader>
-                      <div className="grid gap-6 py-4">
-                        {/* Basic Info */}
-                        <div className="grid grid-cols-2 gap-4">
-                          <div className="space-y-2">
-                            <Label htmlFor="name">Name *</Label>
-                            <Input
-                              id="name"
-                              value={itemForm.name}
-                              onChange={(e) => setItemForm({...itemForm, name: e.target.value})}
-                              placeholder="Item name"
-                            />
-                          </div>
-                          <div className="space-y-2">
-                            <Label htmlFor="price">Price ({currencySymbol}) *</Label>
-                            <Input
-                              id="price"
-                              type="number"
-                              step="0.01"
-                              min="0"
-                              value={itemForm.price}
-                              onChange={(e) => setItemForm({...itemForm, price: parseFloat(e.target.value) || 0})}
-                              placeholder="0.00"
-                            />
-                          </div>
-                        </div>
-                        
-                        <div className="space-y-2">
-                          <Label htmlFor="description">Description</Label>
-                          <Textarea
-                            id="description"
-                            value={itemForm.description}
-                            onChange={(e) => setItemForm({...itemForm, description: e.target.value})}
-                            placeholder="Describe your item..."
-                            rows={3}
-                          />
-                        </div>
-                        
-                        {/* Image Upload and Category */}
-                        <div className="grid grid-cols-2 gap-4">
-                          <div className="space-y-2">
-                            <Label className="flex items-center gap-2">
-                              <ImageIcon className="w-4 h-4" />
-                              Image Upload
-                            </Label>
+                  {/* View Mode and Add Button */}
+                  <div className="flex gap-2">
+                    <Button
+                      variant={viewMode === 'list' ? 'default' : 'outline'}
+                      size="icon"
+                      onClick={() => setViewMode('list')}
+                    >
+                      <List className="w-4 h-4" />
+                    </Button>
+                    <Button
+                      variant={viewMode === 'grid' ? 'default' : 'outline'}
+                      size="icon"
+                      onClick={() => setViewMode('grid')}
+                    >
+                      <Grid3X3 className="w-4 h-4" />
+                    </Button>
+                    
+                    <Separator orientation="vertical" className="h-8" />
+                    
+                    <Dialog open={isItemDialogOpen} onOpenChange={setIsItemDialogOpen}>
+                      <DialogTrigger asChild>
+                        <Button onClick={resetItemForm} className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700">
+                          <Plus className="mr-2 h-4 w-4" />
+                          Add Item
+                        </Button>
+                      </DialogTrigger>
+                      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+                        <DialogHeader>
+                          <DialogTitle className="flex items-center gap-2">
+                            <Package className="w-5 h-5" />
+                            {editingItem ? 'Edit Menu Item' : 'Add New Menu Item'}
+                          </DialogTitle>
+                        </DialogHeader>
+                        <div className="grid gap-6 py-4">
+                          <div className="grid grid-cols-2 gap-4">
                             <div className="space-y-2">
-                              {itemForm.image ? (
-                                <div className="relative">
-                                  <img
-                                    src={itemForm.image}
-                                    alt="Preview"
-                                    className="w-full h-32 object-cover rounded-lg border"
-                                  />
-                                  <Button
-                                    type="button"
-                                    variant="destructive"
-                                    size="sm"
-                                    className="absolute top-2 right-2"
-                                    onClick={removeImage}
-                                  >
-                                    <X className="w-4 h-4" />
-                                  </Button>
-                                </div>
-                              ) : (
-                                <div className="w-full h-32 border-2 border-dashed border-gray-300 rounded-lg flex items-center justify-center">
-                                  <div className="text-center">
-                                    <ImageIcon className="w-8 h-8 mx-auto text-gray-400 mb-2" />
-                                    <p className="text-sm text-gray-500">No image uploaded</p>
-                                  </div>
-                                </div>
-                              )}
-                              <input
-                                ref={fileInputRef}
-                                type="file"
-                                accept="image/*"
-                                className="hidden"
-                                onChange={handleImageUpload}
+                              <Label htmlFor="name">Name *</Label>
+                              <Input
+                                id="name"
+                                value={itemForm.name}
+                                onChange={(e) => setItemForm({...itemForm, name: e.target.value})}
+                                placeholder="Item name"
                               />
-                              <Button
-                                type="button"
-                                variant="outline"
-                                size="sm"
-                                onClick={() => fileInputRef.current?.click()}
-                                className="w-full"
-                              >
-                                <Upload className="w-4 h-4 mr-2" />
-                                Upload Image
-                              </Button>
+                            </div>
+                            <div className="space-y-2">
+                              <Label htmlFor="price">Price ({currencySymbol}) *</Label>
+                              <Input
+                                id="price"
+                                type="number"
+                                step="0.01"
+                                min="0"
+                                value={itemForm.price}
+                                onChange={(e) => setItemForm({...itemForm, price: parseFloat(e.target.value) || 0})}
+                                placeholder="0.00"
+                              />
                             </div>
                           </div>
+                          
                           <div className="space-y-2">
-                            <Label htmlFor="category">Category</Label>
-                            <Select 
-                              value={itemForm.categoryId || "uncategorized"} 
-                              onValueChange={(value) => setItemForm({
-                                ...itemForm, 
-                                categoryId: value === "uncategorized" ? "" : value
-                              })}
-                            >
-                              <SelectTrigger>
-                                <SelectValue placeholder="Select category" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="uncategorized">No Category</SelectItem>
-                                {getHierarchicalCategories().map(parent => (
-                                  <div key={parent.id}>
-                                    <SelectItem value={parent.id}>
-                                      {parent.name}
-                                    </SelectItem>
-                                    {parent.subcategories.map(sub => (
-                                      <SelectItem key={sub.id} value={sub.id}>
-                                        └ {sub.name}
-                                      </SelectItem>
-                                    ))}
-                                  </div>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                          </div>
-                        </div>
-                        
-                        {/* Set Menu Section */}
-                        <div className="space-y-4">
-                          <div className="flex items-center space-x-2">
-                            <Switch
-                              id="isSetMenu"
-                              checked={itemForm.isSetMenu}
-                              onCheckedChange={(checked) => setItemForm({...itemForm, isSetMenu: checked})}
+                            <Label htmlFor="description">Description</Label>
+                            <Textarea
+                              id="description"
+                              value={itemForm.description}
+                              onChange={(e) => setItemForm({...itemForm, description: e.target.value})}
+                              placeholder="Describe your item..."
+                              rows={3}
                             />
-                            <Label htmlFor="isSetMenu" className="flex items-center gap-2">
-                              <Utensils className="w-4 h-4" />
-                              This is a set menu
-                            </Label>
                           </div>
                           
-                          {itemForm.isSetMenu && (
-                            <div className="border rounded-lg p-4 space-y-4">
-                              <div className="flex items-center justify-between">
-                                <Label className="text-sm font-medium">Set Menu Items</Label>
+                          <div className="grid grid-cols-2 gap-4">
+                            <div className="space-y-2">
+                              <Label className="flex items-center gap-2">
+                                <ImageIcon className="w-4 h-4" />
+                                Image Upload
+                              </Label>
+                              <div className="space-y-2">
+                                {itemForm.image ? (
+                                  <div className="relative">
+                                    <img
+                                      src={itemForm.image}
+                                      alt="Preview"
+                                      className="w-full h-32 object-cover rounded-lg border"
+                                    />
+                                    <Button
+                                      type="button"
+                                      variant="destructive"
+                                      size="sm"
+                                      className="absolute top-2 right-2"
+                                      onClick={removeImage}
+                                    >
+                                      <X className="w-4 h-4" />
+                                    </Button>
+                                  </div>
+                                ) : (
+                                  <div className="w-full h-32 border-2 border-dashed border-gray-300 rounded-lg flex items-center justify-center">
+                                    <div className="text-center">
+                                      <ImageIcon className="w-8 h-8 mx-auto text-gray-400 mb-2" />
+                                      <p className="text-sm text-gray-500">No image uploaded</p>
+                                    </div>
+                                  </div>
+                                )}
+                                <input
+                                  ref={fileInputRef}
+                                  type="file"
+                                  accept="image/*"
+                                  className="hidden"
+                                  onChange={handleImageUpload}
+                                />
                                 <Button
                                   type="button"
                                   variant="outline"
                                   size="sm"
-                                  onClick={addSetMenuItem}
+                                  onClick={() => fileInputRef.current?.click()}
+                                  className="w-full"
                                 >
-                                  <Plus className="w-4 h-4 mr-2" />
-                                  Add Item
+                                  <Upload className="w-4 h-4 mr-2" />
+                                  Upload Image
                                 </Button>
                               </div>
-                              
-                              {itemForm.setMenuItems?.map((setItem, index) => (
-                                <div key={setItem.id} className="border rounded-lg p-3 space-y-2">
-                                  <div className="flex items-center justify-between">
-                                    <span className="text-sm font-medium">Item {index + 1}</span>
-                                    <Button
-                                      type="button"
-                                      variant="ghost"
-                                      size="sm"
-                                      onClick={() => removeSetMenuItem(setItem.id)}
-                                    >
-                                      <Trash2 className="w-4 h-4" />
-                                    </Button>
-                                  </div>
-                                  
-                                  <div className="grid grid-cols-2 gap-2">
-                                    <div>
-                                      <Label className="text-xs">Display Name</Label>
-                                      <Input
-                                        value={setItem.name}
-                                        onChange={(e) => updateSetMenuItem(setItem.id, { name: e.target.value })}
-                                        placeholder="e.g., Main Course"
-                                        className="h-8"
-                                      />
-                                    </div>
-                                    <div>
-                                      <Label className="text-xs">Quantity</Label>
-                                      <Input
-                                        type="number"
-                                        min="1"
-                                        value={setItem.quantity}
-                                        onChange={(e) => updateSetMenuItem(setItem.id, { quantity: parseInt(e.target.value) || 1 })}
-                                        className="h-8"
-                                      />
-                                    </div>
-                                  </div>
-                                  
-                                  <div className="flex items-center space-x-2">
-                                    <Checkbox
-                                      id={`replaceable-${setItem.id}`}
-                                      checked={setItem.replaceable}
-                                      onCheckedChange={(checked) => updateSetMenuItem(setItem.id, { replaceable: checked as boolean })}
-                                    />
-                                    <Label htmlFor={`replaceable-${setItem.id}`} className="text-xs">
-                                      Customer can replace this item
-                                    </Label>
-                                  </div>
-                                </div>
-                              ))}
                             </div>
-                          )}
-                        </div>
-                        
-                        {/* Add-ons Section */}
-                        <div className="space-y-4">
-                          <div className="flex items-center justify-between">
-                            <Label className="text-sm font-medium">Add-ons</Label>
-                            <Button
-                              type="button"
-                              variant="outline"
-                              size="sm"
-                              onClick={addAddon}
-                            >
-                              <Plus className="w-4 h-4 mr-2" />
-                              Add Add-on
-                            </Button>
+                            <div className="space-y-2">
+                              <Label htmlFor="category">Category</Label>
+                              <Select 
+                                value={itemForm.categoryId || "uncategorized"} 
+                                onValueChange={(value) => setItemForm({
+                                  ...itemForm, 
+                                  categoryId: value === "uncategorized" ? "" : value
+                                })}
+                              >
+                                <SelectTrigger>
+                                  <SelectValue placeholder="Select category" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="uncategorized">No Category</SelectItem>
+                                  {getHierarchicalCategories().map(parent => (
+                                    <div key={parent.id}>
+                                      <SelectItem value={parent.id}>
+                                        {parent.name}
+                                      </SelectItem>
+                                      {parent.subcategories.map(sub => (
+                                        <SelectItem key={sub.id} value={sub.id}>
+                                          &nbsp;&nbsp;└ {sub.name}
+                                        </SelectItem>
+                                      ))}
+                                    </div>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            </div>
                           </div>
                           
-                          {itemForm.addons?.map((addon, index) => (
-                            <div key={addon.id} className="border rounded-lg p-4 space-y-3">
-                              <div className="flex items-center justify-between">
-                                <span className="text-sm font-medium">Add-on {index + 1}</span>
-                                <Button
-                                  type="button"
-                                  variant="ghost"
-                                  size="sm"
-                                  onClick={() => removeAddon(addon.id)}
-                                >
-                                  <Trash2 className="w-4 h-4" />
-                                </Button>
-                              </div>
-                              
-                              <div className="grid grid-cols-3 gap-2">
-                                <div>
-                                  <Label className="text-xs">Name</Label>
-                                  <Input
-                                    value={addon.name}
-                                    onChange={(e) => updateAddon(addon.id, { name: e.target.value })}
-                                    placeholder="e.g., Extra Cheese"
-                                    className="h-8"
-                                  />
-                                </div>
-                                <div>
-                                  <Label className="text-xs">Price ({currencySymbol})</Label>
-                                  <Input
-                                    type="number"
-                                    step="0.01"
-                                    min="0"
-                                    value={addon.price}
-                                    onChange={(e) => updateAddon(addon.id, { price: parseFloat(e.target.value) || 0 })}
-                                    className="h-8"
-                                  />
-                                </div>
-                                <div>
-                                  <Label className="text-xs">Type</Label>
-                                  <Select
-                                    value={addon.type}
-                                    onValueChange={(value: any) => updateAddon(addon.id, { type: value })}
+                          {/* Set Menu Section */}
+                          <div className="space-y-4">
+                            <div className="flex items-center space-x-2">
+                              <Switch
+                                id="isSetMenu"
+                                checked={itemForm.isSetMenu}
+                                onCheckedChange={(checked) => setItemForm({...itemForm, isSetMenu: checked})}
+                              />
+                              <Label htmlFor="isSetMenu" className="flex items-center gap-2">
+                                <Utensils className="w-4 h-4" />
+                                This is a set menu
+                              </Label>
+                            </div>
+                            
+                            {itemForm.isSetMenu && (
+                              <div className="border rounded-lg p-4 space-y-4">
+                                <div className="flex items-center justify-between">
+                                  <Label className="text-sm font-medium">Set Menu Items</Label>
+                                  <Button
+                                    type="button"
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={addSetMenuItem}
                                   >
-                                    <SelectTrigger className="h-8">
-                                      <SelectValue />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                      <SelectItem value="size">Size</SelectItem>
-                                      <SelectItem value="extra">Extra</SelectItem>
-                                      <SelectItem value="sauce">Sauce</SelectItem>
-                                      <SelectItem value="sides">Sides</SelectItem>
-                                      <SelectItem value="drink">Drink</SelectItem>
-                                      <SelectItem value="dessert">Dessert</SelectItem>
-                                    </SelectContent>
-                                  </Select>
+                                    <Plus className="w-4 h-4 mr-2" />
+                                    Add Item
+                                  </Button>
                                 </div>
+                                
+                                {itemForm.setMenuItems?.map((setItem, index) => (
+                                  <div key={setItem.id} className="border rounded-lg p-3 space-y-2">
+                                    <div className="flex items-center justify-between">
+                                      <span className="text-sm font-medium">Item {index + 1}</span>
+                                      <Button
+                                        type="button"
+                                        variant="ghost"
+                                        size="sm"
+                                        onClick={() => removeSetMenuItem(setItem.id)}
+                                      >
+                                        <Trash2 className="w-4 h-4" />
+                                      </Button>
+                                    </div>
+                                    
+                                    <div className="grid grid-cols-2 gap-2">
+                                      <div>
+                                        <Label className="text-xs">Display Name</Label>
+                                        <Input
+                                          value={setItem.name}
+                                          onChange={(e) => updateSetMenuItem(setItem.id, { name: e.target.value })}
+                                          placeholder="e.g., Main Course"
+                                          className="h-8"
+                                        />
+                                      </div>
+                                      <div>
+                                        <Label className="text-xs">Quantity</Label>
+                                        <Input
+                                          type="number"
+                                          min="1"
+                                          value={setItem.quantity}
+                                          onChange={(e) => updateSetMenuItem(setItem.id, { quantity: parseInt(e.target.value) || 1 })}
+                                          className="h-8"
+                                        />
+                                      </div>
+                                    </div>
+                                    
+                                    <div className="space-y-2">
+                                      <div className="flex items-center space-x-2">
+                                        <Checkbox
+                                          id={`replaceable-${setItem.id}`}
+                                          checked={setItem.replaceable}
+                                          onCheckedChange={(checked) => updateSetMenuItem(setItem.id, { replaceable: checked as boolean })}
+                                        />
+                                        <Label htmlFor={`replaceable-${setItem.id}`} className="text-xs">
+                                          Customer can replace this item
+                                        </Label>
+                                      </div>
+                                      
+                                      {setItem.replaceable && (
+                                        <div>
+                                          <Label className="text-xs">Replacement Categories</Label>
+                                          <div className="grid grid-cols-2 gap-1 mt-1">
+                                            {categories?.map(category => (
+                                              <div key={category.id} className="flex items-center space-x-2">
+                                                <Checkbox
+                                                  id={`replace-${setItem.id}-${category.id}`}
+                                                  checked={setItem.replaceableWith?.includes(category.id)}
+                                                  onCheckedChange={(checked) => {
+                                                    const current = setItem.replaceableWith || [];
+                                                    const updated = checked
+                                                      ? [...current, category.id]
+                                                      : current.filter(id => id !== category.id);
+                                                    updateSetMenuItem(setItem.id, { replaceableWith: updated });
+                                                  }}
+                                                />
+                                                <Label htmlFor={`replace-${setItem.id}-${category.id}`} className="text-xs">
+                                                  {category.name}
+                                                </Label>
+                                              </div>
+                                            ))}
+                                          </div>
+                                        </div>
+                                      )}
+                                    </div>
+                                  </div>
+                                ))}
                               </div>
-                              
-                              <div className="grid grid-cols-3 gap-2">
-                                <div className="flex items-center space-x-2">
-                                  <Checkbox
-                                    id={`required-${addon.id}`}
-                                    checked={addon.required}
-                                    onCheckedChange={(checked) => updateAddon(addon.id, { required: checked as boolean })}
-                                  />
-                                  <Label htmlFor={`required-${addon.id}`} className="text-xs">
-                                    Required
-                                  </Label>
+                            )}
+                          </div>
+                          
+                          {/* Add-ons Section */}
+                          <div className="space-y-4">
+                            <div className="flex items-center justify-between">
+                              <Label className="text-sm font-medium">Add-ons</Label>
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                onClick={addAddon}
+                              >
+                                <Plus className="w-4 h-4 mr-2" />
+                                Add Add-on
+                              </Button>
+                            </div>
+                            
+                            {itemForm.addons?.map((addon, index) => (
+                              <div key={addon.id} className="border rounded-lg p-4 space-y-3">
+                                <div className="flex items-center justify-between">
+                                  <span className="text-sm font-medium">Add-on {index + 1}</span>
+                                  <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => removeAddon(addon.id)}
+                                  >
+                                    <Trash2 className="w-4 h-4" />
+                                  </Button>
                                 </div>
-                                <div className="flex items-center space-x-2">
-                                  <Checkbox
-                                    id={`multiple-${addon.id}`}
-                                    checked={addon.multiple}
-                                    onCheckedChange={(checked) => updateAddon(addon.id, { multiple: checked as boolean })}
-                                  />
-                                  <Label htmlFor={`multiple-${addon.id}`} className="text-xs">
-                                    Multiple selection
-                                  </Label>
-                                </div>
-                                {addon.multiple && (
+                                
+                                <div className="grid grid-cols-3 gap-2">
                                   <div>
-                                    <Label className="text-xs">Max selections</Label>
+                                    <Label className="text-xs">Name</Label>
                                     <Input
-                                      type="number"
-                                      min="1"
-                                      value={addon.maxSelections}
-                                      onChange={(e) => updateAddon(addon.id, { maxSelections: parseInt(e.target.value) || 1 })}
+                                      value={addon.name}
+                                      onChange={(e) => updateAddon(addon.id, { name: e.target.value })}
+                                      placeholder="e.g., Extra Cheese"
                                       className="h-8"
                                     />
                                   </div>
-                                )}
+                                  <div>
+                                    <Label className="text-xs">Price ({currencySymbol})</Label>
+                                    <Input
+                                      type="number"
+                                      step="0.01"
+                                      min="0"
+                                      value={addon.price}
+                                      onChange={(e) => updateAddon(addon.id, { price: parseFloat(e.target.value) || 0 })}
+                                      className="h-8"
+                                    />
+                                  </div>
+                                  <div>
+                                    <Label className="text-xs">Type</Label>
+                                    <Select
+                                      value={addon.type}
+                                      onValueChange={(value: any) => updateAddon(addon.id, { type: value })}
+                                    >
+                                      <SelectTrigger className="h-8">
+                                        <SelectValue />
+                                      </SelectTrigger>
+                                      <SelectContent>
+                                        <SelectItem value="size">Size</SelectItem>
+                                        <SelectItem value="extra">Extra</SelectItem>
+                                        <SelectItem value="sauce">Sauce</SelectItem>
+                                        <SelectItem value="sides">Sides</SelectItem>
+                                        <SelectItem value="drink">Drink</SelectItem>
+                                        <SelectItem value="dessert">Dessert</SelectItem>
+                                      </SelectContent>
+                                    </Select>
+                                  </div>
+                                </div>
+                                
+                                <div className="grid grid-cols-3 gap-2">
+                                  <div className="flex items-center space-x-2">
+                                    <Checkbox
+                                      id={`required-${addon.id}`}
+                                      checked={addon.required}
+                                      onCheckedChange={(checked) => updateAddon(addon.id, { required: checked as boolean })}
+                                    />
+                                    <Label htmlFor={`required-${addon.id}`} className="text-xs">
+                                      Required
+                                    </Label>
+                                  </div>
+                                  <div className="flex items-center space-x-2">
+                                    <Checkbox
+                                      id={`multiple-${addon.id}`}
+                                      checked={addon.multiple}
+                                      onCheckedChange={(checked) => updateAddon(addon.id, { multiple: checked as boolean })}
+                                    />
+                                    <Label htmlFor={`multiple-${addon.id}`} className="text-xs">
+                                      Multiple selection
+                                    </Label>
+                                  </div>
+                                  {addon.multiple && (
+                                    <div>
+                                      <Label className="text-xs">Max selections</Label>
+                                      <Input
+                                        type="number"
+                                        min="1"
+                                        value={addon.maxSelections}
+                                        onChange={(e) => updateAddon(addon.id, { maxSelections: parseInt(e.target.value) || 1 })}
+                                        className="h-8"
+                                      />
+                                    </div>
+                                  )}
+                                </div>
+                                
+                                {/* Add-on Options */}
+                                <div className="space-y-2">
+                                  <div className="flex items-center justify-between">
+                                    <Label className="text-xs font-medium">Options</Label>
+                                    <Button
+                                      type="button"
+                                      variant="outline"
+                                      size="sm"
+                                      onClick={() => addAddonOption(addon.id)}
+                                    >
+                                      <Plus className="w-3 h-3 mr-1" />
+                                      Add Option
+                                    </Button>
+                                  </div>
+                                  
+                                  {addon.options?.map((option, optionIndex) => (
+                                    <div key={option.id} className="border rounded p-2 space-y-2">
+                                      <div className="flex items-center justify-between">
+                                        <span className="text-xs">Option {optionIndex + 1}</span>
+                                        <Button
+                                          type="button"
+                                          variant="ghost"
+                                          size="sm"
+                                          onClick={() => removeAddonOption(addon.id, option.id)}
+                                        >
+                                          <X className="w-3 h-3" />
+                                        </Button>
+                                      </div>
+                                      
+                                      <div className="grid grid-cols-3 gap-2">
+                                        <div>
+                                          <Label className="text-xs">Name</Label>
+                                          <Input
+                                            value={option.name}
+                                            onChange={(e) => updateAddonOption(addon.id, option.id, { name: e.target.value })}
+                                            placeholder="Option name"
+                                            className="h-7"
+                                          />
+                                        </div>
+                                        <div>
+                                          <Label className="text-xs">Price ({currencySymbol})</Label>
+                                          <Input
+                                            type="number"
+                                            step="0.01"
+                                            min="0"
+                                            value={option.price}
+                                            onChange={(e) => updateAddonOption(addon.id, option.id, { price: parseFloat(e.target.value) || 0 })}
+                                            className="h-7"
+                                          />
+                                        </div>
+                                        <div className="flex items-center space-x-2">
+                                          <Checkbox
+                                            id={`available-${option.id}`}
+                                            checked={option.available}
+                                            onCheckedChange={(checked) => updateAddonOption(addon.id, option.id, { available: checked as boolean })}
+                                          />
+                                          <Label htmlFor={`available-${option.id}`} className="text-xs">
+                                            Available
+                                          </Label>
+                                        </div>
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
                               </div>
-                            </div>
-                          ))}
+                            ))}
+                          </div>
+                          
+                          <div className="flex items-center space-x-2">
+                            <Switch
+                              id="available"
+                              checked={itemForm.available}
+                              onCheckedChange={(checked) => setItemForm({...itemForm, available: checked})}
+                            />
+                            <Label htmlFor="available" className="flex items-center gap-2">
+                              <CheckCircle className="w-4 h-4" />
+                              Available for orders
+                            </Label>
+                          </div>
                         </div>
-                        
-                        <div className="flex items-center space-x-2">
-                          <Switch
-                            id="available"
-                            checked={itemForm.available}
-                            onCheckedChange={(checked) => setItemForm({...itemForm, available: checked})}
-                          />
-                          <Label htmlFor="available" className="flex items-center gap-2">
-                            <CheckCircle className="w-4 h-4" />
-                            Available for orders
-                          </Label>
+                        <div className="flex justify-end gap-2">
+                          <Button variant="outline" onClick={() => setIsItemDialogOpen(false)}>
+                            Cancel
+                          </Button>
+                          <Button onClick={handleSaveItem} className="bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700">
+                            {editingItem ? 'Update Item' : 'Create Item'}
+                          </Button>
                         </div>
-                      </div>
-                      <div className="flex justify-end gap-2">
-                        <Button variant="outline" onClick={() => setIsItemDialogOpen(false)}>
-                          Cancel
-                        </Button>
-                        <Button onClick={handleSaveItem} className="bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700">
-                          {editingItem ? 'Update Item' : 'Create Item'}
-                        </Button>
-                      </div>
-                    </DialogContent>
-                  </Dialog>
+                      </DialogContent>
+                    </Dialog>
+                  </div>
                 </div>
               </div>
             </CardHeader>
@@ -976,7 +1078,6 @@ export default function TenantMenuPage() {
                       <TableHead>Name</TableHead>
                       <TableHead>Category</TableHead>
                       <TableHead>Price</TableHead>
-                      <TableHead>Type</TableHead>
                       <TableHead>Status</TableHead>
                       <TableHead className="text-center">Actions</TableHead>
                     </TableRow>
@@ -1000,14 +1101,7 @@ export default function TenantMenuPage() {
                           </TableCell>
                           <TableCell>
                             <div>
-                              <div className="font-medium flex items-center gap-2">
-                                {item.name}
-                                {item.isSetMenu && (
-                                  <Badge variant="secondary" className="bg-purple-100 text-purple-800">
-                                    Set Menu
-                                  </Badge>
-                                )}
-                              </div>
+                              <div className="font-medium">{item.name}</div>
                               {item.description && (
                                 <div className="text-sm text-muted-foreground line-clamp-1">
                                   {item.description}
@@ -1026,20 +1120,6 @@ export default function TenantMenuPage() {
                           </TableCell>
                           <TableCell className="font-medium">
                             {currencySymbol}{item.price.toFixed(2)}
-                          </TableCell>
-                          <TableCell>
-                            <div className="flex flex-col gap-1">
-                              {item.isSetMenu && (
-                                <Badge variant="outline" className="bg-purple-50 text-purple-700 border-purple-200">
-                                  Set Menu
-                                </Badge>
-                              )}
-                              {item.addons && item.addons.length > 0 && (
-                                <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
-                                  {item.addons.length} Add-ons
-                                </Badge>
-                              )}
-                            </div>
                           </TableCell>
                           <TableCell>
                             <Badge 
@@ -1093,7 +1173,7 @@ export default function TenantMenuPage() {
                       ))
                     ) : (
                       <TableRow>
-                        <TableCell colSpan={7} className="h-24 text-center">
+                        <TableCell colSpan={6} className="h-24 text-center">
                           <div className="flex flex-col items-center gap-2 text-muted-foreground">
                             <Package className="w-12 h-12" />
                             <div>
@@ -1122,7 +1202,7 @@ export default function TenantMenuPage() {
                   <Tag className="w-5 h-5" />
                   Categories
                 </CardTitle>
-                <CardDescription>Organize your menu with categories and sub-categories</CardDescription>
+                <CardDescription>Organize your menu with categories</CardDescription>
               </div>
               <Dialog open={isCategoryDialogOpen} onOpenChange={setIsCategoryDialogOpen}>
                 <DialogTrigger asChild>
@@ -1146,6 +1226,16 @@ export default function TenantMenuPage() {
                         value={categoryForm.name}
                         onChange={(e) => setCategoryForm({...categoryForm, name: e.target.value})}
                         placeholder="Category name"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="categoryDescription">Description</Label>
+                      <Textarea
+                        id="categoryDescription"
+                        value={categoryForm.description}
+                        onChange={(e) => setCategoryForm({...categoryForm, description: e.target.value})}
+                        placeholder="Category description"
+                        rows={3}
                       />
                     </div>
                     <div className="space-y-2">
@@ -1218,6 +1308,7 @@ export default function TenantMenuPage() {
                   <TableHeader>
                     <TableRow>
                       <TableHead>Name</TableHead>
+                      <TableHead>Description</TableHead>
                       <TableHead>Items Count</TableHead>
                       <TableHead>Sort Order</TableHead>
                       <TableHead>Status</TableHead>
@@ -1242,6 +1333,9 @@ export default function TenantMenuPage() {
                                 )}
                                 {category.name}
                               </div>
+                            </TableCell>
+                            <TableCell className="max-w-xs">
+                              <span className="line-clamp-2">{category.description || '-'}</span>
                             </TableCell>
                             <TableCell>
                               <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">
@@ -1311,7 +1405,7 @@ export default function TenantMenuPage() {
                       })()
                     ) : (
                       <TableRow>
-                        <TableCell colSpan={5} className="h-24 text-center">
+                        <TableCell colSpan={6} className="h-24 text-center">
                           <div className="flex flex-col items-center gap-2 text-muted-foreground">
                             <Tag className="w-12 h-12" />
                             <div>No categories yet. Create your first category!</div>
@@ -1326,6 +1420,8 @@ export default function TenantMenuPage() {
           </Card>
         </TabsContent>
       </Tabs>
+        );
+      })()}
     </div>
   );
 }

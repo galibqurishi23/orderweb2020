@@ -92,8 +92,10 @@ export async function createTenantOrder(tenantId: string, orderData: Omit<Order,
     // Generate order number with proper prefix (use default if null)
     const orderNumber = generateOrderNumber(restaurantSettings || defaultRestaurantSettings, orderData.isAdvanceOrder);
     
-    console.log('Creating order with data:', JSON.stringify(orderData, null, 2));
-    console.log('Generated order number:', orderNumber);
+    if (process.env.NODE_ENV === 'development') {
+        console.log('Creating order with data:', JSON.stringify(orderData, null, 2));
+        console.log('Generated order number:', orderNumber);
+    }
     
     await pool.execute(
         `INSERT INTO orders (

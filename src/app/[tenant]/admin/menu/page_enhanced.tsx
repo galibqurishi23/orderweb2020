@@ -115,6 +115,7 @@ export default function TenantMenuPage() {
 
   const [categoryForm, setCategoryForm] = useState<Partial<Category>>({
     name: '',
+    description: '',
     active: true,
     order: 0,
     parentId: undefined
@@ -323,6 +324,7 @@ export default function TenantMenuPage() {
   const resetCategoryForm = () => {
     setCategoryForm({
       name: '',
+      description: '',
       active: true,
       order: categories?.length || 0,
       parentId: undefined
@@ -392,6 +394,7 @@ export default function TenantMenuPage() {
       const categoryToSave: Category = {
         id: editingCategory?.id || `cat_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
         name: categoryForm.name!,
+        description: categoryForm.description || '',
         active: categoryForm.active ?? true,
         order: Number(categoryForm.order) || 0,
         parentId: categoryForm.parentId,
@@ -443,6 +446,7 @@ export default function TenantMenuPage() {
     setEditingCategory(category);
     setCategoryForm({
       name: category.name,
+      description: category.description,
       active: category.active,
       order: category.order,
       parentId: category.parentId,
@@ -1149,6 +1153,16 @@ export default function TenantMenuPage() {
                       />
                     </div>
                     <div className="space-y-2">
+                      <Label htmlFor="categoryDescription">Description</Label>
+                      <Textarea
+                        id="categoryDescription"
+                        value={categoryForm.description}
+                        onChange={(e) => setCategoryForm({...categoryForm, description: e.target.value})}
+                        placeholder="Category description"
+                        rows={3}
+                      />
+                    </div>
+                    <div className="space-y-2">
                       <Label htmlFor="parentCategory">Parent Category</Label>
                       <Select
                         value={categoryForm.parentId || "none"}
@@ -1218,6 +1232,7 @@ export default function TenantMenuPage() {
                   <TableHeader>
                     <TableRow>
                       <TableHead>Name</TableHead>
+                      <TableHead>Description</TableHead>
                       <TableHead>Items Count</TableHead>
                       <TableHead>Sort Order</TableHead>
                       <TableHead>Status</TableHead>
@@ -1242,6 +1257,9 @@ export default function TenantMenuPage() {
                                 )}
                                 {category.name}
                               </div>
+                            </TableCell>
+                            <TableCell className="max-w-xs">
+                              <span className="line-clamp-2">{category.description || '-'}</span>
                             </TableCell>
                             <TableCell>
                               <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">
@@ -1311,7 +1329,7 @@ export default function TenantMenuPage() {
                       })()
                     ) : (
                       <TableRow>
-                        <TableCell colSpan={5} className="h-24 text-center">
+                        <TableCell colSpan={6} className="h-24 text-center">
                           <div className="flex flex-col items-center gap-2 text-muted-foreground">
                             <Tag className="w-12 h-12" />
                             <div>No categories yet. Create your first category!</div>

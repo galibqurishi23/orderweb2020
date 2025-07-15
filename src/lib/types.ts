@@ -2,7 +2,27 @@ export interface Addon {
   id: string;
   name: string;
   price: number;
-  type: 'size' | 'extra' | 'sauce' | 'sides';
+  type: 'size' | 'extra' | 'sauce' | 'sides' | 'drink' | 'dessert';
+  required?: boolean; // Whether this addon is required
+  multiple?: boolean; // Whether multiple selections are allowed
+  maxSelections?: number; // Maximum number of selections (for multiple=true)
+  options?: AddonOption[]; // For grouped addon options
+}
+
+export interface AddonOption {
+  id: string;
+  name: string;
+  price: number;
+  available: boolean;
+}
+
+export interface SetMenuItem {
+  id: string;
+  menuItemId: string;
+  quantity: number;
+  name: string; // For display purposes
+  replaceable?: boolean; // Whether this item can be replaced with another
+  replaceableWith?: string[]; // Array of category IDs that can replace this item
 }
 
 export type Characteristic = 
@@ -26,22 +46,28 @@ export interface MenuItem {
   name: string;
   description: string;
   price: number;
-  imageUrl: string;
-  imageHint: string;
+  image?: string; // Changed from imageUrl to image for base64 storage
+  imageHint?: string;
   available: boolean;
   categoryId: string;
   addons?: Addon[];
   characteristics?: Characteristic[];
   nutrition?: NutritionInfo;
+  isSetMenu?: boolean; // Whether this is a set menu
+  setMenuItems?: SetMenuItem[]; // Items included in set menu
+  preparationTime?: number; // Time in minutes to prepare this item
+  tags?: string[]; // Tags for better organization and search
 }
 
 export interface Category {
     id: string;
     name: string;
-    description: string;
     active: boolean;
     order: number;
-    parentId?: string;
+    parentId?: string; // For sub-categories
+    image?: string; // Category image
+    icon?: string; // Category icon
+    color?: string; // Category color theme
 }
 
 export interface OrderItem extends MenuItem {

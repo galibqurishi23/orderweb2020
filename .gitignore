@@ -43,3 +43,24 @@ next-env.d.ts
 # firebase
 firebase-debug.log
 firestore-debug.log
+
+# Development files
+*.md
+*.sql
+*.js
+test-*
+*test*
+*debug*
+*dev*
+*.bak
+*.tmp
+*~
+.idea/
+.vscode/
+.idx/
+docs/
+scripts/
+
+# OS files
+.DS_Store
+Thumbs.db

@@ -5,6 +5,9 @@ export async function GET(request: NextRequest) {
   try {
     const tenantId = request.headers.get('X-Tenant-ID');
     
+    console.log('=== GET SETTINGS API ===');
+    console.log('Tenant ID from header:', tenantId);
+    
     if (!tenantId) {
       return NextResponse.json(
         { success: false, error: 'Tenant ID is required' },
@@ -12,7 +15,9 @@ export async function GET(request: NextRequest) {
       );
     }
 
+    console.log('Calling getTenantSettings with:', tenantId);
     const settings = await getTenantSettings(tenantId);
+    console.log('Settings result:', settings);
     
     return NextResponse.json({
       success: true,

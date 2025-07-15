@@ -6,7 +6,7 @@ export const defaultRestaurantSettings: RestaurantSettings = {
   address: '123 Main Street, City',
   phone: '+1234567890',
   email: 'contact@restaurant.com',
-  currency: 'USD',
+  currency: 'GBP',
   taxRate: 0.10,
   orderPrefix: 'ORD',
   advanceOrderPrefix: 'ADV',

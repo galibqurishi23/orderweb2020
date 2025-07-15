@@ -15,33 +15,35 @@ export async function sendWelcomeEmail(
 ): Promise<void> {
   // In a real application, you would integrate with an email service like SendGrid, AWS SES, etc.
   // For now, we'll log the email details (in production, replace with actual email sending)
-  console.log('=== RESTAURANT ADMIN WELCOME EMAIL ===');
-  console.log('To:', adminEmail);
-  console.log('Subject: Welcome to OrderWeb - Your Restaurant Dashboard is Ready!');
-  console.log('---');
-  console.log(`Dear ${adminName},`);
-  console.log('');
-  console.log(`Welcome to OrderWeb! Your restaurant "${restaurantName}" has been successfully set up.`);
-  console.log('');
-  console.log('Your admin dashboard login details:');
-  console.log(`Dashboard URL: https://orderWeb.com/${tenantSlug}/admin`);
-  console.log(`Email: ${adminEmail}`);
-  console.log(`Password: ${password}`);
-  console.log('');
-  console.log('Please log in and change your password for security.');
-  console.log('');
-  console.log('Your restaurant starts with default settings that you can customize:');
-  console.log('- Business hours (Monday-Saturday 9 AM - 5 PM, Sunday closed)');
-  console.log('- Currency (GBP)');
-  console.log('- Tax rate (10%)');
-  console.log('- Payment methods (Cash enabled by default)');
-  console.log('- Empty menu (ready for you to add your items)');
-  console.log('');
-  console.log('You have a 14-day free trial. Enjoy setting up your restaurant!');
-  console.log('');
-  console.log('Best regards,');
-  console.log('The OrderWeb Team');
-  console.log('=====================================');
+  if (process.env.NODE_ENV === 'development') {
+    console.log('=== RESTAURANT ADMIN WELCOME EMAIL ===');
+    console.log('To:', adminEmail);
+    console.log('Subject: Welcome to OrderWeb - Your Restaurant Dashboard is Ready!');
+    console.log('---');
+    console.log(`Dear ${adminName},`);
+    console.log('');
+    console.log(`Welcome to OrderWeb! Your restaurant "${restaurantName}" has been successfully set up.`);
+    console.log('');
+    console.log('Your admin dashboard login details:');
+    console.log(`Dashboard URL: https://orderWeb.com/${tenantSlug}/admin`);
+    console.log(`Email: ${adminEmail}`);
+    console.log(`Password: ${password}`);
+    console.log('');
+    console.log('Please log in and change your password for security.');
+    console.log('');
+    console.log('Your restaurant starts with default settings that you can customize:');
+    console.log('- Business hours (Monday-Saturday 9 AM - 5 PM, Sunday closed)');
+    console.log('- Currency (GBP)');
+    console.log('- Tax rate (10%)');
+    console.log('- Payment methods (Cash enabled by default)');
+    console.log('- Empty menu (ready for you to add your items)');
+    console.log('');
+    console.log('You have a 14-day free trial. Enjoy setting up your restaurant!');
+    console.log('');
+    console.log('Best regards,');
+    console.log('The OrderWeb Team');
+    console.log('=====================================');
+  }
   
   // TODO: Replace with actual email service integration
 }
@@ -270,16 +272,37 @@ export async function createTenant(data: {
 // Get tenant settings
 export async function getTenantSettings(tenantId: string): Promise<RestaurantSettings | null> {
   try {
-    const [rows] = await pool.execute(
-      'SELECT settings_json FROM tenant_settings WHERE tenant_id = ?',
-      [tenantId]
-    );
-    const settings = rows as any[];
-    if (settings.length > 0) {
-      // The settings are stored as a JSON string, so we need to parse it.
-      return JSON.parse(settings[0].settings_json) as RestaurantSettings;
+    if (process.env.NODE_ENV === 'development') {
+      console.log('Getting settings for tenant:', tenantId);
     }
-    return null;
+    
+    // Let's try to debug if the pool is working correctly
+    const connection = await pool.getConnection();
+    if (process.env.NODE_ENV === 'development') {
+      console.log('Got connection from pool');
+    }
+    
+    try {
+      const [rows] = await connection.execute(
+        'SELECT settings_json FROM tenant_settings WHERE tenant_id = ?',
+        [tenantId]
+      );
+      const settings = rows as any[];
+      if (process.env.NODE_ENV === 'development') {
+        console.log('Settings rows found:', settings.length);
+      }
+      
+      if (settings.length > 0) {
+        if (process.env.NODE_ENV === 'development') {
+          console.log('Settings JSON:', settings[0].settings_json);
+        }
+        // The settings are stored as a JSON string, so we need to parse it.
+        return JSON.parse(settings[0].settings_json) as RestaurantSettings;
+      }
+      return null;
+    } finally {
+      connection.release();
+    }
   } catch (error) {
     console.error('Error fetching tenant settings:', error);
     return null;
@@ -289,9 +312,14 @@ export async function getTenantSettings(tenantId: string): Promise<RestaurantSet
 // Update tenant settings
 export async function updateTenantSettings(tenantId: string, settings: RestaurantSettings): Promise<void> {
   try {
+    // Use INSERT ON DUPLICATE KEY UPDATE for upsert functionality
     await pool.execute(
-      'UPDATE tenant_settings SET settings_json = ?, updated_at = NOW() WHERE tenant_id = ?',
-      [JSON.stringify(settings), tenantId]
+      `INSERT INTO tenant_settings (tenant_id, settings_json, created_at, updated_at) 
+       VALUES (?, ?, NOW(), NOW()) 
+       ON DUPLICATE KEY UPDATE 
+       settings_json = VALUES(settings_json), 
+       updated_at = NOW()`,
+      [tenantId, JSON.stringify(settings)]
     );
   } catch (error) {
     console.error('Error updating tenant settings:', error);
@@ -533,10 +561,10 @@ export async function changeTenantAdminPassword(
   newPassword: string
 ): Promise<void> {
   try {
-    // Get the tenant admin user
+    // Get the tenant admin user (owner role)
     const [rows] = await pool.execute(
       'SELECT id, password FROM tenant_users WHERE tenant_id = ? AND role = ?',
-      [tenantId, 'admin']
+      [tenantId, 'owner']
     );
     
     const users = rows as any[];
@@ -571,10 +599,10 @@ export async function changeTenantAdminEmail(
   currentPassword: string
 ): Promise<void> {
   try {
-    // Get the tenant admin user
+    // Get the tenant admin user (owner role)
     const [rows] = await pool.execute(
       'SELECT id, email, password FROM tenant_users WHERE tenant_id = ? AND role = ?',
-      [tenantId, 'admin']
+      [tenantId, 'owner']
     );
     
     const users = rows as any[];
