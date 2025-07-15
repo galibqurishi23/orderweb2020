@@ -9,7 +9,26 @@ import { defaultRestaurantSettings } from './defaultRestaurantSettings';
 
 export async function getTenantOrders(tenantId: string): Promise<Order[]> {
     const [orderRows] = await pool.query(
-        'SELECT * FROM orders WHERE tenant_id = ? ORDER BY createdAt DESC',
+        `SELECT o.*, 
+                o.order_number as orderNumber,
+                o.created_at as createdAt,
+                o.customer_name as customerName,
+                o.customer_phone as customerPhone,
+                o.customer_email as customerEmail,
+                o.order_type as orderType,
+                o.is_advance_order as isAdvanceOrder,
+                o.scheduled_time as scheduledTime,
+                o.subtotal,
+                o.delivery_fee as deliveryFee,
+                o.discount,
+                o.tax,
+                o.voucher_code as voucherCode,
+                o.printed,
+                o.customer_id as customerId,
+                o.payment_method as paymentMethod
+         FROM orders o 
+         WHERE o.tenant_id = ? 
+         ORDER BY o.created_at DESC`,
         [tenantId]
     );
     
@@ -22,9 +41,9 @@ export async function getTenantOrders(tenantId: string): Promise<Order[]> {
     const [itemRows] = await pool.query(
         `SELECT oi.*, mi.name as menuItemName, mi.price as menuItemPrice 
          FROM order_items oi 
-         LEFT JOIN menu_items mi ON oi.menuItemId = mi.id 
-         WHERE oi.tenant_id = ? AND oi.orderId IN (${orderIds.map(() => '?').join(',')})`,
-        [tenantId, ...orderIds]
+         LEFT JOIN menu_items mi ON oi.menu_item_id = mi.id 
+         WHERE oi.order_id IN (${orderIds.map(() => '?').join(',')})`,
+        orderIds
     );
     
     const items = itemRows as any[];
@@ -32,14 +51,20 @@ export async function getTenantOrders(tenantId: string): Promise<Order[]> {
     // Group items by order
     const itemsByOrder: { [orderId: string]: any[] } = {};
     items.forEach(item => {
-        if (!itemsByOrder[item.orderId]) {
-            itemsByOrder[item.orderId] = [];
+        if (!itemsByOrder[item.order_id]) {
+            itemsByOrder[item.order_id] = [];
         }
-        itemsByOrder[item.orderId].push({
+        itemsByOrder[item.order_id].push({
             ...item,
-            selectedAddons: item.selectedAddons ? 
-                (typeof item.selectedAddons === 'string' ? JSON.parse(item.selectedAddons) : item.selectedAddons) : 
-                []
+            selectedAddons: item.selected_addons ? 
+                (typeof item.selected_addons === 'string' ? JSON.parse(item.selected_addons) : item.selected_addons) : 
+                [],
+            specialInstructions: item.special_instructions,
+            menuItem: {
+                id: item.menu_item_id,
+                name: item.menuItemName,
+                price: item.menuItemPrice
+            }
         });
     });
     
@@ -72,9 +97,9 @@ export async function createTenantOrder(tenantId: string, orderData: Omit<Order,
     
     await pool.execute(
         `INSERT INTO orders (
-            id, tenant_id, orderNumber, createdAt, customerName, customerPhone, customerEmail, 
-            address, total, status, orderType, isAdvanceOrder, scheduledTime,
-            subtotal, deliveryFee, discount, tax, voucherCode, printed, customerId
+            id, tenant_id, order_number, created_at, customer_name, customer_phone, customer_email, 
+            address, total, status, order_type, is_advance_order, scheduled_time,
+            subtotal, delivery_fee, discount, tax, voucher_code, printed, customer_id
         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
             orderId, tenantId, orderNumber, createdAt, orderData.customerName, orderData.customerPhone,
@@ -88,15 +113,16 @@ export async function createTenantOrder(tenantId: string, orderData: Omit<Order,
     // Insert order items
     if (orderData.items && orderData.items.length > 0) {
         const itemValues = orderData.items.map(item => [
-            tenantId, orderId, item.menuItem.id, item.quantity,
+            uuidv4(), orderId, item.menuItem.id, item.quantity,
+            item.menuItem.price, item.menuItem.price * item.quantity,
             JSON.stringify(item.selectedAddons || []), item.specialInstructions
         ]);
         
-        const placeholders = itemValues.map(() => '(?, ?, ?, ?, ?, ?)').join(',');
+        const placeholders = itemValues.map(() => '(?, ?, ?, ?, ?, ?, ?, ?)').join(',');
         const flatValues = itemValues.flat();
         
         await pool.execute(
-            `INSERT INTO order_items (tenant_id, orderId, menuItemId, quantity, selectedAddons, specialInstructions) 
+            `INSERT INTO order_items (id, order_id, menu_item_id, quantity, unit_price, total_price, selected_addons, special_instructions) 
              VALUES ${placeholders}`,
             flatValues
         );

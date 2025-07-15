@@ -19,10 +19,10 @@ export async function getTenantDeliveryZones(tenantId: string): Promise<Delivery
     return (rows as any[]).map(zone => ({
         ...zone,
         postcodes: parseJsonField(zone.postcodes),
-        deliveryFee: parseFloat(zone.deliveryFee),
-        minOrder: parseFloat(zone.minOrder),
-        deliveryTime: parseInt(zone.deliveryTime, 10),
-        collectionTime: parseInt(zone.collectionTime, 10),
+        deliveryFee: parseFloat(zone.delivery_fee),
+        minOrder: parseFloat(zone.min_order),
+        deliveryTime: parseInt(zone.delivery_time, 10),
+        collectionTime: parseInt(zone.collection_time, 10),
     }));
 }
 
@@ -99,23 +99,25 @@ export async function getDeliveryTime(tenantId: string, postcode: string): Promi
     return 30;
 }
 
-export async function saveTenantDeliveryZone(tenantId: string, zone: Omit<DeliveryZone, 'id'>): Promise<void> {
-    const { name, type, postcodes, deliveryFee, minOrder, deliveryTime, collectionTime } = zone;
-    const sql = `
-        INSERT INTO delivery_zones (id, tenant_id, name, type, postcodes, deliveryFee, minOrder, deliveryTime, collectionTime)
-        VALUES (UUID(), ?, ?, ?, ?, ?, ?, ?, ?)
-    `;
-    await pool.execute(sql, [tenantId, name, type, JSON.stringify(postcodes), deliveryFee, minOrder, deliveryTime, collectionTime]);
-}
-
-export async function updateTenantDeliveryZone(tenantId: string, zone: DeliveryZone): Promise<void> {
-    const { id, name, type, postcodes, deliveryFee, minOrder, deliveryTime, collectionTime } = zone;
-    const sql = `
-        UPDATE delivery_zones 
-        SET name = ?, type = ?, postcodes = ?, deliveryFee = ?, minOrder = ?, deliveryTime = ?, collectionTime = ?
-        WHERE id = ? AND tenant_id = ?
-    `;
-    await pool.execute(sql, [name, type, JSON.stringify(postcodes), deliveryFee, minOrder, deliveryTime, collectionTime, id, tenantId]);
+export async function saveTenantDeliveryZone(tenantId: string, zone: DeliveryZone): Promise<void> {
+    if (zone.id) {
+        // Update existing zone
+        const { id, name, type, postcodes, deliveryFee, minOrder, deliveryTime, collectionTime } = zone;
+        const sql = `
+            UPDATE delivery_zones 
+            SET name = ?, type = ?, postcodes = ?, delivery_fee = ?, min_order = ?, delivery_time = ?, collection_time = ?
+            WHERE id = ? AND tenant_id = ?
+        `;
+        await pool.execute(sql, [name, type, JSON.stringify(postcodes), deliveryFee, minOrder, deliveryTime, collectionTime, id, tenantId]);
+    } else {
+        // Create new zone
+        const { name, type, postcodes, deliveryFee, minOrder, deliveryTime, collectionTime } = zone;
+        const sql = `
+            INSERT INTO delivery_zones (id, tenant_id, name, type, postcodes, delivery_fee, min_order, delivery_time, collection_time)
+            VALUES (UUID(), ?, ?, ?, ?, ?, ?, ?, ?)
+        `;
+        await pool.execute(sql, [tenantId, name, type, JSON.stringify(postcodes), deliveryFee, minOrder, deliveryTime, collectionTime]);
+    }
 }
 
 export async function deleteTenantDeliveryZone(tenantId: string, zoneId: string): Promise<void> {

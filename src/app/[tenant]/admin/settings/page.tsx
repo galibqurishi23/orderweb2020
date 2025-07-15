@@ -3,6 +3,7 @@
 import React, { useState } from 'react';
 import { Save, Upload, Mail, Phone, MapPin, Settings as SettingsIcon, Image as ImageIcon, KeyRound, Palette } from 'lucide-react';
 import { useTenantData } from '@/context/TenantDataContext';
+import { useTenant } from '@/context/TenantContext';
 import type { RestaurantSettings, OpeningHoursPerDay, ThemeSettings } from '@/lib/types';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -161,6 +162,7 @@ const ColorPickerInput = ({
 
 export default function SettingsPage() {
     const { restaurantSettings, saveSettings } = useTenantData();
+    const { tenantData } = useTenant();
     const [settings, setSettings] = useState<RestaurantSettings>(restaurantSettings);
     const { toast } = useToast();
     const [passwordData, setPasswordData] = useState({
@@ -208,7 +210,7 @@ export default function SettingsPage() {
         setEmailData(prev => ({ ...prev, [field]: value }));
     };
 
-    const handleChangePassword = () => {
+    const handleChangePassword = async () => {
         if (!passwordData.currentPassword || !passwordData.newPassword || !passwordData.confirmPassword) {
              toast({
                 variant: 'destructive',
@@ -233,18 +235,46 @@ export default function SettingsPage() {
             });
             return;
         }
-        // In a real application, you would make an API call here to update the password
-        // after verifying the current password on the server.
-        console.log('Password change requested:', passwordData);
-        toast({
-            title: 'Password Updated',
-            description: 'Your password has been successfully updated.',
-        });
-        // Reset fields
-        setPasswordData({ currentPassword: '', newPassword: '', confirmPassword: '' });
+        
+        try {
+            const response = await fetch('/api/tenant/auth/change-password', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-Tenant-ID': tenantData?.id || ''
+                },
+                body: JSON.stringify({
+                    currentPassword: passwordData.currentPassword,
+                    newPassword: passwordData.newPassword
+                })
+            });
+            
+            const result = await response.json();
+            
+            if (result.success) {
+                toast({
+                    title: 'Password Updated',
+                    description: 'Your password has been successfully updated.',
+                });
+                setPasswordData({ currentPassword: '', newPassword: '', confirmPassword: '' });
+            } else {
+                toast({
+                    variant: 'destructive',
+                    title: 'Password Change Failed',
+                    description: result.error || 'An error occurred while changing your password.',
+                });
+            }
+        } catch (error) {
+            console.error('Password change error:', error);
+            toast({
+                variant: 'destructive',
+                title: 'Password Change Failed',
+                description: 'An error occurred while changing your password.',
+            });
+        }
     };
 
-    const handleChangeEmail = () => {
+    const handleChangeEmail = async () => {
         if (!emailData.newEmail || !emailData.passwordForEmail) {
             toast({
                 variant: 'destructive',
@@ -261,13 +291,43 @@ export default function SettingsPage() {
             });
             return;
         }
-        // In a real app, verify password on server
-        console.log('Email change requested:', emailData);
-        toast({
-            title: 'Email Updated',
-            description: `Your admin email has been changed to ${emailData.newEmail}.`,
-        });
-        setEmailData({ newEmail: '', passwordForEmail: '' });
+        
+        try {
+            const response = await fetch('/api/tenant/auth/change-email', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-Tenant-ID': tenantData?.id || ''
+                },
+                body: JSON.stringify({
+                    newEmail: emailData.newEmail,
+                    currentPassword: emailData.passwordForEmail
+                })
+            });
+            
+            const result = await response.json();
+            
+            if (result.success) {
+                toast({
+                    title: 'Email Updated',
+                    description: `Your admin email has been changed to ${emailData.newEmail}.`,
+                });
+                setEmailData({ newEmail: '', passwordForEmail: '' });
+            } else {
+                toast({
+                    variant: 'destructive',
+                    title: 'Email Change Failed',
+                    description: result.error || 'An error occurred while changing your email.',
+                });
+            }
+        } catch (error) {
+            console.error('Email change error:', error);
+            toast({
+                variant: 'destructive',
+                title: 'Email Change Failed',
+                description: 'An error occurred while changing your email.',
+            });
+        }
     };
 
     const handleHoursChange = (dayKey: string, field: keyof OpeningHoursPerDay, value: string | boolean) => {

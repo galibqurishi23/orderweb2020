@@ -20,7 +20,7 @@ export default function TenantAdminLoginPage({
   const { tenantData, isLoading: isTenantLoading } = useTenant();
   const [tenantSlug, setTenantSlug] = useState<string>('');
   const [credentials, setCredentials] = useState({
-    username: '',
+    email: '',
     password: ''
   });
   const [isLogging, setIsLogging] = useState(false);
@@ -65,7 +65,7 @@ export default function TenantAdminLoginPage({
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          username: credentials.username,
+          email: credentials.email,
           password: credentials.password,
           tenantSlug
         }),
@@ -129,15 +129,15 @@ export default function TenantAdminLoginPage({
         <CardContent>
           <form onSubmit={handleLogin} className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="username" className="text-gray-700">Username</Label>
+              <Label htmlFor="email" className="text-gray-700">Email</Label>
               <div className="relative">
                 <User className="absolute left-3 top-3 w-4 h-4 text-gray-400" />
                 <Input
-                  id="username"
-                  type="text"
-                  placeholder="admin"
-                  value={credentials.username}
-                  onChange={(e) => setCredentials({...credentials, username: e.target.value})}
+                  id="email"
+                  type="email"
+                  placeholder="admin@restaurant.com"
+                  value={credentials.email}
+                  onChange={(e) => setCredentials({...credentials, email: e.target.value})}
                   className="pl-10"
                   required
                   disabled={isLogging}

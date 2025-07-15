@@ -6,11 +6,11 @@ import db from '@/lib/db';
 
 export async function POST(request: NextRequest) {
   try {
-    const { username, password, tenantSlug } = await request.json();
+    const { email, password, tenantSlug } = await request.json();
 
-    if (!username || !password || !tenantSlug) {
+    if (!email || !password || !tenantSlug) {
       return NextResponse.json(
-        { success: false, error: 'Username, password, and tenant are required' },
+        { success: false, error: 'Email, password, and tenant are required' },
         { status: 400 }
       );
     }
@@ -24,18 +24,16 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Find user in tenant_users table using email or username (owner is the admin role)
-    // Try both the plain username and the username with tenant slug
-    const usernameWithSlug = `${username}_${tenant.slug}`;
+    // Find user in tenant_users table using email (owner is the admin role)
     const [userRows] = await db.execute(
-      'SELECT id, email, username, password, name, role, active FROM tenant_users WHERE (email = ? OR username = ? OR username = ?) AND tenant_id = ? AND role = "owner"',
-      [username, username, usernameWithSlug, tenant.id]
+      'SELECT id, email, password, name, role, active FROM tenant_users WHERE email = ? AND tenant_id = ? AND role = "owner"',
+      [email, tenant.id]
     );
 
     const users = userRows as any[];
     if (users.length === 0) {
       return NextResponse.json(
-        { success: false, error: 'Invalid username or password' },
+        { success: false, error: 'Invalid email or password' },
         { status: 401 }
       );
     }
@@ -54,7 +52,7 @@ export async function POST(request: NextRequest) {
     const isPasswordValid = await bcrypt.compare(password, user.password);
     if (!isPasswordValid) {
       return NextResponse.json(
-        { success: false, error: 'Invalid username or password' },
+        { success: false, error: 'Invalid email or password' },
         { status: 401 }
       );
     }
@@ -63,7 +61,6 @@ export async function POST(request: NextRequest) {
     const sessionData = {
       userId: user.id,
       email: user.email,
-      username: user.username,
       name: user.name,
       role: user.role,
       tenantId: tenant.id,

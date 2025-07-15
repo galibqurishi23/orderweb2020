@@ -9,12 +9,12 @@ export async function getTenantVouchers(tenantId: string): Promise<Voucher[]> {
     return (rows as any[]).map(v => ({
         ...v,
         value: parseFloat(v.value),
-        minOrder: parseFloat(v.minOrder),
-        maxDiscount: v.maxDiscount ? parseFloat(v.maxDiscount) : undefined,
-        expiryDate: new Date(v.expiryDate),
+        minOrder: parseFloat(v.min_order),
+        maxDiscount: v.max_discount ? parseFloat(v.max_discount) : undefined,
+        expiryDate: new Date(v.expiry_date),
         active: Boolean(v.active),
-        usageLimit: v.usageLimit ? Number(v.usageLimit) : undefined,
-        usedCount: Number(v.usedCount)
+        usageLimit: v.usage_limit ? Number(v.usage_limit) : undefined,
+        usedCount: Number(v.used_count)
     }));
 }
 
@@ -79,19 +79,37 @@ export async function calculateVoucherDiscount(voucher: Voucher, orderTotal: num
     return Math.round(discount * 100) / 100; // Round to 2 decimal places
 }
 
-export async function saveTenantVoucher(tenantId: string, voucher: Omit<Voucher, 'id'>): Promise<void> {
-    const id = uuidv4();
-    const { code, type, value, minOrder, maxDiscount, expiryDate, active, usageLimit, usedCount } = voucher;
-    
-    const sql = `
-        INSERT INTO vouchers (id, tenant_id, code, type, value, minOrder, maxDiscount, expiryDate, active, usageLimit, usedCount)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `;
-    
-    await pool.execute(sql, [
-        id, tenantId, code, type, value, minOrder, maxDiscount, 
-        expiryDate, active, usageLimit || null, usedCount
-    ]);
+export async function saveTenantVoucher(tenantId: string, voucher: Voucher): Promise<void> {
+    if (voucher.id) {
+        // Update existing voucher
+        const { id, code, type, value, minOrder, maxDiscount, expiryDate, active, usageLimit, usedCount } = voucher;
+        
+        const sql = `
+            UPDATE vouchers 
+            SET code = ?, type = ?, value = ?, min_order = ?, max_discount = ?, 
+                expiry_date = ?, active = ?, usage_limit = ?, used_count = ?
+            WHERE id = ? AND tenant_id = ?
+        `;
+        
+        await pool.execute(sql, [
+            code, type, value, minOrder, maxDiscount, 
+            expiryDate, active, usageLimit || null, usedCount, id, tenantId
+        ]);
+    } else {
+        // Create new voucher
+        const id = uuidv4();
+        const { code, type, value, minOrder, maxDiscount, expiryDate, active, usageLimit, usedCount } = voucher;
+        
+        const sql = `
+            INSERT INTO vouchers (id, tenant_id, code, type, value, min_order, max_discount, expiry_date, active, usage_limit, used_count)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `;
+        
+        await pool.execute(sql, [
+            id, tenantId, code, type, value, minOrder, maxDiscount, 
+            expiryDate, active, usageLimit || null, usedCount || 0
+        ]);
+    }
 }
 
 export async function updateTenantVoucher(tenantId: string, voucher: Voucher): Promise<void> {

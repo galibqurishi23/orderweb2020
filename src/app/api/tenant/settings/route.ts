@@ -3,8 +3,7 @@ import { getTenantSettings, updateTenantSettings } from '@/lib/tenant-service';
 
 export async function GET(request: NextRequest) {
   try {
-    const { searchParams } = new URL(request.url);
-    const tenantId = searchParams.get('tenantId');
+    const tenantId = request.headers.get('X-Tenant-ID');
     
     if (!tenantId) {
       return NextResponse.json(
@@ -28,10 +27,44 @@ export async function GET(request: NextRequest) {
   }
 }
 
+export async function POST(request: NextRequest) {
+  try {
+    const tenantId = request.headers.get('X-Tenant-ID');
+    
+    if (!tenantId) {
+      return NextResponse.json(
+        { success: false, error: 'Tenant ID is required' },
+        { status: 400 }
+      );
+    }
+
+    const settingsData = await request.json();
+    
+    if (!settingsData) {
+      return NextResponse.json(
+        { success: false, error: 'Settings data is required' },
+        { status: 400 }
+      );
+    }
+
+    await updateTenantSettings(tenantId, settingsData);
+    
+    return NextResponse.json({
+      success: true,
+      message: 'Settings updated successfully'
+    });
+  } catch (error) {
+    console.error('Error updating tenant settings:', error);
+    return NextResponse.json(
+      { success: false, error: 'Failed to update settings' },
+      { status: 500 }
+    );
+  }
+}
+
 export async function PUT(request: NextRequest) {
   try {
-    const { searchParams } = new URL(request.url);
-    const tenantId = searchParams.get('tenantId');
+    const tenantId = request.headers.get('X-Tenant-ID');
     
     if (!tenantId) {
       return NextResponse.json(

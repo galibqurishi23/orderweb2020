@@ -17,7 +17,7 @@ function parseJsonField<T>(field: any): T | undefined {
 
 export async function getTenantCategories(tenantId: string): Promise<Category[]> {
     const [rows] = await pool.query(
-        'SELECT * FROM categories WHERE tenant_id = ? ORDER BY categories.`order` ASC',
+        'SELECT * FROM categories WHERE tenant_id = ? ORDER BY display_order ASC',
         [tenantId]
     );
     return (rows as any[]).map(category => ({
@@ -35,6 +35,9 @@ export async function getTenantMenuItems(tenantId: string): Promise<MenuItem[]> 
     // MariaDB/MySQL returns several fields as strings or numbers that need to be correctly typed.
     const items = (rows as any[]).map(item => ({
         ...item,
+        categoryId: item.category_id,
+        imageUrl: item.image_url,
+        imageHint: item.image_hint,
         price: parseFloat(item.price), // Ensure 'price' is a number
         available: Boolean(item.available), // Ensure 'available' is a boolean
         addons: parseJsonField(item.addons),
@@ -67,10 +70,10 @@ export async function saveTenantMenuItem(tenantId: string, item: MenuItem): Prom
         name: item.name,
         description: item.description || '',
         price: item.price,
-        imageUrl: item.imageUrl || '',
-        imageHint: item.imageHint || '',
+        image_url: item.imageUrl || '',
+        image_hint: item.imageHint || '',
         available: item.available ? 1 : 0,
-        categoryId: item.categoryId || null,
+        category_id: item.categoryId || null,
         addons: JSON.stringify(item.addons || []),
         characteristics: JSON.stringify(item.characteristics || []),
         nutrition: item.nutrition ? JSON.stringify(item.nutrition) : null,
@@ -81,12 +84,12 @@ export async function saveTenantMenuItem(tenantId: string, item: MenuItem): Prom
         // Update existing item
         await pool.query(
             `UPDATE menu_items SET 
-                name = ?, description = ?, price = ?, imageUrl = ?, imageHint = ?,
-                available = ?, categoryId = ?, addons = ?, characteristics = ?, nutrition = ?
+                name = ?, description = ?, price = ?, image_url = ?, image_hint = ?,
+                available = ?, category_id = ?, addons = ?, characteristics = ?, nutrition = ?
             WHERE id = ? AND tenant_id = ?`,
             [
-                itemData.name, itemData.description, itemData.price, itemData.imageUrl, itemData.imageHint,
-                itemData.available, itemData.categoryId, itemData.addons, itemData.characteristics, itemData.nutrition,
+                itemData.name, itemData.description, itemData.price, itemData.image_url, itemData.image_hint,
+                itemData.available, itemData.category_id, itemData.addons, itemData.characteristics, itemData.nutrition,
                 item.id, tenantId
             ]
         );
@@ -94,11 +97,11 @@ export async function saveTenantMenuItem(tenantId: string, item: MenuItem): Prom
         // Insert new item
         await pool.query(
             `INSERT INTO menu_items 
-                (id, name, description, price, imageUrl, imageHint, available, categoryId, addons, characteristics, nutrition, tenant_id)
+                (id, name, description, price, image_url, image_hint, available, category_id, addons, characteristics, nutrition, tenant_id)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
             [
-                item.id, itemData.name, itemData.description, itemData.price, itemData.imageUrl, itemData.imageHint,
-                itemData.available, itemData.categoryId, itemData.addons, itemData.characteristics, itemData.nutrition, tenantId
+                item.id, itemData.name, itemData.description, itemData.price, itemData.image_url, itemData.image_hint,
+                itemData.available, itemData.category_id, itemData.addons, itemData.characteristics, itemData.nutrition, tenantId
             ]
         );
     }
@@ -121,8 +124,8 @@ export async function saveTenantCategory(tenantId: string, category: Category): 
         name: category.name,
         description: category.description || '',
         active: category.active ? 1 : 0,
-        order: category.order || 0,
-        parentId: category.parentId || null,
+        display_order: category.order || 0,
+        parent_id: category.parentId || null,
         tenant_id: tenantId
     };
 
@@ -130,10 +133,10 @@ export async function saveTenantCategory(tenantId: string, category: Category): 
         // Update existing category
         await pool.query(
             `UPDATE categories SET 
-                name = ?, description = ?, active = ?, \`order\` = ?, parentId = ?
+                name = ?, description = ?, active = ?, display_order = ?, parent_id = ?
             WHERE id = ? AND tenant_id = ?`,
             [
-                categoryData.name, categoryData.description, categoryData.active, categoryData.order, categoryData.parentId,
+                categoryData.name, categoryData.description, categoryData.active, categoryData.display_order, categoryData.parent_id,
                 category.id, tenantId
             ]
         );
@@ -141,11 +144,11 @@ export async function saveTenantCategory(tenantId: string, category: Category): 
         // Insert new category
         await pool.query(
             `INSERT INTO categories 
-                (id, name, description, active, \`order\`, parentId, tenant_id)
+                (id, name, description, active, display_order, parent_id, tenant_id)
             VALUES (?, ?, ?, ?, ?, ?, ?)`,
             [
                 category.id, categoryData.name, categoryData.description, categoryData.active, 
-                categoryData.order, categoryData.parentId, tenantId
+                categoryData.display_order, categoryData.parent_id, tenantId
             ]
         );
     }
@@ -154,7 +157,7 @@ export async function saveTenantCategory(tenantId: string, category: Category): 
 export async function deleteTenantCategory(tenantId: string, categoryId: string): Promise<void> {
     // First, set all menu items in this category to have no category
     await pool.query(
-        'UPDATE menu_items SET categoryId = NULL WHERE categoryId = ? AND tenant_id = ?',
+        'UPDATE menu_items SET category_id = NULL WHERE category_id = ? AND tenant_id = ?',
         [categoryId, tenantId]
     );
     

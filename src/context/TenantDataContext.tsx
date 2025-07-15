@@ -240,37 +240,93 @@ export const TenantDataProvider = ({ children }: { children: ReactNode }) => {
     // --- Handler Functions ---
     const createOrder = async (orderData: Omit<Order, 'id' | 'createdAt' | 'status' | 'orderNumber'>) => {
         if (!tenantData?.id) throw new Error('No tenant selected');
-        await TenantOrderService.createTenantOrder(tenantData.id, orderData);
+        
+        const response = await fetch(`/api/tenant/orders/create?tenantId=${tenantData.id}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(orderData)
+        });
+        
+        if (!response.ok) {
+            throw new Error('Failed to create order');
+        }
+        
         await refreshData();
     };
 
     const saveMenuItem = async (item: MenuItem) => {
         if (!tenantData?.id) throw new Error('No tenant selected');
-        await TenantMenuService.saveTenantMenuItem(tenantData.id, item);
+        
+        const response = await fetch(`/api/tenant/menu?tenantId=${tenantData.id}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ type: 'menuItem', data: item })
+        });
+        
+        if (!response.ok) {
+            throw new Error('Failed to save menu item');
+        }
+        
         await refreshData();
     };
 
     const deleteMenuItem = async (itemId: string) => {
         if (!tenantData?.id) throw new Error('No tenant selected');
-        await TenantMenuService.deleteTenantMenuItem(tenantData.id, itemId);
+        
+        const response = await fetch(`/api/tenant/menu?tenantId=${tenantData.id}&type=menuItem&id=${itemId}`, {
+            method: 'DELETE'
+        });
+        
+        if (!response.ok) {
+            throw new Error('Failed to delete menu item');
+        }
+        
         await refreshData();
     };
 
     const saveCategory = async (category: Category) => {
         if (!tenantData?.id) throw new Error('No tenant selected');
-        await TenantMenuService.saveTenantCategory(tenantData.id, category);
+        
+        const response = await fetch(`/api/tenant/menu?tenantId=${tenantData.id}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ type: 'category', data: category })
+        });
+        
+        if (!response.ok) {
+            throw new Error('Failed to save category');
+        }
+        
         await refreshData();
     };
 
     const deleteCategory = async (categoryId: string) => {
         if (!tenantData?.id) throw new Error('No tenant selected');
-        await TenantMenuService.deleteTenantCategory(tenantData.id, categoryId);
+        
+        const response = await fetch(`/api/tenant/menu?tenantId=${tenantData.id}&type=category&id=${categoryId}`, {
+            method: 'DELETE'
+        });
+        
+        if (!response.ok) {
+            throw new Error('Failed to delete category');
+        }
+        
         await refreshData();
     };
 
     const updateOrderStatus = async (orderId: string, status: OrderStatus) => {
         if (!tenantData?.id) throw new Error('No tenant selected');
-        await TenantOrderService.updateTenantOrderStatus(tenantData.id, orderId, status);
+        
+        const response = await fetch(`/api/tenant/orders/update-status?tenantId=${tenantData.id}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ orderId, status })
+        });
+        
+        if (!response.ok) {
+            throw new Error('Failed to update order status');
+        }
+        
         await refreshData();
     };
 
@@ -278,6 +334,7 @@ export const TenantDataProvider = ({ children }: { children: ReactNode }) => {
         if (!tenantData?.id) throw new Error('No tenant selected');
         const order = orders.find(o => o.id === orderId);
         if (order) {
+            // This would need a separate API endpoint for print status
             await TenantOrderService.updateTenantOrderPrintStatus(tenantData.id, orderId, !order.printed);
             await refreshData();
         }

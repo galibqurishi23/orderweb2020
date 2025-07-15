@@ -129,19 +129,16 @@ export async function createTenant(data: {
       
       // Create the admin user for this tenant
       const adminId = uuidv4();
-      // Create a unique username by combining the desired username with tenant slug
-      const uniqueUsername = `${data.adminEmail}_${data.slug}`;
       
       await connection.execute(
         `INSERT INTO tenant_users (
-          id, tenant_id, email, username, password, name, role, active,
+          id, tenant_id, email, password, name, role, active,
           created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           adminId,
           tenantId,
           data.adminEmail,
-          uniqueUsername,
           hashedPassword,
           data.adminName,
           'owner',
@@ -529,6 +526,91 @@ export async function changeTenantAdminUserPassword(
   }
 }
 
+// Change tenant admin password (self-service)
+export async function changeTenantAdminPassword(
+  tenantId: string, 
+  currentPassword: string, 
+  newPassword: string
+): Promise<void> {
+  try {
+    // Get the tenant admin user
+    const [rows] = await pool.execute(
+      'SELECT id, password FROM tenant_users WHERE tenant_id = ? AND role = ?',
+      [tenantId, 'admin']
+    );
+    
+    const users = rows as any[];
+    if (users.length === 0) {
+      throw new Error('Tenant admin user not found');
+    }
+    
+    const user = users[0];
+    
+    // Verify current password
+    const isCurrentPasswordValid = await bcrypt.compare(currentPassword, user.password);
+    if (!isCurrentPasswordValid) {
+      throw new Error('Invalid current password');
+    }
+    
+    // Hash and update the new password
+    const hashedNewPassword = await bcrypt.hash(newPassword, 12);
+    await pool.execute(
+      'UPDATE tenant_users SET password = ?, updated_at = NOW() WHERE id = ?',
+      [hashedNewPassword, user.id]
+    );
+  } catch (error) {
+    console.error('Error changing tenant admin password:', error);
+    throw error;
+  }
+}
+
+// Change tenant admin email (self-service)
+export async function changeTenantAdminEmail(
+  tenantId: string, 
+  newEmail: string, 
+  currentPassword: string
+): Promise<void> {
+  try {
+    // Get the tenant admin user
+    const [rows] = await pool.execute(
+      'SELECT id, email, password FROM tenant_users WHERE tenant_id = ? AND role = ?',
+      [tenantId, 'admin']
+    );
+    
+    const users = rows as any[];
+    if (users.length === 0) {
+      throw new Error('Tenant admin user not found');
+    }
+    
+    const user = users[0];
+    
+    // Verify current password
+    const isCurrentPasswordValid = await bcrypt.compare(currentPassword, user.password);
+    if (!isCurrentPasswordValid) {
+      throw new Error('Invalid current password');
+    }
+    
+    // Check if new email is already in use
+    const [existingEmailRows] = await pool.execute(
+      'SELECT id FROM tenant_users WHERE email = ? AND id != ?',
+      [newEmail, user.id]
+    );
+    
+    if ((existingEmailRows as any[]).length > 0) {
+      throw new Error('Email already exists');
+    }
+    
+    // Update the email
+    await pool.execute(
+      'UPDATE tenant_users SET email = ?, updated_at = NOW() WHERE id = ?',
+      [newEmail, user.id]
+    );
+  } catch (error) {
+    console.error('Error changing tenant admin email:', error);
+    throw error;
+  }
+}
+
 // Order Service for tenant statistics
 export async function getTenantOrderStats(tenantId: string): Promise<{
   totalOrders: number;
@@ -551,14 +633,14 @@ export async function getTenantOrderStats(tenantId: string): Promise<{
     
     // Get today's orders count
     const [todayOrdersResult] = await pool.execute(
-      'SELECT COUNT(*) as count FROM orders WHERE tenant_id = ? AND createdAt >= ?',
+      'SELECT COUNT(*) as count FROM orders WHERE tenant_id = ? AND created_at >= ?',
       [tenantId, todayStart]
     );
     const todayOrders = (todayOrdersResult as any[])[0].count;
     
     // Get advance orders count (orders marked as advance orders)
     const [advanceOrdersResult] = await pool.execute(
-      'SELECT COUNT(*) as count FROM orders WHERE tenant_id = ? AND isAdvanceOrder = 1',
+      'SELECT COUNT(*) as count FROM orders WHERE tenant_id = ? AND is_advance_order = 1',
       [tenantId]
     );
     const advanceOrders = (advanceOrdersResult as any[])[0].count;
@@ -572,14 +654,14 @@ export async function getTenantOrderStats(tenantId: string): Promise<{
     
     // Get today's revenue
     const [todayRevenueResult] = await pool.execute(
-      'SELECT SUM(total) as total FROM orders WHERE tenant_id = ? AND createdAt >= ? AND status != ?',
+      'SELECT SUM(total) as total FROM orders WHERE tenant_id = ? AND created_at >= ? AND status != ?',
       [tenantId, todayStart, 'cancelled']
     );
     const todayRevenue = (todayRevenueResult as any[])[0].total || 0;
     
     // Get total customers count
     const [totalCustomersResult] = await pool.execute(
-      'SELECT COUNT(DISTINCT customerId) as count FROM orders WHERE tenant_id = ? AND customerId IS NOT NULL',
+      'SELECT COUNT(DISTINCT customer_id) as count FROM orders WHERE tenant_id = ? AND customer_id IS NOT NULL',
       [tenantId]
     );
     const totalCustomers = (totalCustomersResult as any[])[0].count;
@@ -601,11 +683,11 @@ export async function getTenantOrderStats(tenantId: string): Promise<{
 export async function getRecentTenantOrders(tenantId: string, limit: number = 10): Promise<any[]> {
   try {
     const [orders] = await pool.execute(
-      `SELECT o.id, o.orderNumber, o.total, o.status, o.createdAt, 
-              o.customerName, o.customerEmail
+      `SELECT o.id, o.order_number as orderNumber, o.total, o.status, o.created_at as createdAt, 
+              o.customer_name as customerName, o.customer_email as customerEmail
        FROM orders o
        WHERE o.tenant_id = ?
-       ORDER BY o.createdAt DESC
+       ORDER BY o.created_at DESC
        LIMIT ?`,
       [tenantId, limit]
     );
@@ -619,11 +701,11 @@ export async function getRecentTenantOrders(tenantId: string, limit: number = 10
 export async function getTenantOrders(tenantId: string, limit: number = 50): Promise<any[]> {
   try {
     const [orders] = await pool.execute(
-      `SELECT o.id, o.orderNumber, o.total, o.status, o.createdAt,
-              o.customerName, o.customerEmail
+      `SELECT o.id, o.order_number as orderNumber, o.total, o.status, o.created_at as createdAt,
+              o.customer_name as customerName, o.customer_email as customerEmail
        FROM orders o
        WHERE o.tenant_id = ?
-       ORDER BY o.createdAt DESC
+       ORDER BY o.created_at DESC
        LIMIT ?`,
       [tenantId, limit]
     );

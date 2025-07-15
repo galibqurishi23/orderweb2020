@@ -54,7 +54,7 @@ export default function RestaurantsPage() {
     email: '',
     phone: '',
     address: '',
-    ownerUsername: '',
+    ownerEmail: '',
     ownerPassword: ''
   });
   const [editFormData, setEditFormData] = useState({
@@ -113,7 +113,7 @@ export default function RestaurantsPage() {
         // Show success message with admin login details
         setSuccessMessage(
           `✅ Restaurant "${formData.name}" created successfully! ` +
-          `Admin can login with username: ${formData.ownerUsername}. ` +
+          `Admin can login with email: ${formData.ownerEmail}. ` +
           `Dashboard URL: /${formData.slug}/admin`
         );
         
@@ -126,7 +126,7 @@ export default function RestaurantsPage() {
           email: '',
           phone: '',
           address: '',
-          ownerUsername: '',
+          ownerEmail: '',
           ownerPassword: ''
         });
       } else {
@@ -451,18 +451,19 @@ export default function RestaurantsPage() {
                       <div className="space-y-4">
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                           <div className="space-y-2">
-                            <Label htmlFor="ownerUsername">Admin Username *</Label>
+                            <Label htmlFor="ownerEmail">Admin Email *</Label>
                             <Input
-                              id="ownerUsername"
-                              value={formData.ownerUsername}
-                              onChange={(e) => setFormData(prev => ({ ...prev, ownerUsername: e.target.value }))}
-                              placeholder="e.g., admin"
+                              id="ownerEmail"
+                              type="email"
+                              value={formData.ownerEmail}
+                              onChange={(e) => setFormData(prev => ({ ...prev, ownerEmail: e.target.value }))}
+                              placeholder="e.g., admin@restaurant.com"
                               required
                               className="border-blue-300 bg-white"
                             />
                             <p className="text-xs text-blue-600">
                               <Key className="h-3 w-3 inline mr-1" />
-                              This username will be used to login to the admin panel
+                              This email will be used to login to the admin panel
                             </p>
                           </div>
                           <div className="space-y-2">

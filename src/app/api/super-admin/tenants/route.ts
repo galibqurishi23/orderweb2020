@@ -21,12 +21,20 @@ export async function GET() {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { name, slug, email, phone, address, ownerUsername, ownerPassword } = body;
+    const { name, slug, email, phone, address, ownerEmail, ownerPassword } = body;
 
     // Validate required fields
-    if (!name || !slug || !email || !ownerUsername || !ownerPassword) {
+    if (!name || !slug || !email || !ownerEmail || !ownerPassword) {
       return NextResponse.json(
         { success: false, error: 'Missing required fields' },
+        { status: 400 }
+      );
+    }
+
+    // Validate email format
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(ownerEmail)) {
+      return NextResponse.json(
+        { success: false, error: 'Invalid email format for admin credentials' },
         { status: 400 }
       );
     }
@@ -45,8 +53,8 @@ export async function POST(request: NextRequest) {
       email,
       phone,
       address,
-      adminName: ownerUsername, // Use username as name
-      adminEmail: ownerUsername, // Use username as email
+      adminName: 'Admin', // Default admin name
+      adminEmail: ownerEmail, // Use email as login credential
       adminPassword: ownerPassword
     });
 
