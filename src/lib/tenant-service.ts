@@ -129,15 +129,19 @@ export async function createTenant(data: {
       
       // Create the admin user for this tenant
       const adminId = uuidv4();
+      // Create a unique username by combining the desired username with tenant slug
+      const uniqueUsername = `${data.adminEmail}_${data.slug}`;
+      
       await connection.execute(
         `INSERT INTO tenant_users (
-          id, tenant_id, email, password, name, role, active,
+          id, tenant_id, email, username, password, name, role, active,
           created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           adminId,
           tenantId,
           data.adminEmail,
+          uniqueUsername,
           hashedPassword,
           data.adminName,
           'owner',
@@ -148,17 +152,65 @@ export async function createTenant(data: {
       );
       
       // Initialize tenant settings with default values
+      const defaultSettings = {
+        name: data.name,
+        description: '',
+        logo: '',
+        logoHint: '',
+        coverImage: '',
+        coverImageHint: '',
+        favicon: '',
+        currency: 'GBP',
+        taxRate: 0.1,
+        website: '',
+        phone: data.phone || '',
+        email: data.email,
+        address: data.address || '',
+        orderPrefix: 'ORD',
+        advanceOrderPrefix: 'ADV',
+        openingHours: {
+          monday: { closed: false, timeMode: 'single', openTime: '09:00', closeTime: '17:00' },
+          tuesday: { closed: false, timeMode: 'single', openTime: '09:00', closeTime: '17:00' },
+          wednesday: { closed: false, timeMode: 'single', openTime: '09:00', closeTime: '17:00' },
+          thursday: { closed: false, timeMode: 'single', openTime: '09:00', closeTime: '17:00' },
+          friday: { closed: false, timeMode: 'single', openTime: '09:00', closeTime: '17:00' },
+          saturday: { closed: false, timeMode: 'single', openTime: '09:00', closeTime: '17:00' },
+          sunday: { closed: true, timeMode: 'single', openTime: '09:00', closeTime: '17:00' }
+        },
+        orderThrottling: {
+          monday: { interval: 15, ordersPerInterval: 10, enabled: false },
+          tuesday: { interval: 15, ordersPerInterval: 10, enabled: false },
+          wednesday: { interval: 15, ordersPerInterval: 10, enabled: false },
+          thursday: { interval: 15, ordersPerInterval: 10, enabled: false },
+          friday: { interval: 15, ordersPerInterval: 10, enabled: false },
+          saturday: { interval: 15, ordersPerInterval: 10, enabled: false },
+          sunday: { interval: 15, ordersPerInterval: 10, enabled: false }
+        },
+        paymentSettings: {
+          cash: { enabled: true },
+          stripe: { enabled: false, apiKey: '', apiSecret: '', merchantId: '' },
+          globalPayments: { enabled: false, apiKey: '', apiSecret: '', merchantId: '' },
+          worldpay: { enabled: false, apiKey: '', apiSecret: '', merchantId: '' }
+        },
+        orderTypeSettings: {
+          deliveryEnabled: true,
+          advanceOrderEnabled: true,
+          collectionEnabled: true
+        },
+        theme: {
+          primary: '224 82% 57%',
+          primaryForeground: '0 0% 100%',
+          background: '0 0% 100%',
+          accent: '210 40% 96%'
+        }
+      };
+      
       await connection.execute(
         `INSERT INTO tenant_settings (tenant_id, settings_json, created_at, updated_at)
         VALUES (?, ?, ?, ?)`,
         [
           tenantId,
-          JSON.stringify({
-            logo: '',
-            primaryColor: '224 82% 57%', // Default blue
-            currency: 'GBP',
-            timezone: 'Europe/London'
-          }),
+          JSON.stringify(defaultSettings),
           now,
           now
         ]
@@ -199,25 +251,38 @@ export async function createTenant(data: {
       };
     } catch (error) {
       await connection.rollback();
+      console.error('Transaction rollback due to error:', error);
       throw error;
     } finally {
       connection.release();
     }
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error creating tenant:', error);
-    throw new Error('Failed to create tenant and admin account');
+    console.error('Error details:', {
+      message: error?.message,
+      code: error?.code,
+      errno: error?.errno,
+      sqlMessage: error?.sqlMessage,
+      sqlState: error?.sqlState,
+      stack: error?.stack
+    });
+    throw new Error(`Failed to create tenant and admin account: ${error?.message || 'Unknown error'}`);
   }
 }
 
 // Get tenant settings
-export async function getTenantSettings(tenantId: string): Promise<any> {
+export async function getTenantSettings(tenantId: string): Promise<RestaurantSettings | null> {
   try {
     const [rows] = await pool.execute(
       'SELECT settings_json FROM tenant_settings WHERE tenant_id = ?',
       [tenantId]
     );
     const settings = rows as any[];
-    return settings.length > 0 ? settings[0].settings_json : null;
+    if (settings.length > 0) {
+      // The settings are stored as a JSON string, so we need to parse it.
+      return JSON.parse(settings[0].settings_json) as RestaurantSettings;
+    }
+    return null;
   } catch (error) {
     console.error('Error fetching tenant settings:', error);
     return null;
@@ -225,7 +290,7 @@ export async function getTenantSettings(tenantId: string): Promise<any> {
 }
 
 // Update tenant settings
-export async function updateTenantSettings(tenantId: string, settings: any): Promise<void> {
+export async function updateTenantSettings(tenantId: string, settings: RestaurantSettings): Promise<void> {
   try {
     await pool.execute(
       'UPDATE tenant_settings SET settings_json = ?, updated_at = NOW() WHERE tenant_id = ?',
@@ -435,13 +500,43 @@ export async function changeSuperAdminUserPassword(
   }
 }
 
+// Change tenant admin user password (called from super admin panel)
+export async function changeTenantAdminUserPassword(
+  userId: string, 
+  newPassword: string
+): Promise<void> {
+  try {
+    // Super admin can change tenant admin password without current password
+    const [rows] = await pool.execute(
+      'SELECT id, tenant_id FROM tenant_users WHERE id = ?',
+      [userId]
+    );
+    
+    const users = rows as any[];
+    if (users.length === 0) {
+      throw new Error('Tenant admin user not found');
+    }
+    
+    // Hash and update the new password
+    const hashedNewPassword = await bcrypt.hash(newPassword, 12);
+    await pool.execute(
+      'UPDATE tenant_users SET password = ?, updated_at = NOW() WHERE id = ?',
+      [hashedNewPassword, userId]
+    );
+  } catch (error) {
+    console.error('Error changing tenant admin user password:', error);
+    throw error;
+  }
+}
+
 // Order Service for tenant statistics
 export async function getTenantOrderStats(tenantId: string): Promise<{
   totalOrders: number;
   todayOrders: number;
-  pendingOrders: number;
+  advanceOrders: number;
   totalRevenue: number;
   todayRevenue: number;
+  totalCustomers: number;
 }> {
   try {
     const today = new Date();
@@ -461,12 +556,12 @@ export async function getTenantOrderStats(tenantId: string): Promise<{
     );
     const todayOrders = (todayOrdersResult as any[])[0].count;
     
-    // Get pending orders count
-    const [pendingOrdersResult] = await pool.execute(
-      'SELECT COUNT(*) as count FROM orders WHERE tenant_id = ? AND status = ?',
-      [tenantId, 'pending']
+    // Get advance orders count (orders marked as advance orders)
+    const [advanceOrdersResult] = await pool.execute(
+      'SELECT COUNT(*) as count FROM orders WHERE tenant_id = ? AND isAdvanceOrder = 1',
+      [tenantId]
     );
-    const pendingOrders = (pendingOrdersResult as any[])[0].count;
+    const advanceOrders = (advanceOrdersResult as any[])[0].count;
     
     // Get total revenue
     const [totalRevenueResult] = await pool.execute(
@@ -482,15 +577,59 @@ export async function getTenantOrderStats(tenantId: string): Promise<{
     );
     const todayRevenue = (todayRevenueResult as any[])[0].total || 0;
     
+    // Get total customers count
+    const [totalCustomersResult] = await pool.execute(
+      'SELECT COUNT(DISTINCT customerId) as count FROM orders WHERE tenant_id = ? AND customerId IS NOT NULL',
+      [tenantId]
+    );
+    const totalCustomers = (totalCustomersResult as any[])[0].count;
+    
     return {
       totalOrders,
       todayOrders,
-      pendingOrders,
+      advanceOrders,
       totalRevenue: parseFloat(totalRevenue.toString()),
-      todayRevenue: parseFloat(todayRevenue.toString())
+      todayRevenue: parseFloat(todayRevenue.toString()),
+      totalCustomers
     };
   } catch (error) {
     console.error('Error fetching tenant order stats:', error);
     throw new Error('Failed to fetch tenant order statistics');
+  }
+}
+
+export async function getRecentTenantOrders(tenantId: string, limit: number = 10): Promise<any[]> {
+  try {
+    const [orders] = await pool.execute(
+      `SELECT o.id, o.orderNumber, o.total, o.status, o.createdAt, 
+              o.customerName, o.customerEmail
+       FROM orders o
+       WHERE o.tenant_id = ?
+       ORDER BY o.createdAt DESC
+       LIMIT ?`,
+      [tenantId, limit]
+    );
+    return orders as any[];
+  } catch (error) {
+    console.error('Error fetching recent tenant orders:', error);
+    throw new Error('Failed to fetch recent tenant orders');
+  }
+}
+
+export async function getTenantOrders(tenantId: string, limit: number = 50): Promise<any[]> {
+  try {
+    const [orders] = await pool.execute(
+      `SELECT o.id, o.orderNumber, o.total, o.status, o.createdAt,
+              o.customerName, o.customerEmail
+       FROM orders o
+       WHERE o.tenant_id = ?
+       ORDER BY o.createdAt DESC
+       LIMIT ?`,
+      [tenantId, limit]
+    );
+    return orders as any[];
+  } catch (error) {
+    console.error('Error fetching tenant orders:', error);
+    throw new Error('Failed to fetch tenant orders');
   }
 }

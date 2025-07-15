@@ -3,20 +3,52 @@
 import React, { createContext, useContext, useState, ReactNode, useEffect, useCallback } from 'react';
 import type { 
     Order, MenuItem, Category, RestaurantSettings, Customer, Address, OrderStatus,
-    OpeningHours, OpeningHoursPerDay
+    OpeningHours, OpeningHoursPerDay, Voucher, DeliveryZone, Printer
 } from '@/lib/types';
 import * as TenantMenuService from '@/lib/tenant-menu-service';
 import * as TenantCustomerService from '@/lib/tenant-customer-service';
 import * as TenantOrderService from '@/lib/tenant-order-service';
 import { getTenantSettingsAction } from '@/lib/server-actions';
-import { defaultRestaurantSettings } from '@/default-setting/defaultRestaurantSettings';
+import { defaultRestaurantSettings } from '@/lib/defaultRestaurantSettings';
 import { useTenant } from './TenantContext';
+
+// Helper functions to fetch vouchers and delivery zones via API
+const fetchTenantVouchers = async (tenantId: string): Promise<Voucher[]> => {
+    const response = await fetch(`/api/tenant/vouchers`, {
+        headers: {
+            'X-Tenant-ID': tenantId
+        }
+    });
+    
+    if (!response.ok) return [];
+    return response.json();
+};
+
+const fetchTenantDeliveryZones = async (tenantId: string): Promise<DeliveryZone[]> => {
+    const response = await fetch(`/api/tenant/zones`, {
+        headers: {
+            'X-Tenant-ID': tenantId
+        }
+    });
+    
+    if (!response.ok) return [];
+    return response.json();
+};
+
+const fetchTenantPrinters = async (tenantId: string): Promise<Printer[]> => {
+    // For now, return empty array since printers might not be implemented yet
+    // This can be updated when printer API is implemented
+    return [];
+};
 
 // Define the shape of the tenant data context
 interface TenantDataContextType {
     orders: Order[];
     menuItems: MenuItem[];
     categories: Category[];
+    vouchers: Voucher[];
+    deliveryZones: DeliveryZone[];
+    printers: Printer[];
     restaurantSettings: RestaurantSettings; // No longer null - always provide default settings
     customers: Customer[];
     currentUser: Customer | null;
@@ -31,6 +63,15 @@ interface TenantDataContextType {
     deleteCategory: (categoryId: string) => Promise<void>;
     updateOrderStatus: (orderId: string, status: OrderStatus) => Promise<void>;
     updateOrderPrintStatus: (orderId: string) => Promise<void>;
+    saveSettings: (settings: RestaurantSettings) => Promise<void>;
+    saveVoucher: (voucher: Voucher) => Promise<void>;
+    deleteVoucher: (voucherId: string) => Promise<void>;
+    toggleVoucherStatus: (voucherId: string) => Promise<void>;
+    saveDeliveryZone: (zone: DeliveryZone) => Promise<void>;
+    deleteDeliveryZone: (zoneId: string) => Promise<void>;
+    savePrinter: (printer: Printer) => Promise<void>;
+    deletePrinter: (printerId: string) => Promise<void>;
+    togglePrinterStatus: (printerId: string) => Promise<void>;
     login: (email: string, pass: string) => Promise<boolean>;
     logout: () => void;
     updateUserDetails: (updatedDetails: Partial<Customer>) => Promise<void>;
@@ -48,6 +89,9 @@ export const TenantDataProvider = ({ children }: { children: ReactNode }) => {
     const [orders, setOrders] = useState<Order[]>([]);
     const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
     const [categories, setCategories] = useState<Category[]>([]);
+    const [vouchers, setVouchers] = useState<Voucher[]>([]);
+    const [deliveryZones, setDeliveryZones] = useState<DeliveryZone[]>([]);
+    const [printers, setPrinters] = useState<Printer[]>([]);
     const [customers, setCustomers] = useState<Customer[]>([]);
     const [currentUser, setCurrentUser] = useState<Customer | null>(null);
     const [restaurantSettings, setRestaurantSettings] = useState<RestaurantSettings | null>(null);
@@ -65,19 +109,28 @@ export const TenantDataProvider = ({ children }: { children: ReactNode }) => {
                 dbMenuItems, 
                 dbCustomers, 
                 dbOrders,
-                dbSettings
+                dbSettings,
+                dbVouchers,
+                dbDeliveryZones,
+                dbPrinters
             ] = await Promise.all([
                 TenantMenuService.getTenantCategories(tenantData.id),
                 TenantMenuService.getTenantMenuItems(tenantData.id),
                 TenantCustomerService.getTenantCustomers(tenantData.id),
                 TenantOrderService.getTenantOrders(tenantData.id),
-                getTenantSettingsAction(tenantData.id)
+                getTenantSettingsAction(tenantData.id),
+                fetchTenantVouchers(tenantData.id),
+                fetchTenantDeliveryZones(tenantData.id),
+                fetchTenantPrinters(tenantData.id)
             ]);
             
             setCategories(dbCategories);
             setMenuItems(dbMenuItems);
             setCustomers(dbCustomers);
             setOrders(dbOrders);
+            setVouchers(dbVouchers);
+            setDeliveryZones(dbDeliveryZones);
+            setPrinters(dbPrinters);
             
             // Process and set restaurant settings
             if (dbSettings) {
@@ -283,10 +336,143 @@ export const TenantDataProvider = ({ children }: { children: ReactNode }) => {
         }));
     };
 
+    const saveSettings = async (settings: RestaurantSettings) => {
+        if (!tenantData?.id) throw new Error('No tenant selected');
+        
+        const response = await fetch(`/api/tenant/settings`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-Tenant-ID': tenantData.id
+            },
+            body: JSON.stringify(settings)
+        });
+
+        if (!response.ok) {
+            throw new Error('Failed to save settings');
+        }
+
+        await refreshData();
+    };
+
+    const saveVoucher = async (voucher: Voucher) => {
+        if (!tenantData?.id) throw new Error('No tenant selected');
+        
+        const response = await fetch(`/api/tenant/vouchers`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-Tenant-ID': tenantData.id
+            },
+            body: JSON.stringify(voucher)
+        });
+
+        if (!response.ok) {
+            throw new Error('Failed to save voucher');
+        }
+
+        await refreshData();
+    };
+
+    const deleteVoucher = async (voucherId: string) => {
+        if (!tenantData?.id) throw new Error('No tenant selected');
+        
+        const response = await fetch(`/api/tenant/vouchers`, {
+            method: 'DELETE',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-Tenant-ID': tenantData.id
+            },
+            body: JSON.stringify({ id: voucherId })
+        });
+
+        if (!response.ok) {
+            throw new Error('Failed to delete voucher');
+        }
+
+        await refreshData();
+    };
+
+    const toggleVoucherStatus = async (voucherId: string) => {
+        if (!tenantData?.id) throw new Error('No tenant selected');
+        
+        const voucher = vouchers.find(v => v.id === voucherId);
+        if (voucher) {
+            await saveVoucher({ ...voucher, active: !voucher.active });
+        }
+    };
+
+    const saveDeliveryZone = async (zone: DeliveryZone) => {
+        if (!tenantData?.id) throw new Error('No tenant selected');
+        
+        const response = await fetch(`/api/tenant/zones`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-Tenant-ID': tenantData.id
+            },
+            body: JSON.stringify(zone)
+        });
+
+        if (!response.ok) {
+            throw new Error('Failed to save delivery zone');
+        }
+
+        await refreshData();
+    };
+
+    const deleteDeliveryZone = async (zoneId: string) => {
+        if (!tenantData?.id) throw new Error('No tenant selected');
+        
+        const response = await fetch(`/api/tenant/zones`, {
+            method: 'DELETE',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-Tenant-ID': tenantData.id
+            },
+            body: JSON.stringify({ id: zoneId })
+        });
+
+        if (!response.ok) {
+            throw new Error('Failed to delete delivery zone');
+        }
+
+        await refreshData();
+    };
+
+    const savePrinter = async (printer: Printer) => {
+        if (!tenantData?.id) throw new Error('No tenant selected');
+        
+        // For now, this is a placeholder since printer API might not be fully implemented
+        // This can be updated when printer API is available
+        console.log('Save printer:', printer);
+        await refreshData();
+    };
+
+    const deletePrinter = async (printerId: string) => {
+        if (!tenantData?.id) throw new Error('No tenant selected');
+        
+        // For now, this is a placeholder since printer API might not be fully implemented
+        console.log('Delete printer:', printerId);
+        await refreshData();
+    };
+
+    const togglePrinterStatus = async (printerId: string) => {
+        if (!tenantData?.id) throw new Error('No tenant selected');
+        
+        const printer = printers.find(p => p.id === printerId);
+        if (printer) {
+            await savePrinter({ ...printer, active: !printer.active });
+        }
+    };
+
     const contextValue: TenantDataContextType = {
         orders,
         menuItems,
         categories,
+        vouchers,
+        deliveryZones,
+        printers,
         // Make sure we always provide a non-null restaurantSettings to avoid breaking components
         restaurantSettings: restaurantSettings || {
             ...defaultRestaurantSettings,
@@ -317,6 +503,15 @@ export const TenantDataProvider = ({ children }: { children: ReactNode }) => {
         addAddress,
         deleteAddress,
         getMenuWithCategories,
+        saveSettings,
+        saveVoucher,
+        deleteVoucher,
+        toggleVoucherStatus,
+        saveDeliveryZone,
+        deleteDeliveryZone,
+        savePrinter,
+        deletePrinter,
+        togglePrinterStatus,
     };
 
     return (

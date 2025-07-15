@@ -88,7 +88,6 @@ export async function GET(
     const [tenantRows] = await db.execute(
       `SELECT t.*, 
               tu.name as admin_name, 
-              tu.username as admin_username,
               tu.email as admin_email
        FROM tenants t 
        LEFT JOIN tenant_users tu ON t.id = tu.tenant_id AND tu.role = 'owner'
@@ -177,7 +176,7 @@ export async function PUT(
        WHERE id = ?`,
       [name, slug, email, phone, address, id]
     );      // Update admin user if admin details are provided
-      if (adminName || adminUsername || adminPassword) {
+      if (adminName || adminPassword) {
         const [adminUser] = await db.execute(
           'SELECT id, password FROM tenant_users WHERE tenant_id = ? AND role = "owner"',
           [id]
@@ -193,24 +192,6 @@ export async function PUT(
         if (adminName) {
           updateFields.push('name = ?');
           updateParams.push(adminName);
-        }
-
-        if (adminUsername) {
-          // Check if username is unique within this tenant
-          const [usernameCheck] = await db.execute(
-            'SELECT id FROM tenant_users WHERE username = ? AND tenant_id = ? AND id != ?',
-            [adminUsername, id, adminUserId]
-          );
-
-          if ((usernameCheck as any[]).length > 0) {
-            return NextResponse.json(
-              { success: false, error: 'Username is already taken for this restaurant' },
-              { status: 400 }
-            );
-          }
-
-          updateFields.push('username = ?');
-          updateParams.push(adminUsername);
         }
 
         if (adminPassword) {
@@ -233,7 +214,6 @@ export async function PUT(
     const [updatedTenant] = await db.execute(
       `SELECT t.*, 
               tu.name as admin_name, 
-              tu.username as admin_username,
               tu.email as admin_email
        FROM tenants t 
        LEFT JOIN tenant_users tu ON t.id = tu.tenant_id AND tu.role = 'owner'

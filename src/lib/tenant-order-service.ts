@@ -5,6 +5,7 @@ import type { Order, OrderStatus } from './types';
 import { v4 as uuidv4 } from 'uuid';
 import { generateOrderNumber } from './order-utils';
 import { getTenantSettings } from './tenant-service';
+import { defaultRestaurantSettings } from './defaultRestaurantSettings';
 
 export async function getTenantOrders(tenantId: string): Promise<Order[]> {
     const [orderRows] = await pool.query(
@@ -63,8 +64,8 @@ export async function createTenantOrder(tenantId: string, orderData: Omit<Order,
         restaurantSettings = JSON.parse(tenantSettings);
     }
     
-    // Generate order number with proper prefix
-    const orderNumber = generateOrderNumber(restaurantSettings, orderData.isAdvanceOrder);
+    // Generate order number with proper prefix (use default if null)
+    const orderNumber = generateOrderNumber(restaurantSettings || defaultRestaurantSettings, orderData.isAdvanceOrder);
     
     console.log('Creating order with data:', JSON.stringify(orderData, null, 2));
     console.log('Generated order number:', orderNumber);

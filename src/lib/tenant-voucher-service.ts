@@ -120,3 +120,10 @@ export async function incrementVoucherUsage(tenantId: string, voucherId: string)
         [voucherId, tenantId]
     );
 }
+
+export async function toggleTenantVoucherStatus(tenantId: string, voucherId: string): Promise<void> {
+    await pool.execute(
+        'UPDATE vouchers SET active = NOT active WHERE id = ? AND tenant_id = ?',
+        [voucherId, tenantId]
+    );
+}

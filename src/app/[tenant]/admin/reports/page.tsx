@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Button } from '@/components/ui/button';
 import { DateRange } from "react-day-picker";
 import { addDays, format, startOfMonth, startOfWeek, endOfMonth, endOfWeek } from 'date-fns';
-import { useData } from '@/context/DataContext';
+import { useTenantData } from '@/context/TenantDataContext';
 import type { Order } from '@/lib/types';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { cn } from '@/lib/utils';
@@ -75,7 +75,7 @@ const generateReport = (orders: Order[]): ReportData => {
 
 
 export default function ReportsPage() {
-    const { orders: allOrders, restaurantSettings } = useData();
+    const { orders: allOrders, restaurantSettings } = useTenantData();
     const [date, setDate] = useState<DateRange | undefined>();
     const [granularity, setGranularity] = useState<'daily' | 'weekly' | 'monthly'>('daily');
     

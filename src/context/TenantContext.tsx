@@ -131,12 +131,12 @@ export function useTenantRouter() {
   const { tenantSlug } = useTenant();
   
   const getAdminPath = (path: string = '') => {
-    if (!tenantSlug) return '/admin' + (path ? `/${path}` : '');
+    if (!tenantSlug) return '/super-admin' + (path ? `/${path}` : '');
     return `/${tenantSlug}/admin` + (path ? `/${path}` : '');
   };
   
   const getCustomerPath = (path: string = '') => {
-    if (!tenantSlug) return '/customer' + (path ? `/${path}` : '');
+    if (!tenantSlug) return '/super-admin' + (path ? `/${path}` : '');
     return `/${tenantSlug}` + (path ? `/${path}` : '');
   };
   

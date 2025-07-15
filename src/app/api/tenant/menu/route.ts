@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getRecentTenantOrders } from '@/lib/tenant-service';
+import { getTenantMenuWithCategories } from '@/lib/tenant-menu-service';
 
 export async function GET(request: NextRequest) {
   try {
@@ -13,17 +13,16 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Always fetch the 10 most recent orders
-    const orders = await getRecentTenantOrders(tenantId, 10);
+    const menuData = await getTenantMenuWithCategories(tenantId);
     
     return NextResponse.json({
       success: true,
-      data: orders
+      data: menuData
     });
   } catch (error) {
-    console.error('Error fetching tenant orders:', error);
+    console.error('Error fetching tenant menu:', error);
     return NextResponse.json(
-      { success: false, error: 'Failed to fetch orders' },
+      { success: false, error: 'Failed to fetch menu' },
       { status: 500 }
     );
   }

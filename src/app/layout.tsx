@@ -1,6 +1,5 @@
 import './globals.css';
 import { Toaster } from '@/components/ui/toaster';
-import { DataProvider } from '@/context/DataContext';
 import { TenantProvider } from '@/context/TenantContext';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import type { Metadata } from 'next';
@@ -25,10 +24,8 @@ export default function RootLayout({
       <body className="font-body antialiased">
         <ErrorBoundary>
           <TenantProvider>
-            <DataProvider>
-              {children}
-              <Toaster />
-            </DataProvider>
+            {children}
+            <Toaster />
           </TenantProvider>
         </ErrorBoundary>
       </body>

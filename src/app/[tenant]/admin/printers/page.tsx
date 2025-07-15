@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import { Printer, Plus, Edit, Trash2, Save, X, Wifi, WifiOff, Settings2, TestTube2 } from 'lucide-react';
-import { useData } from '@/context/DataContext';
+import { useTenantData } from '@/context/TenantDataContext';
 import type { Printer as PrinterType, PrinterType as TypeEnum } from '@/lib/types';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -169,7 +169,7 @@ const PrinterFormDialog = ({ isOpen, onClose, onSave, printer }: { isOpen: boole
 };
 
 export default function PrintersPage() {
-    const { printers, savePrinter, deletePrinter, togglePrinterStatus } = useData();
+    const { printers, savePrinter, deletePrinter, togglePrinterStatus } = useTenantData();
     const [editingPrinter, setEditingPrinter] = useState<PrinterType | null>(null);
     const [isFormOpen, setIsFormOpen] = useState(false);
     const { toast } = useToast();

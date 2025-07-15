@@ -3,7 +3,7 @@
 import React, { useState } from 'react';
 import { Save, CreditCard, Wallet } from 'lucide-react';
 import type { PaymentSettings } from '@/lib/types';
-import { useData } from '@/context/DataContext';
+import { useTenantData } from '@/context/TenantDataContext';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -13,7 +13,7 @@ import { cn } from '@/lib/utils';
 import { Switch } from '@/components/ui/switch';
 
 export default function PaymentsPage() {
-    const { restaurantSettings, saveSettings } = useData();
+    const { restaurantSettings, saveSettings } = useTenantData();
     const [settings, setSettings] = useState<PaymentSettings>(restaurantSettings.paymentSettings);
     const { toast } = useToast();
     

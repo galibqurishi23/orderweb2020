@@ -54,7 +54,6 @@ export default function RestaurantsPage() {
     email: '',
     phone: '',
     address: '',
-    ownerName: '',
     ownerUsername: '',
     ownerPassword: ''
   });
@@ -127,7 +126,6 @@ export default function RestaurantsPage() {
           email: '',
           phone: '',
           address: '',
-          ownerName: '',
           ownerUsername: '',
           ownerPassword: ''
         });
@@ -451,17 +449,6 @@ export default function RestaurantsPage() {
                         Admin Account Credentials
                       </h4>
                       <div className="space-y-4">
-                        <div className="space-y-2">
-                          <Label htmlFor="ownerName">Admin Full Name *</Label>
-                          <Input
-                            id="ownerName"
-                            value={formData.ownerName}
-                            onChange={(e) => setFormData(prev => ({ ...prev, ownerName: e.target.value }))}
-                            placeholder="e.g., John Doe"
-                            required
-                            className="border-blue-300 bg-white"
-                          />
-                        </div>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                           <div className="space-y-2">
                             <Label htmlFor="ownerUsername">Admin Username *</Label>
@@ -469,7 +456,7 @@ export default function RestaurantsPage() {
                               id="ownerUsername"
                               value={formData.ownerUsername}
                               onChange={(e) => setFormData(prev => ({ ...prev, ownerUsername: e.target.value }))}
-                              placeholder="e.g., admin or johndoe"
+                              placeholder="e.g., admin"
                               required
                               className="border-blue-300 bg-white"
                             />

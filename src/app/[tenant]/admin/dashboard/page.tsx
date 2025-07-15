@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -13,19 +13,50 @@ import {
   AlertCircle,
   Loader2,
   TrendingUp,
-  BookText
+  BookText,
+  Settings,
+  CalendarCheck
 } from "lucide-react";
 import { useTenant } from '@/context/TenantContext';
-import type { TenantStats } from '@/lib/types';
+import type { TenantStats, Order } from '@/lib/types';
+import { Skeleton } from '@/components/ui/skeleton';
 
 export default function TenantAdminDashboard() {
   const { tenantData, isLoading: isTenantLoading, error: tenantError } = useTenant();
   const [stats, setStats] = useState<TenantStats | null>(null);
-  const [recentOrders, setRecentOrders] = useState<any[]>([]);
+  const [recentOrders, setRecentOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [authLoading, setAuthLoading] = useState(true);
+
+  const fetchDashboardData = useCallback(async () => {
+    if (!tenantData) return;
+    setLoading(true);
+    setError(null);
+    try {
+      // Fetch stats
+      const statsResponse = await fetch(`/api/tenant/stats?tenantId=${tenantData.id}`);
+      const statsResult = await statsResponse.json();
+      if (!statsResult.success) {
+        throw new Error(statsResult.error || 'Failed to load statistics');
+      }
+      setStats(statsResult.data);
+
+      // Fetch recent orders
+      const ordersResponse = await fetch(`/api/tenant/orders?tenantId=${tenantData.id}`);
+      const ordersResult = await ordersResponse.json();
+      if (!ordersResult.success) {
+        throw new Error(ordersResult.error || 'Failed to load recent orders');
+      }
+      setRecentOrders(ordersResult.data);
+
+    } catch (err: any) {
+      setError(`Failed to load dashboard data: ${err.message}`);
+    } finally {
+      setLoading(false);
+    }
+  }, [tenantData]);
   
   // Check authentication first
   useEffect(() => {
@@ -38,11 +69,13 @@ export default function TenantAdminDashboard() {
           setIsAuthenticated(true);
         } else {
           // Not authenticated, redirect to login
-          window.location.href = window.location.pathname.replace('/dashboard', '');
+          const tenantSlug = window.location.pathname.split('/')[1];
+          window.location.href = `/${tenantSlug}/admin`;
         }
       } catch (error) {
         // Not authenticated, redirect to login
-        window.location.href = window.location.pathname.replace('/dashboard', '');
+        const tenantSlug = window.location.pathname.split('/')[1];
+        window.location.href = `/${tenantSlug}/admin`;
       } finally {
         setAuthLoading(false);
       }
@@ -50,88 +83,15 @@ export default function TenantAdminDashboard() {
 
     checkAuth();
   }, []);
-  
+
+  // Fetch data if authenticated
   useEffect(() => {
-    if (isAuthenticated && tenantData?.id) {
+    if (isAuthenticated && tenantData) {
       fetchDashboardData();
-    } else if (!isTenantLoading && !authLoading) {
-      // If tenant data is not available and we are not loading, set an error.
-      setError('Tenant data is not available. Cannot fetch dashboard data.');
-      setLoading(false);
     }
-  }, [tenantData, isTenantLoading, isAuthenticated, authLoading]);
+  }, [isAuthenticated, tenantData, fetchDashboardData]);
 
-  const fetchDashboardData = async () => {
-    if (!tenantData?.id) return;
-
-    try {
-      // Fetch stats with a timestamp to avoid caching issues
-      const timestamp = new Date().getTime();
-      const statsResponse = await fetch(`/api/tenant/stats?tenantId=${tenantData.id}&t=${timestamp}`, {
-        headers: {
-          'Cache-Control': 'no-cache',
-          'Pragma': 'no-cache'
-        }
-      });
-      
-      if (!statsResponse.ok) {
-        throw new Error(`Stats API returned ${statsResponse.status}`);
-      }
-      
-      const statsResult = await statsResponse.json();
-      
-      if (statsResult.success) {
-        setStats(statsResult.data);
-      } else {
-        // Use fallback dummy data if API fails but returns a response
-        setStats({
-          totalOrders: 8,
-          todayOrders: 2,
-          pendingOrders: 1,
-          totalRevenue: 249.95,
-          todayRevenue: 49.95
-        });
-      }
-
-      // Fetch recent orders
-      const ordersResponse = await fetch(`/api/tenant/orders?tenantId=${tenantData.id}&limit=10&t=${timestamp}`, {
-        headers: {
-          'Cache-Control': 'no-cache',
-          'Pragma': 'no-cache'
-        }
-      });
-      
-      if (!ordersResponse.ok) {
-        throw new Error(`Orders API returned ${ordersResponse.status}`);
-      }
-      
-      const ordersResult = await ordersResponse.json();
-      
-      if (ordersResult.success) {
-        setRecentOrders(ordersResult.data);
-      } else {
-        // Use fallback dummy data if API fails but returns a response
-        setRecentOrders([{
-          id: 'dummy-order-1',
-          customerName: 'John Doe',
-          customerPhone: '+447123456789',
-          customerEmail: 'john@example.com',
-          total: 29.95,
-          status: 'pending',
-          orderType: 'delivery',
-          isAdvanceOrder: false,
-          scheduledTime: null,
-          createdAt: new Date().toISOString()
-        }]);
-      }
-    } catch (err: any) {
-      setError(`Failed to load dashboard data: ${err.message || 'Unknown error'}`);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  if (authLoading || isTenantLoading || loading || !tenantData || !isAuthenticated) {
+  if (authLoading || isTenantLoading) {
     return (
       <div className="p-6 space-y-6">
         <Card>
@@ -199,7 +159,8 @@ export default function TenantAdminDashboard() {
   }
 
   const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('en-US', {
+    // This should ideally use the tenant's currency setting
+    return new Intl.NumberFormat('en-GB', {
       style: 'currency',
       currency: 'GBP'
     }).format(amount);
@@ -213,168 +174,149 @@ export default function TenantAdminDashboard() {
       case 'ready': return 'bg-green-100 text-green-800';
       case 'delivered': return 'bg-green-100 text-green-800';
       case 'cancelled': return 'bg-red-100 text-red-800';
+      case 'scheduled': return 'bg-purple-100 text-purple-800';
       default: return 'bg-gray-100 text-gray-800';
     }
   };
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div>
-        <h1 className="text-3xl font-bold">Welcome back!</h1>
-        <p className="text-muted-foreground">
-          Here's what's happening at {tenantData.name} today
-        </p>
+    <div className="flex-1 space-y-4 p-4 md:p-8 pt-6">
+      <div className="flex items-center justify-between space-y-2">
+        <div>
+          <h2 className="text-3xl font-bold tracking-tight">Dashboard</h2>
+          <p className="text-muted-foreground">
+            Here's what's happening at {tenantData.name} today.
+          </p>
+        </div>
+        <div className="flex items-center space-x-2">
+          <Link href={`/${tenantData.slug}/admin/settings`} passHref>
+            <Button variant="outline" size="icon">
+              <Settings className="h-4 w-4" />
+            </Button>
+          </Link>
+        </div>
       </div>
-
-      {/* Stats Cards */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Total Revenue</CardTitle>
+            <Banknote className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">
+              {loading ? <Skeleton className="h-8 w-32" /> : formatCurrency(stats?.totalRevenue ?? 0)}
+            </div>
+            <p className="text-xs text-muted-foreground">Based on all-time completed orders</p>
+          </CardContent>
+        </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Total Orders</CardTitle>
             <ShoppingCart className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{stats?.totalOrders || 0}</div>
-            <p className="text-xs text-muted-foreground">
-              {stats?.todayOrders || 0} today
-            </p>
+            <div className="text-2xl font-bold">
+              {loading ? <Skeleton className="h-8 w-16" /> : `+${stats?.totalOrders ?? 0}`}
+            </div>
+            <p className="text-xs text-muted-foreground">All-time order count</p>
           </CardContent>
         </Card>
-
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Revenue</CardTitle>
-            <Banknote className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{formatCurrency(stats?.totalRevenue || 0)}</div>
-            <p className="text-xs text-muted-foreground">
-              {formatCurrency(stats?.todayRevenue || 0)} today
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Pending Orders</CardTitle>
-            <Clock className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{stats?.pendingOrders || 0}</div>
-            <p className="text-xs text-muted-foreground">
-              {stats?.pendingOrders === 0 ? 'All caught up!' : 'Needs attention'}
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Growth</CardTitle>
-            <TrendingUp className="h-4 w-4 text-muted-foreground" />
+            <CardTitle className="text-sm font-medium">Advance Orders</CardTitle>
+            <CalendarCheck className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {stats?.totalOrders === 0 ? '0%' : '+100%'}
+              {loading ? <Skeleton className="h-8 w-16" /> : `+${stats?.advanceOrders ?? 0}`}
             </div>
-            <p className="text-xs text-muted-foreground">
-              {stats?.totalOrders === 0 ? 'Getting started' : 'Month over month'}
-            </p>
+            <p className="text-xs text-muted-foreground">Scheduled for a future date</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Total Customers</CardTitle>
+            <Users className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">
+              {loading ? <Skeleton className="h-8 w-16" /> : `+${stats?.totalCustomers ?? 0}`}
+            </div>
+            <p className="text-xs text-muted-foreground">All-time unique customers</p>
           </CardContent>
         </Card>
       </div>
-
-      {/* Recent Orders */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Recent Orders</CardTitle>
-          <CardDescription>
-            Your latest orders and their status
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          {recentOrders.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-12 text-center">
-              <ShoppingCart className="h-12 w-12 text-muted-foreground mb-4" />
-              <h3 className="text-lg font-semibold mb-2">No orders yet</h3>
-              <p className="text-muted-foreground max-w-sm">
-                Once customers start placing orders, they'll appear here.
-              </p>
-            </div>
-          ) : (
-            <div className="space-y-4">
-              {recentOrders.map((order) => (
-                <div key={order.id} className="flex items-center justify-between p-4 border rounded-lg">
-                  <div className="space-y-1">
-                    <div className="flex items-center space-x-2">
-                      <span className="font-medium">#{order.id.slice(-8)}</span>
-                      <Badge className={getOrderStatusColor(order.status)}>
-                        {order.status}
-                      </Badge>
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-7">
+        <Card className="col-span-4">
+          <CardHeader>
+            <CardTitle>Recent Orders</CardTitle>
+            <CardDescription>
+              The 10 most recent orders placed.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {loading ? (
+              <div className="space-y-4">
+                {[...Array(5)].map((_, i) => (
+                  <div key={i} className="flex items-center">
+                    <Skeleton className="h-9 w-9 rounded-full" />
+                    <div className="ml-4 space-y-1">
+                      <Skeleton className="h-4 w-32" />
+                      <Skeleton className="h-4 w-24" />
                     </div>
-                    <div className="text-sm text-muted-foreground">
-                      {order.customerName} • {order.orderType}
-                    </div>
-                    <div className="text-xs text-muted-foreground">
-                      {new Date(order.createdAt).toLocaleString()}
-                    </div>
+                    <Skeleton className="ml-auto h-4 w-20" />
                   </div>
-                  <div className="text-right">
-                    <div className="font-medium">{formatCurrency(order.total)}</div>
-                    <Button variant="outline" size="sm" className="mt-2">
-                      View Details
-                    </Button>
+                ))}
+              </div>
+            ) : (
+              <div className="space-y-8">
+                {recentOrders.map((order) => (
+                  <div key={order.id} className="flex items-center">
+                    <div className="flex-1">
+                      <p className="text-sm font-medium leading-none">
+                        {order.customerName || 'Guest'}
+                      </p>
+                      <p className="text-sm text-muted-foreground">
+                        {order.customerEmail || 'No email'}
+                      </p>
+                    </div>
+                    <div className="ml-auto font-medium">
+                      {formatCurrency(order.total)}
+                    </div>
+                    <Badge className={`ml-4 capitalize ${getOrderStatusColor(order.status)}`}>
+                      {order.status}
+                    </Badge>
                   </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* Quick Actions */}
-      <div className="grid gap-4 md:grid-cols-3">
-        <Link href={`/${tenantData.slug}/admin/orders`}>
-          <Card className="cursor-pointer hover:shadow-lg transition-shadow">
-            <CardContent className="flex items-center space-x-4 p-6">
-              <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
-                <ShoppingCart className="w-6 h-6 text-blue-600" />
+                ))}
               </div>
-              <div>
-                <h3 className="font-semibold">Manage Orders</h3>
-                <p className="text-sm text-muted-foreground">View and process orders</p>
-              </div>
-            </CardContent>
-          </Card>
-        </Link>
-
-        <Link href={`/${tenantData.slug}/admin/menu`}>
-          <Card className="cursor-pointer hover:shadow-lg transition-shadow">
-            <CardContent className="flex items-center space-x-4 p-6">
-              <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center">
-                <BookText className="w-6 h-6 text-green-600" />
-              </div>
-              <div>
-                <h3 className="font-semibold">Menu Management</h3>
-                <p className="text-sm text-muted-foreground">Update your menu items</p>
-              </div>
-            </CardContent>
-          </Card>
-        </Link>
-
-        <Link href={`/${tenantData.slug}/admin/settings`}>
-          <Card className="cursor-pointer hover:shadow-lg transition-shadow">
-            <CardContent className="flex items-center space-x-4 p-6">
-              <div className="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center">
-                <Banknote className="w-6 h-6 text-purple-600" />
-              </div>
-              <div>
-                <h3 className="font-semibold">Settings</h3>
-                <p className="text-sm text-muted-foreground">Configure restaurant settings</p>
-              </div>
-            </CardContent>
-          </Card>
-        </Link>
+            )}
+          </CardContent>
+        </Card>
+        <Card className="col-span-3">
+          <CardHeader>
+            <CardTitle>Quick Actions</CardTitle>
+          </CardHeader>
+          <CardContent className="grid gap-2">
+            <Link href={`/${tenantData.slug}/admin/menu`} passHref>
+              <Button className="w-full justify-start" variant="outline">
+                <BookText className="mr-2 h-4 w-4" />
+                Manage Menu
+              </Button>
+            </Link>
+            <Link href={`/${tenantData.slug}/admin/orders`} passHref>
+              <Button className="w-full justify-start" variant="outline">
+                <ShoppingCart className="mr-2 h-4 w-4" />
+                View All Orders
+              </Button>
+            </Link>
+            <Link href={`/${tenantData.slug}/admin/settings`} passHref>
+              <Button className="w-full justify-start" variant="outline">
+                <Settings className="mr-2 h-4 w-4" />
+                Adjust Settings
+              </Button>
+            </Link>
+          </CardContent>
+        </Card>
       </div>
     </div>
   );

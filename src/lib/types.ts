@@ -61,7 +61,7 @@ export interface PlacedOrderItem {
     specialInstructions?: string;
 }
 
-export type OrderStatus = 'confirmed' | 'cancelled';
+export type OrderStatus = 'pending' | 'confirmed' | 'preparing' | 'ready' | 'delivered' | 'cancelled';
 
 export interface Order {
     id: string;
@@ -275,9 +275,10 @@ export interface SuperAdminUser {
 export interface TenantStats {
   totalOrders: number;
   todayOrders: number;
-  pendingOrders: number;
+  advanceOrders: number;
   totalRevenue: number;
   todayRevenue: number;
+  totalCustomers: number;
 }
 
 export interface PlatformStats {

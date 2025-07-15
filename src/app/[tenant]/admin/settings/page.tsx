@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import { Save, Upload, Mail, Phone, MapPin, Settings as SettingsIcon, Image as ImageIcon, KeyRound, Palette } from 'lucide-react';
-import { useData } from '@/context/DataContext';
+import { useTenantData } from '@/context/TenantDataContext';
 import type { RestaurantSettings, OpeningHoursPerDay, ThemeSettings } from '@/lib/types';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -160,7 +160,7 @@ const ColorPickerInput = ({
 }
 
 export default function SettingsPage() {
-    const { restaurantSettings, saveSettings } = useData();
+    const { restaurantSettings, saveSettings } = useTenantData();
     const [settings, setSettings] = useState<RestaurantSettings>(restaurantSettings);
     const { toast } = useToast();
     const [passwordData, setPasswordData] = useState({

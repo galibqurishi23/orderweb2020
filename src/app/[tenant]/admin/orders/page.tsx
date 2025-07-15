@@ -3,7 +3,7 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { getCurrencySymbol } from '@/lib/currency-utils';
 import { ShoppingBag, Printer, Eye, CheckCircle, Search } from 'lucide-react';
-import { useData } from '@/context/DataContext';
+import { useTenantData } from '@/context/TenantDataContext';
 import type { Order, OrderStatus } from '@/lib/types';
 import {
   Card,
@@ -38,7 +38,7 @@ import { format } from 'date-fns';
 import { Skeleton } from '@/components/ui/skeleton';
 
 export default function TenantOrdersPage() {
-  const { orders, updateOrderPrintStatus, restaurantSettings } = useData();
+  const { orders, updateOrderPrintStatus, restaurantSettings } = useTenantData();
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
   const [isClient, setIsClient] = useState(false);

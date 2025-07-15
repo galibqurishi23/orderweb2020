@@ -4,7 +4,7 @@ import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { getCurrencySymbol } from '@/lib/currency-utils';
 import { Clock, Calendar, Eye, CheckCircle, XCircle, Printer } from 'lucide-react';
 import type { Order, OrderStatus } from '@/lib/types';
-import { useData } from '@/context/DataContext';
+import { useTenantData } from '@/context/TenantDataContext';
 import {
   Card,
   CardContent,
@@ -38,7 +38,7 @@ import { format } from 'date-fns';
 import { Skeleton } from '@/components/ui/skeleton';
 
 export default function AdvanceOrdersPage() {
-  const { orders, updateOrderStatus, restaurantSettings } = useData();
+  const { orders, updateOrderStatus, restaurantSettings } = useTenantData();
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
   const [isClient, setIsClient] = useState(false);
   const { toast } = useToast();

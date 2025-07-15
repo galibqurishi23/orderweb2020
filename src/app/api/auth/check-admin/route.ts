@@ -13,7 +13,26 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    const sessionData = JSON.parse(sessionCookie.value);
+    let sessionData;
+    try {
+      sessionData = JSON.parse(sessionCookie.value);
+    } catch (parseError) {
+      // Invalid session data, clear cookie
+      cookieStore.delete('admin-session');
+      return NextResponse.json({
+        authenticated: false,
+        error: 'Invalid session data'
+      });
+    }
+
+    // Validate session data structure
+    if (!sessionData.userId || !sessionData.tenantId || !sessionData.loginTime) {
+      cookieStore.delete('admin-session');
+      return NextResponse.json({
+        authenticated: false,
+        error: 'Invalid session structure'
+      });
+    }
     
     // Check if session is still valid (24 hours)
     const loginTime = new Date(sessionData.loginTime);

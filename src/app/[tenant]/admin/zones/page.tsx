@@ -3,7 +3,7 @@
 import React, { useState, useRef, useMemo, useEffect } from 'react';
 import { getCurrencySymbol } from '@/lib/currency-utils';
 import { MapPin, Edit, Trash2, Plus, Save, X, Upload, Map as MapIcon, Clock, Settings, ThumbsUp, ThumbsDown } from 'lucide-react';
-import { useData } from '@/context/DataContext';
+import { useTenantData } from '@/context/TenantDataContext';
 import type { DeliveryZone, OrderThrottlingSettings } from '@/lib/types';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -238,7 +238,7 @@ reader.onload = (e) => {
 
 
 export default function DeliveryZonesPage() {
-    const { deliveryZones, saveDeliveryZone, deleteDeliveryZone, restaurantSettings, saveSettings } = useData();
+    const { deliveryZones, saveDeliveryZone, deleteDeliveryZone, restaurantSettings, saveSettings } = useTenantData();
     const [editingZone, setEditingZone] = useState<DeliveryZone | null>(null);
     const [isFormOpen, setIsFormOpen] = useState(false);
     const [throttlingSettings, setThrottlingSettings] = useState<OrderThrottlingSettings>(restaurantSettings.orderThrottling);

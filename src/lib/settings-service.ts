@@ -2,7 +2,7 @@
 
 import pool from './db';
 import type { RestaurantSettings } from './types';
-import { defaultRestaurantSettings } from '@/default-setting/defaultRestaurantSettings';
+import { defaultRestaurantSettings } from '@/lib/defaultRestaurantSettings';
 
 export async function getSettings(): Promise<RestaurantSettings> {
     const [rows] = await pool.query('SELECT settings_json FROM restaurant_settings WHERE id = 1');

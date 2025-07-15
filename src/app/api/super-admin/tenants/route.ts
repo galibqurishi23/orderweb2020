@@ -21,10 +21,10 @@ export async function GET() {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { name, slug, email, phone, address, ownerName, ownerUsername, ownerPassword } = body;
+    const { name, slug, email, phone, address, ownerUsername, ownerPassword } = body;
 
     // Validate required fields
-    if (!name || !slug || !email || !ownerName || !ownerUsername || !ownerPassword) {
+    if (!name || !slug || !email || !ownerUsername || !ownerPassword) {
       return NextResponse.json(
         { success: false, error: 'Missing required fields' },
         { status: 400 }
@@ -45,8 +45,8 @@ export async function POST(request: NextRequest) {
       email,
       phone,
       address,
-      adminName: ownerName,
-      adminEmail: ownerUsername,
+      adminName: ownerUsername, // Use username as name
+      adminEmail: ownerUsername, // Use username as email
       adminPassword: ownerPassword
     });
 
@@ -57,6 +57,11 @@ export async function POST(request: NextRequest) {
     });
   } catch (error: any) {
     console.error('Error creating tenant:', error);
+    console.error('Error details:', {
+      code: error.code,
+      message: error.message,
+      stack: error.stack
+    });
     
     // Handle duplicate key errors
     if (error.code === 'ER_DUP_ENTRY') {
@@ -75,7 +80,7 @@ export async function POST(request: NextRequest) {
     }
 
     return NextResponse.json(
-      { success: false, error: 'Failed to create restaurant' },
+      { success: false, error: error.message || 'Failed to create restaurant' },
       { status: 500 }
     );
   }

@@ -3,7 +3,7 @@
 import React, { useState, useMemo } from 'react';
 import { getCurrencySymbol } from '@/lib/currency-utils';
 import { Tag, Plus, Edit, Trash2, Save, X, Check, Ban } from 'lucide-react';
-import { useData } from '@/context/DataContext';
+import { useTenantData } from '@/context/TenantDataContext';
 import type { Voucher } from '@/lib/types';
 import {
   Card,
@@ -220,7 +220,7 @@ const VoucherFormDialog = ({ isOpen, onClose, onSave, voucher, currencySymbol }:
 
 
 export default function VouchersPage() {
-    const { vouchers, saveVoucher, deleteVoucher, toggleVoucherStatus, restaurantSettings } = useData();
+    const { vouchers, saveVoucher, deleteVoucher, toggleVoucherStatus, restaurantSettings } = useTenantData();
     const [editingVoucher, setEditingVoucher] = useState<Voucher | null>(null);
     const [isFormOpen, setIsFormOpen] = useState(false);
     const { toast } = useToast();

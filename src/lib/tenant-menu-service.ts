@@ -17,7 +17,7 @@ function parseJsonField<T>(field: any): T | undefined {
 
 export async function getTenantCategories(tenantId: string): Promise<Category[]> {
     const [rows] = await pool.query(
-        'SELECT * FROM categories WHERE tenant_id = ? ORDER BY `order` ASC',
+        'SELECT * FROM categories WHERE tenant_id = ? ORDER BY categories.`order` ASC',
         [tenantId]
     );
     return (rows as any[]).map(category => ({

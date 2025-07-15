@@ -24,10 +24,12 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Find user in tenant_users table using username (owner is the admin role)
+    // Find user in tenant_users table using email or username (owner is the admin role)
+    // Try both the plain username and the username with tenant slug
+    const usernameWithSlug = `${username}_${tenant.slug}`;
     const [userRows] = await db.execute(
-      'SELECT id, email, username, password, name, role, active FROM tenant_users WHERE username = ? AND tenant_id = ? AND role = "owner"',
-      [username, tenant.id]
+      'SELECT id, email, username, password, name, role, active FROM tenant_users WHERE (email = ? OR username = ? OR username = ?) AND tenant_id = ? AND role = "owner"',
+      [username, username, usernameWithSlug, tenant.id]
     );
 
     const users = userRows as any[];
