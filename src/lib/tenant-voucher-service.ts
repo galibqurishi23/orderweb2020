@@ -15,7 +15,7 @@ export async function getTenantVouchers(tenantId: string): Promise<Voucher[]> {
         active: Boolean(v.active),
         usageLimit: v.usageLimit ? Number(v.usageLimit) : undefined,
         usedCount: Number(v.usedCount),
-        type: v.type === 'fixed' ? 'amount' : v.type // Convert 'fixed' to 'amount'
+        type: v.type // Keep type as-is since database has correct enum values
     }));
 }
 
@@ -40,7 +40,7 @@ export async function validateTenantVoucher(tenantId: string, code: string, orde
         active: Boolean(voucher.active),
         usageLimit: voucher.usageLimit ? Number(voucher.usageLimit) : undefined,
         usedCount: Number(voucher.usedCount),
-        type: voucher.type === 'fixed' ? 'amount' : voucher.type // Convert 'fixed' to 'amount'
+        type: voucher.type // Keep type as-is since database has correct enum values
     };
     
     // Check if voucher has expired
@@ -82,7 +82,8 @@ export async function calculateVoucherDiscount(voucher: Voucher, orderTotal: num
 }
 
 export async function saveTenantVoucher(tenantId: string, voucher: Voucher): Promise<void> {
-    const voucherType = voucher.type === 'amount' ? 'fixed' : voucher.type; // Convert 'amount' to 'fixed'
+    // Database expects 'amount' not 'fixed'
+    const voucherType = voucher.type;
     
     if (voucher.id && !voucher.id.startsWith('voucher-')) {
         // Update existing voucher
@@ -118,7 +119,7 @@ export async function saveTenantVoucher(tenantId: string, voucher: Voucher): Pro
 
 export async function updateTenantVoucher(tenantId: string, voucher: Voucher): Promise<void> {
     const { id, code, value, minOrder, maxDiscount, expiryDate, active, usageLimit, usedCount } = voucher;
-    const voucherType = voucher.type === 'amount' ? 'fixed' : voucher.type; // Convert 'amount' to 'fixed'
+    const voucherType = voucher.type; // Use type as-is since database expects 'amount' not 'fixed'
     
     const sql = `
         UPDATE vouchers 
@@ -139,7 +140,7 @@ export async function deleteTenantVoucher(tenantId: string, voucherId: string): 
 
 export async function incrementVoucherUsage(tenantId: string, voucherId: string): Promise<void> {
     await pool.execute(
-        'UPDATE vouchers SET used_count = used_count + 1 WHERE id = ? AND tenant_id = ?',
+        'UPDATE vouchers SET usedCount = usedCount + 1 WHERE id = ? AND tenant_id = ?',
         [voucherId, tenantId]
     );
 }
