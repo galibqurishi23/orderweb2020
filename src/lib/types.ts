@@ -234,8 +234,6 @@ export interface RestaurantSettings {
   phone: string;
   email: string;
   address: string;
-  orderPrefix: string;
-  advanceOrderPrefix: string;
   paymentSettings: PaymentSettings;
   orderTypeSettings: {
     deliveryEnabled: boolean;

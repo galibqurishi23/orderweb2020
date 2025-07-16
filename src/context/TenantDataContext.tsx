@@ -2,10 +2,10 @@
 
 import React, { createContext, useContext, useState, ReactNode, useEffect, useCallback } from 'react';
 import type { 
-    Order, MenuItem, Category, RestaurantSettings, Customer, Address, OrderStatus,
+    Order, RestaurantSettings, Customer, Address, OrderStatus,
     OpeningHours, OpeningHoursPerDay, Voucher, DeliveryZone, Printer
 } from '@/lib/types';
-import * as TenantMenuService from '@/lib/tenant-menu-service';
+import { MenuCategory, MenuItem } from '@/lib/menu-types';
 import * as TenantCustomerService from '@/lib/tenant-customer-service';
 import * as TenantOrderService from '@/lib/tenant-order-service';
 import { getTenantSettingsAction } from '@/lib/server-actions';
@@ -45,7 +45,7 @@ const fetchTenantPrinters = async (tenantId: string): Promise<Printer[]> => {
 interface TenantDataContextType {
     orders: Order[];
     menuItems: MenuItem[];
-    categories: Category[];
+    categories: MenuCategory[];
     vouchers: Voucher[];
     deliveryZones: DeliveryZone[];
     printers: Printer[];
@@ -59,10 +59,11 @@ interface TenantDataContextType {
     createOrder: (order: Omit<Order, 'id' | 'createdAt' | 'status' | 'orderNumber'>) => Promise<void>;
     saveMenuItem: (item: MenuItem) => Promise<void>;
     deleteMenuItem: (itemId: string) => Promise<void>;
-    saveCategory: (category: Category) => Promise<void>;
+    saveCategory: (category: MenuCategory) => Promise<void>;
     deleteCategory: (categoryId: string) => Promise<void>;
     updateOrderStatus: (orderId: string, status: OrderStatus) => Promise<void>;
     updateOrderPrintStatus: (orderId: string) => Promise<void>;
+    deleteOrder: (orderId: string) => Promise<void>;
     saveSettings: (settings: RestaurantSettings) => Promise<void>;
     saveVoucher: (voucher: Voucher) => Promise<void>;
     deleteVoucher: (voucherId: string) => Promise<void>;
@@ -77,7 +78,8 @@ interface TenantDataContextType {
     updateUserDetails: (updatedDetails: Partial<Customer>) => Promise<void>;
     addAddress: (address: Omit<Address, 'id'>) => Promise<void>;
     deleteAddress: (addressId: string) => Promise<void>;
-    getMenuWithCategories: () => { category: Category; items: MenuItem[] }[];
+    getMenuWithCategories: () => { category: MenuCategory; items: MenuItem[] }[];
+    getMenuWithCategoriesForCustomer: () => { category: any; items: any[] }[];
 }
 
 // Create the context
@@ -88,7 +90,7 @@ export const TenantDataProvider = ({ children }: { children: ReactNode }) => {
     const { tenantData, isLoading: tenantLoading } = useTenant();
     const [orders, setOrders] = useState<Order[]>([]);
     const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
-    const [categories, setCategories] = useState<Category[]>([]);
+    const [categories, setCategories] = useState<MenuCategory[]>([]);
     const [vouchers, setVouchers] = useState<Voucher[]>([]);
     const [deliveryZones, setDeliveryZones] = useState<DeliveryZone[]>([]);
     const [printers, setPrinters] = useState<Printer[]>([]);
@@ -103,10 +105,7 @@ export const TenantDataProvider = ({ children }: { children: ReactNode }) => {
         if (!tenantData?.id) return;
         
         try {
-            setIsLoading(true);
-            const [
-                dbCategories, 
-                dbMenuItems, 
+            setIsLoading(true);            const [
                 dbCustomers, 
                 dbOrders,
                 dbSettings,
@@ -114,8 +113,6 @@ export const TenantDataProvider = ({ children }: { children: ReactNode }) => {
                 dbDeliveryZones,
                 dbPrinters
             ] = await Promise.all([
-                TenantMenuService.getTenantCategories(tenantData.id),
-                TenantMenuService.getTenantMenuItems(tenantData.id),
                 TenantCustomerService.getTenantCustomers(tenantData.id),
                 TenantOrderService.getTenantOrders(tenantData.id),
                 getTenantSettingsAction(tenantData.id),
@@ -124,8 +121,16 @@ export const TenantDataProvider = ({ children }: { children: ReactNode }) => {
                 fetchTenantPrinters(tenantData.id)
             ]);
             
-            setCategories(dbCategories);
-            setMenuItems(dbMenuItems);
+            // Fetch menu data using new API
+            const menuResponse = await fetch(`/api/menu?tenantId=${tenantData.id}&action=menu`);
+            const menuData = await menuResponse.json();
+            
+            if (menuData.success) {
+                const menuWithCategories = menuData.data;
+                setCategories(menuWithCategories.map((item: any) => item.category));
+                setMenuItems(menuWithCategories.flatMap((item: any) => item.items));
+            }
+            
             setCustomers(dbCustomers);
             setOrders(dbOrders);
             setVouchers(dbVouchers);
@@ -257,14 +262,21 @@ export const TenantDataProvider = ({ children }: { children: ReactNode }) => {
     const saveMenuItem = async (item: MenuItem) => {
         if (!tenantData?.id) throw new Error('No tenant selected');
         
-        const response = await fetch(`/api/tenant/menu?tenantId=${tenantData.id}`, {
-            method: 'POST',
+        // Determine if this is an update or create based on whether the item has an ID
+        // and whether we can find it in the existing items
+        const isUpdate = item.id && item.id.length > 0 && menuItems?.some(existingItem => existingItem.id === item.id);
+        const action = isUpdate ? 'update-menu-item' : 'create-menu-item';
+        const method = isUpdate ? 'PUT' : 'POST';
+        
+        const response = await fetch(`/api/menu?tenantId=${tenantData.id}&action=${action}`, {
+            method: method,
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ type: 'menuItem', data: item })
+            body: JSON.stringify(item)
         });
         
         if (!response.ok) {
-            throw new Error('Failed to save menu item');
+            const errorData = await response.json();
+            throw new Error(errorData.error || 'Failed to save menu item');
         }
         
         await refreshData();
@@ -273,7 +285,7 @@ export const TenantDataProvider = ({ children }: { children: ReactNode }) => {
     const deleteMenuItem = async (itemId: string) => {
         if (!tenantData?.id) throw new Error('No tenant selected');
         
-        const response = await fetch(`/api/tenant/menu?tenantId=${tenantData.id}&type=menuItem&id=${itemId}`, {
+        const response = await fetch(`/api/menu?tenantId=${tenantData.id}&action=delete-menu-item&id=${itemId}`, {
             method: 'DELETE'
         });
         
@@ -284,17 +296,24 @@ export const TenantDataProvider = ({ children }: { children: ReactNode }) => {
         await refreshData();
     };
 
-    const saveCategory = async (category: Category) => {
+    const saveCategory = async (category: MenuCategory) => {
         if (!tenantData?.id) throw new Error('No tenant selected');
         
-        const response = await fetch(`/api/tenant/menu?tenantId=${tenantData.id}`, {
-            method: 'POST',
+        // Determine if this is an update or create based on whether the category has an ID
+        // and whether we can find it in the existing categories
+        const isUpdate = category.id && category.id.length > 0 && categories?.some(existingCategory => existingCategory.id === category.id);
+        const action = isUpdate ? 'update-category' : 'create-category';
+        const method = isUpdate ? 'PUT' : 'POST';
+        
+        const response = await fetch(`/api/menu?tenantId=${tenantData.id}&action=${action}`, {
+            method: method,
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ type: 'category', data: category })
+            body: JSON.stringify(category)
         });
         
         if (!response.ok) {
-            throw new Error('Failed to save category');
+            const errorData = await response.json();
+            throw new Error(errorData.error || 'Failed to save category');
         }
         
         await refreshData();
@@ -303,7 +322,7 @@ export const TenantDataProvider = ({ children }: { children: ReactNode }) => {
     const deleteCategory = async (categoryId: string) => {
         if (!tenantData?.id) throw new Error('No tenant selected');
         
-        const response = await fetch(`/api/tenant/menu?tenantId=${tenantData.id}&type=category&id=${categoryId}`, {
+        const response = await fetch(`/api/menu?tenantId=${tenantData.id}&action=delete-category&id=${categoryId}`, {
             method: 'DELETE'
         });
         
@@ -338,6 +357,27 @@ export const TenantDataProvider = ({ children }: { children: ReactNode }) => {
             await TenantOrderService.updateTenantOrderPrintStatus(tenantData.id, orderId, !order.printed);
             await refreshData();
         }
+    };
+
+    const deleteOrder = async (orderId: string) => {
+        if (!tenantData?.id) throw new Error('No tenant selected');
+        
+        const response = await fetch(`/api/tenant/orders/${orderId}?tenantId=${tenantData.id}`, {
+            method: 'DELETE',
+            headers: { 'Content-Type': 'application/json' }
+        });
+        
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
+            console.error('Delete order API error:', {
+                status: response.status,
+                statusText: response.statusText,
+                error: errorData
+            });
+            throw new Error(errorData.error || `Failed to delete order (${response.status})`);
+        }
+        
+        await refreshData();
     };
 
     const login = async (email: string, password: string): Promise<boolean> => {
@@ -386,10 +426,53 @@ export const TenantDataProvider = ({ children }: { children: ReactNode }) => {
         setCurrentUser(prev => prev ? { ...prev, addresses } : null);
     };
 
-    const getMenuWithCategories = (): { category: Category; items: MenuItem[] }[] => {
+    const getMenuWithCategories = (): { category: MenuCategory; items: MenuItem[] }[] => {
         return categories.map(category => ({
             category,
             items: menuItems.filter(item => item.categoryId === category.id)
+        }));
+    };
+
+    // Transform new menu structure to old structure for customer interface compatibility
+    const getMenuWithCategoriesForCustomer = (): { category: any; items: any[] }[] => {
+        return categories.map(category => ({
+            category: {
+                id: category.id,
+                name: category.name,
+                active: category.active,
+                order: category.displayOrder,
+                parentId: category.parentId,
+                image: category.imageUrl,
+                icon: category.icon,
+                color: category.color
+            },
+            items: menuItems.filter(item => item.categoryId === category.id).map(item => ({
+                id: item.id,
+                name: item.name,
+                description: item.description || '',
+                price: item.price,
+                imageUrl: item.imageUrl,
+                imageHint: item.imageHint,
+                available: item.available,
+                categoryId: item.categoryId || '',
+                addons: item.addons ? item.addons.flatMap(group => 
+                    group.options.map(option => ({
+                        id: option.id,
+                        name: option.name,
+                        price: option.price,
+                        type: 'extra' as const,
+                        required: group.required,
+                        multiple: group.multiple,
+                        maxSelections: group.maxSelections
+                    }))
+                ) : [],
+                characteristics: item.characteristics || [],
+                nutrition: item.nutrition || {},
+                isSetMenu: item.isSetMenu,
+                setMenuItems: item.setMenuItems || [],
+                preparationTime: item.preparationTime,
+                tags: item.tags || []
+            }))
         }));
     };
 
@@ -415,6 +498,9 @@ export const TenantDataProvider = ({ children }: { children: ReactNode }) => {
     const saveVoucher = async (voucher: Voucher) => {
         if (!tenantData?.id) throw new Error('No tenant selected');
         
+        console.log('Saving voucher:', voucher);
+        console.log('Tenant ID:', tenantData.id);
+        
         const response = await fetch(`/api/tenant/vouchers`, {
             method: 'POST',
             headers: {
@@ -425,7 +511,16 @@ export const TenantDataProvider = ({ children }: { children: ReactNode }) => {
         });
 
         if (!response.ok) {
-            throw new Error('Failed to save voucher');
+            const errorText = await response.text();
+            console.error('Save voucher error response:', errorText);
+            console.error('Response status:', response.status);
+            
+            try {
+                const errorData = JSON.parse(errorText);
+                throw new Error(errorData.error || 'Failed to save voucher');
+            } catch (parseError) {
+                throw new Error(`Failed to save voucher: ${errorText}`);
+            }
         }
 
         await refreshData();
@@ -554,12 +649,14 @@ export const TenantDataProvider = ({ children }: { children: ReactNode }) => {
         deleteCategory,
         updateOrderStatus,
         updateOrderPrintStatus,
+        deleteOrder,
         login,
         logout,
         updateUserDetails,
         addAddress,
         deleteAddress,
         getMenuWithCategories,
+        getMenuWithCategoriesForCustomer,
         saveSettings,
         saveVoucher,
         deleteVoucher,

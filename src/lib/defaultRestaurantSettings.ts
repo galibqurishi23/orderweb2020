@@ -8,8 +8,6 @@ export const defaultRestaurantSettings: RestaurantSettings = {
   email: 'contact@restaurant.com',
   currency: 'GBP',
   taxRate: 0.10,
-  orderPrefix: 'ORD',
-  advanceOrderPrefix: 'ADV',
   openingHours: {
     monday: { closed: false, timeMode: 'single', openTime: '09:00', closeTime: '22:00' },
     tuesday: { closed: false, timeMode: 'single', openTime: '09:00', closeTime: '22:00' },

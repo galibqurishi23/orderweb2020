@@ -1,17 +1,15 @@
 import type { RestaurantSettings } from './types';
 
 /**
- * Generates a unique order number with prefix based on restaurant settings
+ * Generates a unique order number with prefix based on restaurant name
  * Format: [PREFIX]-[4-digit-number]
- * Examples: "BIS-1234", "ADV-5678"
+ * Examples: "BIS-1234", "PIZ-5678"
  */
 export function generateOrderNumber(
   restaurantSettings: RestaurantSettings, 
   isAdvanceOrder: boolean = false
 ): string {
-  const prefix = isAdvanceOrder 
-    ? (restaurantSettings.advanceOrderPrefix || getDefaultPrefix(restaurantSettings.name, 'advance'))
-    : (restaurantSettings.orderPrefix || getDefaultPrefix(restaurantSettings.name, 'regular'));
+  const prefix = generatePrefixFromRestaurantName(restaurantSettings.name);
     
   // Generate 4-digit random number
   const orderNumber = Math.floor(1000 + Math.random() * 9000);
@@ -20,20 +18,26 @@ export function generateOrderNumber(
 }
 
 /**
- * Generates default prefix from restaurant name
- * Takes first 3 characters of restaurant name, uppercased
+ * Generates prefix from restaurant name
+ * Takes first 3 alphabetic characters of restaurant name, uppercased
  */
-function getDefaultPrefix(restaurantName: string, type: 'regular' | 'advance'): string {
+function generatePrefixFromRestaurantName(restaurantName: string): string {
   if (!restaurantName) {
-    return type === 'advance' ? 'ADV' : 'ORD';
+    return 'ORD';
   }
   
-  // Extract first 3 characters, remove spaces and special characters
-  const cleanName = restaurantName.replace(/[^a-zA-Z]/g, '').toUpperCase();
-  const basePrefix = cleanName.substring(0, 3).padEnd(3, 'X'); // Pad with X if less than 3 chars
+  // Extract only alphabetic characters
+  const alphabetic = restaurantName.replace(/[^a-zA-Z]/g, '');
   
-  // For advance orders, add 'A' prefix or modify the prefix
-  return type === 'advance' ? `A${basePrefix.substring(0, 2)}` : basePrefix;
+  // Take first 3 characters, uppercase
+  let prefix = alphabetic.substring(0, 3).toUpperCase();
+  
+  // Pad with 'X' if less than 3 characters
+  while (prefix.length < 3) {
+    prefix += 'X';
+  }
+  
+  return prefix;
 }
 
 /**

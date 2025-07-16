@@ -163,7 +163,67 @@ const ColorPickerInput = ({
 export default function SettingsPage() {
     const { restaurantSettings, saveSettings } = useTenantData();
     const { tenantData } = useTenant();
-    const [settings, setSettings] = useState<RestaurantSettings>(restaurantSettings);
+    
+    // Create proper default settings
+    const defaultSettings: RestaurantSettings = {
+        name: '',
+        description: '',
+        address: '',
+        phone: '',
+        email: '',
+        currency: 'GBP',
+        taxRate: 0.1,
+        website: '',
+        logo: '',
+        logoHint: '',
+        coverImage: '',
+        coverImageHint: '',
+        favicon: '',
+        openingHours: {
+            monday: { closed: false, timeMode: 'single', openTime: '09:00', closeTime: '17:00' },
+            tuesday: { closed: false, timeMode: 'single', openTime: '09:00', closeTime: '17:00' },
+            wednesday: { closed: false, timeMode: 'single', openTime: '09:00', closeTime: '17:00' },
+            thursday: { closed: false, timeMode: 'single', openTime: '09:00', closeTime: '17:00' },
+            friday: { closed: false, timeMode: 'single', openTime: '09:00', closeTime: '17:00' },
+            saturday: { closed: false, timeMode: 'single', openTime: '09:00', closeTime: '17:00' },
+            sunday: { closed: false, timeMode: 'single', openTime: '09:00', closeTime: '17:00' }
+        },
+        orderThrottling: {
+            monday: { interval: 15, ordersPerInterval: 10, enabled: false },
+            tuesday: { interval: 15, ordersPerInterval: 10, enabled: false },
+            wednesday: { interval: 15, ordersPerInterval: 10, enabled: false },
+            thursday: { interval: 15, ordersPerInterval: 10, enabled: false },
+            friday: { interval: 15, ordersPerInterval: 10, enabled: false },
+            saturday: { interval: 15, ordersPerInterval: 10, enabled: false },
+            sunday: { interval: 15, ordersPerInterval: 10, enabled: false }
+        },
+        paymentSettings: {
+            cash: { enabled: true },
+            stripe: { enabled: false, apiKey: '', apiSecret: '', merchantId: '' },
+            globalPayments: { enabled: false, apiKey: '', apiSecret: '', merchantId: '' },
+            worldpay: { enabled: false, apiKey: '', apiSecret: '', merchantId: '' }
+        },
+        orderTypeSettings: {
+            deliveryEnabled: true,
+            advanceOrderEnabled: true,
+            collectionEnabled: true
+        },
+        theme: {
+            primary: '224 82% 57%',
+            primaryForeground: '210 40% 98%',
+            background: '210 40% 98%',
+            accent: '210 40% 94%'
+        }
+    };
+    
+    const [settings, setSettings] = useState<RestaurantSettings>(() => {
+        // Merge defaults with actual settings, ensuring all fields are defined
+        return {
+            ...defaultSettings,
+            ...restaurantSettings
+        };
+    });
+    
     const { toast } = useToast();
     const [passwordData, setPasswordData] = useState({
         currentPassword: '',
@@ -177,22 +237,26 @@ export default function SettingsPage() {
     
     // Sync local state when context data changes
     React.useEffect(() => {
-        // Ensure all opening hours have proper defaults
-        const settingsWithDefaults = {
-            ...restaurantSettings,
-            currency: 'GBP', // Always use GBP
-            openingHours: {
-                ...restaurantSettings.openingHours,
-                monday: ensureHoursDefaults(restaurantSettings.openingHours?.monday),
-                tuesday: ensureHoursDefaults(restaurantSettings.openingHours?.tuesday),
-                wednesday: ensureHoursDefaults(restaurantSettings.openingHours?.wednesday),
-                thursday: ensureHoursDefaults(restaurantSettings.openingHours?.thursday),
-                friday: ensureHoursDefaults(restaurantSettings.openingHours?.friday),
-                saturday: ensureHoursDefaults(restaurantSettings.openingHours?.saturday),
-                sunday: ensureHoursDefaults(restaurantSettings.openingHours?.sunday),
-            }
-        };
-        setSettings(settingsWithDefaults);
+        if (restaurantSettings) {
+            // Ensure all opening hours have proper defaults
+            const settingsWithDefaults = {
+                ...defaultSettings,
+                ...restaurantSettings,
+                currency: 'GBP', // Always use GBP
+                openingHours: {
+                    ...defaultSettings.openingHours,
+                    ...restaurantSettings.openingHours,
+                    monday: ensureHoursDefaults(restaurantSettings.openingHours?.monday),
+                    tuesday: ensureHoursDefaults(restaurantSettings.openingHours?.tuesday),
+                    wednesday: ensureHoursDefaults(restaurantSettings.openingHours?.wednesday),
+                    thursday: ensureHoursDefaults(restaurantSettings.openingHours?.thursday),
+                    friday: ensureHoursDefaults(restaurantSettings.openingHours?.friday),
+                    saturday: ensureHoursDefaults(restaurantSettings.openingHours?.saturday),
+                    sunday: ensureHoursDefaults(restaurantSettings.openingHours?.sunday),
+                }
+            };
+            setSettings(settingsWithDefaults);
+        }
     }, [restaurantSettings]);
     
     // Helper function to ensure hours have all required defaults
@@ -518,19 +582,19 @@ export default function SettingsPage() {
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                 <div>
                                     <Label htmlFor="name">Restaurant Name</Label>
-                                    <Input id="name" value={settings.name} onChange={e => handleInputChange('name', e.target.value)} />
+                                    <Input id="name" value={settings.name || ''} onChange={e => handleInputChange('name', e.target.value)} />
                                 </div>
                                 <div>
                                     <Label htmlFor="taxRate">Tax Rate (%)</Label>
-                                    <Input id="taxRate" type="number" value={settings.taxRate * 100} onChange={e => handleInputChange('taxRate', parseFloat(e.target.value) / 100 || 0)} />
+                                    <Input id="taxRate" type="number" value={settings.taxRate ? settings.taxRate * 100 : 0} onChange={e => handleInputChange('taxRate', parseFloat(e.target.value) / 100 || 0)} />
                                 </div>
                                 <div className="md:col-span-2">
                                      <Label htmlFor="description">Description</Label>
-                                     <Textarea id="description" value={settings.description} onChange={e => handleInputChange('description', e.target.value)} />
+                                     <Textarea id="description" value={settings.description || ''} onChange={e => handleInputChange('description', e.target.value)} />
                                 </div>
                                 <div>
                                     <Label htmlFor="website">Website</Label>
-                                    <Input id="website" type="url" value={settings.website} onChange={e => handleInputChange('website', e.target.value)} placeholder="https://example.com" />
+                                    <Input id="website" type="url" value={settings.website || ''} onChange={e => handleInputChange('website', e.target.value)} placeholder="https://example.com" />
                                 </div>
                             </div>
                             <div>
@@ -608,19 +672,7 @@ export default function SettingsPage() {
                             <Separator className="my-4" />
                             <div>
                                 <h3 className="text-lg font-medium">Order Settings</h3>
-                                <p className="text-sm text-muted-foreground mb-4">Customize order prefixes and available fulfillment options.</p>
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                    <div>
-                                        <Label htmlFor="orderPrefix">Regular Order Prefix</Label>
-                                        <Input id="orderPrefix" value={settings.orderPrefix} onChange={e => handleInputChange('orderPrefix', e.target.value.toUpperCase())} placeholder="ORD" />
-                                        <p className="text-xs text-muted-foreground mt-1">e.g., ORD-12345</p>
-                                    </div>
-                                    <div>
-                                        <Label htmlFor="advanceOrderPrefix">Advance Order Prefix</Label>
-                                        <Input id="advanceOrderPrefix" value={settings.advanceOrderPrefix} onChange={e => handleInputChange('advanceOrderPrefix', e.target.value.toUpperCase())} placeholder="ADV" />
-                                        <p className="text-xs text-muted-foreground mt-1">e.g., ADV-12345</p>
-                                    </div>
-                                </div>
+                                <p className="text-sm text-muted-foreground mb-4">Configure available fulfillment options.</p>
                                 <div className="mt-6 space-y-4 rounded-lg border p-4">
                                     <h4 className="font-medium">Available Order Types</h4>
                                     <div className="flex items-center justify-between">
@@ -859,15 +911,15 @@ export default function SettingsPage() {
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                 <div>
                                     <Label htmlFor="phone"><Phone className="inline w-4 h-4 mr-2"/>Phone Number</Label>
-                                    <Input id="phone" type="tel" value={settings.phone} onChange={e => handleInputChange('phone', e.target.value)} />
+                                    <Input id="phone" type="tel" value={settings.phone || ''} onChange={e => handleInputChange('phone', e.target.value)} />
                                 </div>
                                  <div>
                                     <Label htmlFor="email"><Mail className="inline w-4 h-4 mr-2"/>Email Address</Label>
-                                    <Input id="email" type="email" value={settings.email} onChange={e => handleInputChange('email', e.target.value)} />
+                                    <Input id="email" type="email" value={settings.email || ''} onChange={e => handleInputChange('email', e.target.value)} />
                                 </div>
                                 <div className="md:col-span-2">
                                     <Label htmlFor="address"><MapPin className="inline w-4 h-4 mr-2"/>Full Address</Label>
-                                    <Textarea id="address" value={settings.address} onChange={e => handleInputChange('address', e.target.value)} />
+                                    <Textarea id="address" value={settings.address || ''} onChange={e => handleInputChange('address', e.target.value)} />
                                 </div>
                             </div>
                         </CardContent>
@@ -888,7 +940,7 @@ export default function SettingsPage() {
                                     <Input
                                         id="current-password"
                                         type="password"
-                                        value={passwordData.currentPassword}
+                                        value={passwordData.currentPassword || ''}
                                         onChange={e => handlePasswordInputChange('currentPassword', e.target.value)}
                                         placeholder="Enter your current password"
                                     />
@@ -898,7 +950,7 @@ export default function SettingsPage() {
                                     <Input
                                         id="new-password"
                                         type="password"
-                                        value={passwordData.newPassword}
+                                        value={passwordData.newPassword || ''}
                                         onChange={e => handlePasswordInputChange('newPassword', e.target.value)}
                                         placeholder="Enter a new password"
                                     />
@@ -908,7 +960,7 @@ export default function SettingsPage() {
                                     <Input
                                         id="confirm-password"
                                         type="password"
-                                        value={passwordData.confirmPassword}
+                                        value={passwordData.confirmPassword || ''}
                                         onChange={e => handlePasswordInputChange('confirmPassword', e.target.value)}
                                         placeholder="Confirm your new password"
                                     />
@@ -922,7 +974,7 @@ export default function SettingsPage() {
                                     <Input
                                         id="new-email"
                                         type="email"
-                                        value={emailData.newEmail}
+                                        value={emailData.newEmail || ''}
                                         onChange={e => handleEmailInputChange('newEmail', e.target.value)}
                                         placeholder="your.new.email@example.com"
                                     />
@@ -932,7 +984,7 @@ export default function SettingsPage() {
                                     <Input
                                         id="password-for-email"
                                         type="password"
-                                        value={emailData.passwordForEmail}
+                                        value={emailData.passwordForEmail || ''}
                                         onChange={e => handleEmailInputChange('passwordForEmail', e.target.value)}
                                         placeholder="Enter password to confirm change"
                                     />

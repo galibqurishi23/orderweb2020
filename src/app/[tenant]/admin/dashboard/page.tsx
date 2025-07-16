@@ -15,7 +15,8 @@ import {
   TrendingUp,
   BookText,
   Settings,
-  CalendarCheck
+  CalendarCheck,
+  Tag
 } from "lucide-react";
 import { useTenant } from '@/context/TenantContext';
 import type { TenantStats, Order } from '@/lib/types';
@@ -158,12 +159,13 @@ export default function TenantAdminDashboard() {
     );
   }
 
-  const formatCurrency = (amount: number) => {
+  const formatCurrency = (amount: number | string | undefined) => {
+    const numAmount = parseFloat(amount?.toString() || '0') || 0;
     // This should ideally use the tenant's currency setting
     return new Intl.NumberFormat('en-GB', {
       style: 'currency',
       currency: 'GBP'
-    }).format(amount);
+    }).format(numAmount);
   };
 
   const getOrderStatusColor = (status: string) => {
@@ -180,110 +182,157 @@ export default function TenantAdminDashboard() {
   };
 
   return (
-    <div className="flex-1 space-y-4 p-4 md:p-8 pt-6">
-      <div className="flex items-center justify-between space-y-2">
+    <div className="space-y-8">
+      {/* Header */}
+      <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-3xl font-bold tracking-tight">Dashboard</h2>
-          <p className="text-muted-foreground">
-            Here's what's happening at {tenantData.name} today.
+          <h1 className="text-4xl font-bold text-slate-900">Dashboard</h1>
+          <p className="text-slate-600 mt-1">
+            Welcome back! Here's what's happening at <span className="font-semibold">{tenantData.name}</span> today.
           </p>
         </div>
-        <div className="flex items-center space-x-2">
-          <Link href={`/${tenantData.slug}/admin/settings`} passHref>
-            <Button variant="outline" size="icon">
-              <Settings className="h-4 w-4" />
+        <div className="flex items-center space-x-3">
+          <Link href={`/${tenantData.slug}`} target="_blank">
+            <Button variant="outline" size="sm" className="flex items-center space-x-2">
+              <span>🌐</span>
+              <span>View Store</span>
+            </Button>
+          </Link>
+          <Link href={`/${tenantData.slug}/admin/settings`}>
+            <Button variant="outline" size="sm">
+              <Settings className="h-4 w-4 mr-2" />
+              Settings
             </Button>
           </Link>
         </div>
       </div>
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <Card>
+
+      {/* Stats Cards */}
+      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
+        <Card className="bg-gradient-to-br from-blue-50 to-indigo-100 border-blue-200">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Revenue</CardTitle>
-            <Banknote className="h-4 w-4 text-muted-foreground" />
+            <CardTitle className="text-sm font-medium text-blue-700">Total Revenue</CardTitle>
+            <div className="p-2 bg-blue-500 rounded-lg">
+              <Banknote className="h-4 w-4 text-white" />
+            </div>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">
+            <div className="text-3xl font-bold text-blue-900">
               {loading ? <Skeleton className="h-8 w-32" /> : formatCurrency(stats?.totalRevenue ?? 0)}
             </div>
-            <p className="text-xs text-muted-foreground">Based on all-time completed orders</p>
+            <p className="text-xs text-blue-600 mt-1">Based on completed orders</p>
           </CardContent>
         </Card>
-        <Card>
+
+        <Card className="bg-gradient-to-br from-green-50 to-emerald-100 border-green-200">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Orders</CardTitle>
-            <ShoppingCart className="h-4 w-4 text-muted-foreground" />
+            <CardTitle className="text-sm font-medium text-green-700">Total Orders</CardTitle>
+            <div className="p-2 bg-green-500 rounded-lg">
+              <ShoppingCart className="h-4 w-4 text-white" />
+            </div>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">
-              {loading ? <Skeleton className="h-8 w-16" /> : `+${stats?.totalOrders ?? 0}`}
+            <div className="text-3xl font-bold text-green-900">
+              {loading ? <Skeleton className="h-8 w-16" /> : `${stats?.totalOrders ?? 0}`}
             </div>
-            <p className="text-xs text-muted-foreground">All-time order count</p>
+            <p className="text-xs text-green-600 mt-1">All-time order count</p>
           </CardContent>
         </Card>
-        <Card>
+
+        <Card className="bg-gradient-to-br from-purple-50 to-violet-100 border-purple-200">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Advance Orders</CardTitle>
-            <CalendarCheck className="h-4 w-4 text-muted-foreground" />
+            <CardTitle className="text-sm font-medium text-purple-700">Advance Orders</CardTitle>
+            <div className="p-2 bg-purple-500 rounded-lg">
+              <CalendarCheck className="h-4 w-4 text-white" />
+            </div>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">
-              {loading ? <Skeleton className="h-8 w-16" /> : `+${stats?.advanceOrders ?? 0}`}
+            <div className="text-3xl font-bold text-purple-900">
+              {loading ? <Skeleton className="h-8 w-16" /> : `${stats?.advanceOrders ?? 0}`}
             </div>
-            <p className="text-xs text-muted-foreground">Scheduled for a future date</p>
+            <p className="text-xs text-purple-600 mt-1">Scheduled orders</p>
           </CardContent>
         </Card>
-        <Card>
+
+        <Card className="bg-gradient-to-br from-orange-50 to-amber-100 border-orange-200">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Customers</CardTitle>
-            <Users className="h-4 w-4 text-muted-foreground" />
+            <CardTitle className="text-sm font-medium text-orange-700">Total Customers</CardTitle>
+            <div className="p-2 bg-orange-500 rounded-lg">
+              <Users className="h-4 w-4 text-white" />
+            </div>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">
-              {loading ? <Skeleton className="h-8 w-16" /> : `+${stats?.totalCustomers ?? 0}`}
+            <div className="text-3xl font-bold text-orange-900">
+              {loading ? <Skeleton className="h-8 w-16" /> : `${stats?.totalCustomers ?? 0}`}
             </div>
-            <p className="text-xs text-muted-foreground">All-time unique customers</p>
+            <p className="text-xs text-orange-600 mt-1">Unique customers</p>
           </CardContent>
         </Card>
       </div>
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-7">
-        <Card className="col-span-4">
+
+      {/* Main Content Grid */}
+      <div className="grid gap-6 lg:grid-cols-3">
+        {/* Recent Orders */}
+        <Card className="lg:col-span-2">
           <CardHeader>
-            <CardTitle>Recent Orders</CardTitle>
-            <CardDescription>
-              The 10 most recent orders placed.
-            </CardDescription>
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle className="text-xl font-semibold">Recent Orders</CardTitle>
+                <CardDescription>Latest customer orders and their status</CardDescription>
+              </div>
+              <Link href={`/${tenantData.slug}/admin/orders`}>
+                <Button variant="outline" size="sm">
+                  View All
+                </Button>
+              </Link>
+            </div>
           </CardHeader>
           <CardContent>
             {loading ? (
               <div className="space-y-4">
                 {[...Array(5)].map((_, i) => (
-                  <div key={i} className="flex items-center">
-                    <Skeleton className="h-9 w-9 rounded-full" />
-                    <div className="ml-4 space-y-1">
+                  <div key={i} className="flex items-center p-3 rounded-lg border">
+                    <Skeleton className="h-10 w-10 rounded-full" />
+                    <div className="ml-4 space-y-1 flex-1">
                       <Skeleton className="h-4 w-32" />
-                      <Skeleton className="h-4 w-24" />
+                      <Skeleton className="h-3 w-24" />
                     </div>
-                    <Skeleton className="ml-auto h-4 w-20" />
+                    <Skeleton className="h-4 w-20" />
                   </div>
                 ))}
               </div>
+            ) : recentOrders.length === 0 ? (
+              <div className="text-center py-8">
+                <ShoppingCart className="h-12 w-12 text-slate-400 mx-auto mb-3" />
+                <p className="text-slate-500">No orders yet</p>
+                <p className="text-sm text-slate-400 mt-1">Orders will appear here once customers start placing them</p>
+              </div>
             ) : (
-              <div className="space-y-8">
-                {recentOrders.map((order) => (
-                  <div key={order.id} className="flex items-center">
-                    <div className="flex-1">
-                      <p className="text-sm font-medium leading-none">
-                        {order.customerName || 'Guest'}
+              <div className="space-y-3">
+                {recentOrders.slice(0, 6).map((order) => (
+                  <div key={order.id} className="flex items-center p-3 rounded-lg border hover:bg-slate-50 transition-colors">
+                    <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center">
+                      <span className="text-white font-semibold text-sm">
+                        {(order.customerName || 'G').charAt(0).toUpperCase()}
+                      </span>
+                    </div>
+                    <div className="ml-4 flex-1">
+                      <p className="font-medium text-slate-900">
+                        {order.customerName || 'Guest Customer'}
                       </p>
-                      <p className="text-sm text-muted-foreground">
-                        {order.customerEmail || 'No email'}
+                      <p className="text-sm text-slate-500">
+                        {order.customerEmail || 'No email provided'}
                       </p>
                     </div>
-                    <div className="ml-auto font-medium">
-                      {formatCurrency(order.total)}
+                    <div className="text-right mr-4">
+                      <p className="font-semibold text-slate-900">
+                        {formatCurrency(order.total)}
+                      </p>
+                      <p className="text-xs text-slate-500">
+                        {new Date(order.createdAt).toLocaleDateString()}
+                      </p>
                     </div>
-                    <Badge className={`ml-4 capitalize ${getOrderStatusColor(order.status)}`}>
+                    <Badge className={`capitalize ${getOrderStatusColor(order.status)}`}>
                       {order.status}
                     </Badge>
                   </div>
@@ -292,27 +341,48 @@ export default function TenantAdminDashboard() {
             )}
           </CardContent>
         </Card>
-        <Card className="col-span-3">
+
+        {/* Quick Actions */}
+        <Card>
           <CardHeader>
-            <CardTitle>Quick Actions</CardTitle>
+            <CardTitle className="text-xl font-semibold">Quick Actions</CardTitle>
+            <CardDescription>Manage your restaurant efficiently</CardDescription>
           </CardHeader>
-          <CardContent className="grid gap-2">
-            <Link href={`/${tenantData.slug}/admin/menu`} passHref>
-              <Button className="w-full justify-start" variant="outline">
-                <BookText className="mr-2 h-4 w-4" />
-                Manage Menu
+          <CardContent className="space-y-3">
+            <Link href={`/${tenantData.slug}/admin/menu`}>
+              <Button className="w-full justify-start h-12 bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white">
+                <BookText className="mr-3 h-5 w-5" />
+                <div className="text-left">
+                  <p className="font-medium">Manage Menu</p>
+                  <p className="text-xs opacity-90">Add items, categories & pricing</p>
+                </div>
               </Button>
             </Link>
-            <Link href={`/${tenantData.slug}/admin/orders`} passHref>
-              <Button className="w-full justify-start" variant="outline">
-                <ShoppingCart className="mr-2 h-4 w-4" />
-                View All Orders
+            <Link href={`/${tenantData.slug}/admin/orders`}>
+              <Button variant="outline" className="w-full justify-start h-12">
+                <ShoppingCart className="mr-3 h-5 w-5" />
+                <div className="text-left">
+                  <p className="font-medium">View All Orders</p>
+                  <p className="text-xs text-slate-500">Track & update order status</p>
+                </div>
               </Button>
             </Link>
-            <Link href={`/${tenantData.slug}/admin/settings`} passHref>
-              <Button className="w-full justify-start" variant="outline">
-                <Settings className="mr-2 h-4 w-4" />
-                Adjust Settings
+            <Link href={`/${tenantData.slug}/admin/vouchers`}>
+              <Button variant="outline" className="w-full justify-start h-12">
+                <Tag className="mr-3 h-5 w-5" />
+                <div className="text-left">
+                  <p className="font-medium">Manage Vouchers</p>
+                  <p className="text-xs text-slate-500">Create discount codes</p>
+                </div>
+              </Button>
+            </Link>
+            <Link href={`/${tenantData.slug}/admin/settings`}>
+              <Button variant="outline" className="w-full justify-start h-12">
+                <Settings className="mr-3 h-5 w-5" />
+                <div className="text-left">
+                  <p className="font-medium">Restaurant Settings</p>
+                  <p className="text-xs text-slate-500">Configure your restaurant</p>
+                </div>
               </Button>
             </Link>
           </CardContent>

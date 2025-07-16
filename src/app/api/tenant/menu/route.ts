@@ -1,111 +1,72 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getTenantMenuWithCategories, saveTenantMenuItem, deleteTenantMenuItem, saveTenantCategory, deleteTenantCategory } from '@/lib/tenant-menu-service';
 
+// This endpoint is deprecated - redirect to new menu API
 export async function GET(request: NextRequest) {
-  try {
-    const { searchParams } = new URL(request.url);
-    const tenantId = searchParams.get('tenantId');
-    
-    if (!tenantId) {
-      return NextResponse.json(
-        { success: false, error: 'Tenant ID is required' },
-        { status: 400 }
-      );
-    }
-
-    const menuData = await getTenantMenuWithCategories(tenantId);
-    
-    return NextResponse.json({
-      success: true,
-      data: menuData
-    });
-  } catch (error) {
-    console.error('Error fetching tenant menu:', error);
-    return NextResponse.json(
-      { success: false, error: 'Failed to fetch menu' },
-      { status: 500 }
-    );
-  }
+  const { searchParams } = new URL(request.url);
+  const tenantId = searchParams.get('tenantId');
+  
+  // Redirect to new menu API
+  const newUrl = new URL('/api/menu', request.url);
+  newUrl.searchParams.set('tenantId', tenantId || '');
+  newUrl.searchParams.set('action', 'menu');
+  
+  return NextResponse.redirect(newUrl);
 }
 
 export async function POST(request: NextRequest) {
+  const { searchParams } = new URL(request.url);
+  const tenantId = searchParams.get('tenantId');
+  
   try {
-    const { searchParams } = new URL(request.url);
-    const tenantId = searchParams.get('tenantId');
-    
-    if (!tenantId) {
-      return NextResponse.json(
-        { success: false, error: 'Tenant ID is required' },
-        { status: 400 }
-      );
-    }
-
     const { type, data } = await request.json();
     
+    // Redirect to new menu API
+    const newUrl = new URL('/api/menu', request.url);
+    newUrl.searchParams.set('tenantId', tenantId || '');
+    
     if (type === 'menuItem') {
-      await saveTenantMenuItem(tenantId, data);
-      return NextResponse.json({
-        success: true,
-        message: 'Menu item saved successfully'
-      });
+      newUrl.searchParams.set('action', 'create-menu-item');
     } else if (type === 'category') {
-      await saveTenantCategory(tenantId, data);
-      return NextResponse.json({
-        success: true,
-        message: 'Category saved successfully'
-      });
-    } else {
-      return NextResponse.json(
-        { success: false, error: 'Invalid type specified' },
-        { status: 400 }
-      );
+      newUrl.searchParams.set('action', 'create-category');
     }
+    
+    // Forward the request to the new API
+    const response = await fetch(newUrl.toString(), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data)
+    });
+    
+    return response;
   } catch (error) {
-    console.error('Error saving menu data:', error);
     return NextResponse.json(
-      { success: false, error: 'Failed to save menu data' },
+      { success: false, error: 'Failed to process request' },
       { status: 500 }
     );
   }
 }
 
 export async function DELETE(request: NextRequest) {
-  try {
-    const { searchParams } = new URL(request.url);
-    const tenantId = searchParams.get('tenantId');
-    const type = searchParams.get('type');
-    const id = searchParams.get('id');
-    
-    if (!tenantId || !type || !id) {
-      return NextResponse.json(
-        { success: false, error: 'Tenant ID, type, and ID are required' },
-        { status: 400 }
-      );
-    }
-
-    if (type === 'menuItem') {
-      await deleteTenantMenuItem(tenantId, id);
-      return NextResponse.json({
-        success: true,
-        message: 'Menu item deleted successfully'
-      });
-    } else if (type === 'category') {
-      await deleteTenantCategory(tenantId, id);
-      return NextResponse.json({
-        success: true,
-        message: 'Category deleted successfully'
-      });
-    } else {
-      return NextResponse.json(
-        { success: false, error: 'Invalid type specified' },
-        { status: 400 }
-      );
-    }
-  } catch (error) {
-    console.error('Error deleting menu data:', error);
-    return NextResponse.json(
-      { success: false, error: 'Failed to delete menu data' },
-      { status: 500 }
-    );
+  const { searchParams } = new URL(request.url);
+  const tenantId = searchParams.get('tenantId');
+  const type = searchParams.get('type');
+  const id = searchParams.get('id');
+  
+  // Redirect to new menu API
+  const newUrl = new URL('/api/menu', request.url);
+  newUrl.searchParams.set('tenantId', tenantId || '');
+  newUrl.searchParams.set('id', id || '');
+  
+  if (type === 'menuItem') {
+    newUrl.searchParams.set('action', 'delete-menu-item');
+  } else if (type === 'category') {
+    newUrl.searchParams.set('action', 'delete-category');
   }
+  
+  // Forward the request to the new API
+  const response = await fetch(newUrl.toString(), {
+    method: 'DELETE'
+  });
+  
+  return response;
 }

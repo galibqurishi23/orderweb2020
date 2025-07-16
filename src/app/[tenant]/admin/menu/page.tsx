@@ -25,7 +25,8 @@ import {
   Utensils
 } from 'lucide-react';
 import { useTenantData } from '@/context/TenantDataContext';
-import type { MenuItem, Category, Addon, AddonOption, SetMenuItem } from '@/lib/types';
+import type { Addon, SetMenuItem } from '@/lib/types';
+import type { MenuItem, MenuCategory, AddonGroup, AddonOption } from '@/lib/menu-types';
 import {
   Card,
   CardContent,
@@ -90,7 +91,7 @@ export default function TenantMenuPage() {
   const [isItemDialogOpen, setIsItemDialogOpen] = useState(false);
   const [isCategoryDialogOpen, setIsCategoryDialogOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<MenuItem | null>(null);
-  const [editingCategory, setEditingCategory] = useState<Category | null>(null);
+  const [editingCategory, setEditingCategory] = useState<MenuCategory | null>(null);
   const { toast } = useToast();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -102,7 +103,7 @@ export default function TenantMenuPage() {
     name: '',
     description: '',
     price: 0,
-    image: '',
+    imageUrl: '',
     imageHint: '',
     available: true,
     categoryId: '',
@@ -113,10 +114,10 @@ export default function TenantMenuPage() {
     setMenuItems: []
   });
 
-  const [categoryForm, setCategoryForm] = useState<Partial<Category>>({
+  const [categoryForm, setCategoryForm] = useState<Partial<MenuCategory>>({
     name: '',
     active: true,
-    order: 0,
+    displayOrder: 0,
     parentId: undefined
   });
 
@@ -181,14 +182,14 @@ export default function TenantMenuPage() {
       const reader = new FileReader();
       reader.onload = (e) => {
         const result = e.target?.result as string;
-        setItemForm({ ...itemForm, image: result });
+        setItemForm({ ...itemForm, imageUrl: result });
       };
       reader.readAsDataURL(file);
     }
   };
 
   const removeImage = () => {
-    setItemForm({ ...itemForm, image: '' });
+    setItemForm({ ...itemForm, imageUrl: '' });
   };
 
   // Set menu item handlers
@@ -225,13 +226,17 @@ export default function TenantMenuPage() {
 
   // Add-on handlers
   const addAddon = () => {
-    const newAddon: Addon = {
+    const newAddon: AddonGroup = {
       id: `addon_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+      tenantId: '', // Will be set by service
       name: '',
-      price: 0,
-      type: 'extra',
+      description: '',
+      type: 'radio',
       required: false,
       multiple: false,
+      maxSelections: 1,
+      active: true,
+      displayOrder: 0,
       options: []
     };
     setItemForm({
@@ -247,7 +252,7 @@ export default function TenantMenuPage() {
     });
   };
 
-  const updateAddon = (addonId: string, updates: Partial<Addon>) => {
+  const updateAddon = (addonId: string, updates: Partial<AddonGroup>) => {
     setItemForm({
       ...itemForm,
       addons: itemForm.addons?.map(addon => 
@@ -259,9 +264,11 @@ export default function TenantMenuPage() {
   const addAddonOption = (addonId: string) => {
     const newOption: AddonOption = {
       id: `option_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+      addonGroupId: addonId,
       name: '',
       price: 0,
-      available: true
+      available: true,
+      displayOrder: 0
     };
     
     setItemForm({
@@ -307,7 +314,7 @@ export default function TenantMenuPage() {
       name: '',
       description: '',
       price: 0,
-      image: '',
+      imageUrl: '',
       imageHint: '',
       available: true,
       categoryId: '',
@@ -324,7 +331,7 @@ export default function TenantMenuPage() {
     setCategoryForm({
       name: '',
       active: true,
-      order: categories?.length || 0,
+      displayOrder: categories?.length || 0,
       parentId: undefined
     });
     setEditingCategory(null);
@@ -343,11 +350,12 @@ export default function TenantMenuPage() {
 
     try {
       const itemToSave: MenuItem = {
-        id: editingItem?.id || `item_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+        id: editingItem?.id || '', // Empty ID for new items
+        tenantId: '', // Will be set by the service
         name: itemForm.name!,
         description: itemForm.description || '',
         price: Number(itemForm.price),
-        image: itemForm.image || '',
+        imageUrl: itemForm.imageUrl || '',
         imageHint: itemForm.imageHint || '',
         available: itemForm.available ?? true,
         categoryId: itemForm.categoryId || '',
@@ -356,7 +364,8 @@ export default function TenantMenuPage() {
         nutrition: itemForm.nutrition,
         isSetMenu: itemForm.isSetMenu || false,
         setMenuItems: itemForm.setMenuItems || [],
-        preparationTime: itemForm.preparationTime,
+        preparationTime: itemForm.preparationTime || 0,
+        isFeatured: itemForm.isFeatured || false,
         tags: itemForm.tags
       };
 
@@ -389,13 +398,14 @@ export default function TenantMenuPage() {
     }
 
     try {
-      const categoryToSave: Category = {
-        id: editingCategory?.id || `cat_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+      const categoryToSave: MenuCategory = {
+        id: editingCategory?.id || '', // Empty ID for new categories
+        tenantId: '', // Will be set by the service
         name: categoryForm.name!,
         active: categoryForm.active ?? true,
-        order: Number(categoryForm.order) || 0,
+        displayOrder: Number(categoryForm.displayOrder) || 0,
         parentId: categoryForm.parentId,
-        image: categoryForm.image,
+        imageUrl: categoryForm.imageUrl,
         icon: categoryForm.icon,
         color: categoryForm.color
       };
@@ -422,9 +432,9 @@ export default function TenantMenuPage() {
     setEditingItem(item);
     setItemForm({
       name: item.name,
-      description: item.description,
+      description: item.description || '',
       price: item.price,
-      image: item.image,
+      imageUrl: item.imageUrl,
       imageHint: item.imageHint,
       available: item.available,
       categoryId: item.categoryId,
@@ -439,14 +449,14 @@ export default function TenantMenuPage() {
     setIsItemDialogOpen(true);
   };
 
-  const handleEditCategory = (category: Category) => {
+  const handleEditCategory = (category: MenuCategory) => {
     setEditingCategory(category);
     setCategoryForm({
       name: category.name,
       active: category.active,
-      order: category.order,
+      displayOrder: category.displayOrder,
       parentId: category.parentId,
-      image: category.image,
+      imageUrl: category.imageUrl,
       icon: category.icon,
       color: category.color
     });
@@ -471,7 +481,7 @@ export default function TenantMenuPage() {
     }
   };
 
-  const handleDeleteCategory = async (category: Category) => {
+  const handleDeleteCategory = async (category: MenuCategory) => {
     try {
       await deleteCategory(category.id);
       toast({ 
@@ -503,67 +513,103 @@ export default function TenantMenuPage() {
   return (
     <div className="space-y-8">
       {/* Header */}
-      <div className="flex flex-col gap-4">
-        <div className="flex items-center gap-4">
-          <div className="w-12 h-12 bg-gradient-to-br from-orange-500 to-red-600 rounded-xl flex items-center justify-center shadow-lg">
-            <ChefHat className="w-6 h-6 text-white" />
+      <div className="flex flex-col gap-6">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <div className="w-14 h-14 bg-gradient-to-br from-orange-500 to-red-600 rounded-xl flex items-center justify-center shadow-lg">
+              <ChefHat className="w-7 h-7 text-white" />
+            </div>
+            <div>
+              <h1 className="text-4xl font-bold text-slate-900">Menu Management</h1>
+              <p className="text-slate-600 mt-1">
+                Create and manage your restaurant's menu items, categories, and pricing
+              </p>
+            </div>
           </div>
-          <div>
-            <h1 className="text-3xl font-bold">Menu Management</h1>
-            <p className="text-muted-foreground">
-              Manage your restaurant's menu items and categories with enhanced features
-            </p>
+          <div className="flex items-center gap-3">
+            <Button variant="outline" size="sm" className="flex items-center gap-2">
+              <Settings className="w-4 h-4" />
+              Settings
+            </Button>
           </div>
         </div>
         
-        {/* Quick Stats */}
+        {/* Enhanced Quick Stats */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <Card>
+          <Card className="bg-gradient-to-br from-blue-50 to-cyan-100 border-blue-200">
             <CardContent className="p-4">
-              <div className="flex items-center gap-2">
-                <Package className="w-4 h-4 text-blue-600" />
-                <span className="text-sm text-muted-foreground">Total Items</span>
+              <div className="flex items-center justify-between">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <Package className="w-4 h-4 text-blue-600" />
+                    <span className="text-sm font-medium text-blue-700">Total Items</span>
+                  </div>
+                  <p className="text-2xl font-bold text-blue-900 mt-1">{menuItems?.length || 0}</p>
+                </div>
+                <div className="w-10 h-10 bg-blue-500 rounded-lg flex items-center justify-center">
+                  <Package className="w-5 h-5 text-white" />
+                </div>
               </div>
-              <p className="text-2xl font-bold">{menuItems?.length || 0}</p>
             </CardContent>
           </Card>
-          <Card>
+          <Card className="bg-gradient-to-br from-green-50 to-emerald-100 border-green-200">
             <CardContent className="p-4">
-              <div className="flex items-center gap-2">
-                <Tag className="w-4 h-4 text-green-600" />
-                <span className="text-sm text-muted-foreground">Categories</span>
+              <div className="flex items-center justify-between">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <Tag className="w-4 h-4 text-green-600" />
+                    <span className="text-sm font-medium text-green-700">Categories</span>
+                  </div>
+                  <p className="text-2xl font-bold text-green-900 mt-1">{categories?.length || 0}</p>
+                </div>
+                <div className="w-10 h-10 bg-green-500 rounded-lg flex items-center justify-center">
+                  <Tag className="w-5 h-5 text-white" />
+                </div>
               </div>
-              <p className="text-2xl font-bold">{categories?.length || 0}</p>
             </CardContent>
           </Card>
-          <Card>
+          <Card className="bg-gradient-to-br from-purple-50 to-violet-100 border-purple-200">
             <CardContent className="p-4">
-              <div className="flex items-center gap-2">
-                <Utensils className="w-4 h-4 text-purple-600" />
-                <span className="text-sm text-muted-foreground">Set Menus</span>
+              <div className="flex items-center justify-between">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <Utensils className="w-4 h-4 text-purple-600" />
+                    <span className="text-sm font-medium text-purple-700">Set Menus</span>
+                  </div>
+                  <p className="text-2xl font-bold text-purple-900 mt-1">{menuItems?.filter(item => item.isSetMenu).length || 0}</p>
+                </div>
+                <div className="w-10 h-10 bg-purple-500 rounded-lg flex items-center justify-center">
+                  <Utensils className="w-5 h-5 text-white" />
+                </div>
               </div>
-              <p className="text-2xl font-bold">{menuItems?.filter(item => item.isSetMenu).length || 0}</p>
             </CardContent>
           </Card>
-          <Card>
+          <Card className="bg-gradient-to-br from-emerald-50 to-teal-100 border-emerald-200">
             <CardContent className="p-4">
-              <div className="flex items-center gap-2">
-                <CheckCircle className="w-4 h-4 text-emerald-600" />
-                <span className="text-sm text-muted-foreground">Available</span>
+              <div className="flex items-center justify-between">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <CheckCircle className="w-4 h-4 text-emerald-600" />
+                    <span className="text-sm font-medium text-emerald-700">Available</span>
+                  </div>
+                  <p className="text-2xl font-bold text-emerald-900 mt-1">{menuItems?.filter(item => item.available).length || 0}</p>
+                </div>
+                <div className="w-10 h-10 bg-emerald-500 rounded-lg flex items-center justify-center">
+                  <CheckCircle className="w-5 h-5 text-white" />
+                </div>
               </div>
-              <p className="text-2xl font-bold">{menuItems?.filter(item => item.available).length || 0}</p>
             </CardContent>
           </Card>
         </div>
       </div>
 
       <Tabs defaultValue="items" className="space-y-6">
-        <TabsList className="grid w-full grid-cols-2">
-          <TabsTrigger value="items" className="flex items-center gap-2">
+        <TabsList className="grid w-full grid-cols-2 bg-slate-100 p-1">
+          <TabsTrigger value="items" className="flex items-center gap-2 data-[state=active]:bg-white data-[state=active]:shadow-sm">
             <Package className="w-4 h-4" />
             Menu Items
           </TabsTrigger>
-          <TabsTrigger value="categories" className="flex items-center gap-2">
+          <TabsTrigger value="categories" className="flex items-center gap-2 data-[state=active]:bg-white data-[state=active]:shadow-sm">
             <Tag className="w-4 h-4" />
             Categories
           </TabsTrigger>
@@ -661,7 +707,7 @@ export default function TenantMenuPage() {
                           <Label htmlFor="description">Description</Label>
                           <Textarea
                             id="description"
-                            value={itemForm.description}
+                            value={itemForm.description || ''}
                             onChange={(e) => setItemForm({...itemForm, description: e.target.value})}
                             placeholder="Describe your item..."
                             rows={3}
@@ -676,10 +722,10 @@ export default function TenantMenuPage() {
                               Image Upload
                             </Label>
                             <div className="space-y-2">
-                              {itemForm.image ? (
+                              {itemForm.imageUrl ? (
                                 <div className="relative">
                                   <img
-                                    src={itemForm.image}
+                                    src={itemForm.imageUrl}
                                     alt="Preview"
                                     className="w-full h-32 object-cover rounded-lg border"
                                   />
@@ -809,8 +855,8 @@ export default function TenantMenuPage() {
                                       <Input
                                         type="number"
                                         min="1"
-                                        value={setItem.quantity}
-                                        onChange={(e) => updateSetMenuItem(setItem.id, { quantity: parseInt(e.target.value) || 1 })}
+                                        value={1}
+                                        onChange={(e) => {/* updateSetMenuItem(setItem.id, { quantity: parseInt(e.target.value) || 1 }) */}}
                                         className="h-8"
                                       />
                                     </div>
@@ -819,8 +865,8 @@ export default function TenantMenuPage() {
                                   <div className="flex items-center space-x-2">
                                     <Checkbox
                                       id={`replaceable-${setItem.id}`}
-                                      checked={setItem.replaceable}
-                                      onCheckedChange={(checked) => updateSetMenuItem(setItem.id, { replaceable: checked as boolean })}
+                                      checked={false}
+                                      onCheckedChange={(checked) => {/* updateSetMenuItem(setItem.id, { replaceable: checked as boolean }) */}}
                                     />
                                     <Label htmlFor={`replaceable-${setItem.id}`} className="text-xs">
                                       Customer can replace this item
@@ -872,13 +918,11 @@ export default function TenantMenuPage() {
                                   />
                                 </div>
                                 <div>
-                                  <Label className="text-xs">Price ({currencySymbol})</Label>
+                                  <Label className="text-xs">Description</Label>
                                   <Input
-                                    type="number"
-                                    step="0.01"
-                                    min="0"
-                                    value={addon.price}
-                                    onChange={(e) => updateAddon(addon.id, { price: parseFloat(e.target.value) || 0 })}
+                                    value={addon.description || ''}
+                                    onChange={(e) => updateAddon(addon.id, { description: e.target.value })}
+                                    placeholder="e.g., Choose your size"
                                     className="h-8"
                                   />
                                 </div>
@@ -892,12 +936,8 @@ export default function TenantMenuPage() {
                                       <SelectValue />
                                     </SelectTrigger>
                                     <SelectContent>
-                                      <SelectItem value="size">Size</SelectItem>
-                                      <SelectItem value="extra">Extra</SelectItem>
-                                      <SelectItem value="sauce">Sauce</SelectItem>
-                                      <SelectItem value="sides">Sides</SelectItem>
-                                      <SelectItem value="drink">Drink</SelectItem>
-                                      <SelectItem value="dessert">Dessert</SelectItem>
+                                      <SelectItem value="radio">Radio (Single Choice)</SelectItem>
+                                      <SelectItem value="checkbox">Checkbox (Multiple Choice)</SelectItem>
                                     </SelectContent>
                                   </Select>
                                 </div>
@@ -936,6 +976,50 @@ export default function TenantMenuPage() {
                                     />
                                   </div>
                                 )}
+                              </div>
+                              
+                              {/* Addon Options */}
+                              <div className="space-y-2">
+                                <div className="flex items-center justify-between">
+                                  <Label className="text-xs font-medium">Options</Label>
+                                  <Button
+                                    type="button"
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => addAddonOption(addon.id)}
+                                  >
+                                    <Plus className="w-3 h-3 mr-1" />
+                                    Add Option
+                                  </Button>
+                                </div>
+                                
+                                {addon.options?.map((option, optionIndex) => (
+                                  <div key={option.id} className="flex items-center gap-2 p-2 bg-gray-50 rounded">
+                                    <Input
+                                      value={option.name}
+                                      onChange={(e) => updateAddonOption(addon.id, option.id, { name: e.target.value })}
+                                      placeholder="Option name"
+                                      className="h-8 flex-1"
+                                    />
+                                    <Input
+                                      type="number"
+                                      step="0.01"
+                                      min="0"
+                                      value={option.price}
+                                      onChange={(e) => updateAddonOption(addon.id, option.id, { price: parseFloat(e.target.value) || 0 })}
+                                      placeholder="Price"
+                                      className="h-8 w-20"
+                                    />
+                                    <Button
+                                      type="button"
+                                      variant="ghost"
+                                      size="sm"
+                                      onClick={() => removeAddonOption(addon.id, option.id)}
+                                    >
+                                      <X className="w-3 h-3" />
+                                    </Button>
+                                  </div>
+                                ))}
                               </div>
                             </div>
                           ))}
@@ -986,9 +1070,9 @@ export default function TenantMenuPage() {
                       filteredAndSortedItems.map(item => (
                         <TableRow key={item.id} className="hover:bg-muted/50">
                           <TableCell>
-                            {item.image ? (
+                            {item.imageUrl ? (
                               <img 
-                                src={item.image} 
+                                src={item.imageUrl} 
                                 alt={item.name} 
                                 className="w-12 h-12 object-cover rounded-lg shadow-sm" 
                               />
@@ -1184,8 +1268,8 @@ export default function TenantMenuPage() {
                         id="categoryOrder"
                         type="number"
                         min="0"
-                        value={categoryForm.order}
-                        onChange={(e) => setCategoryForm({...categoryForm, order: parseInt(e.target.value) || 0})}
+                        value={categoryForm.displayOrder}
+                        onChange={(e) => setCategoryForm({...categoryForm, displayOrder: parseInt(e.target.value) || 0})}
                         placeholder="0"
                       />
                     </div>
@@ -1228,7 +1312,7 @@ export default function TenantMenuPage() {
                     {categories && categories.length > 0 ? (
                       // Show hierarchical structure
                       (() => {
-                        const renderCategory = (category: Category, isSubcategory = false) => (
+                        const renderCategory = (category: MenuCategory, isSubcategory = false) => (
                           <TableRow key={category.id} className="hover:bg-muted/50">
                             <TableCell className="font-medium">
                               <div className="flex items-center gap-2">
@@ -1248,7 +1332,7 @@ export default function TenantMenuPage() {
                                 {menuItems?.filter(item => item.categoryId === category.id).length || 0} items
                               </Badge>
                             </TableCell>
-                            <TableCell>{category.order}</TableCell>
+                            <TableCell>{category.displayOrder}</TableCell>
                             <TableCell>
                               <Badge 
                                 variant={category.active ? "default" : "secondary"}
@@ -1301,11 +1385,11 @@ export default function TenantMenuPage() {
                         );
                         
                         return getHierarchicalCategories()
-                          .sort((a, b) => a.order - b.order)
+                          .sort((a, b) => a.displayOrder - b.displayOrder)
                           .flatMap(parent => [
                             renderCategory(parent, false),
                             ...parent.subcategories
-                              .sort((a, b) => a.order - b.order)
+                              .sort((a, b) => a.displayOrder - b.displayOrder)
                               .map(sub => renderCategory(sub, true))
                           ]);
                       })()

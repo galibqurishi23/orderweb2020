@@ -166,9 +166,9 @@ function MenuItemDialog({
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader className="space-y-0">
-          {item.imageUrl && !item.imageUrl.includes('placehold.co') && (
+          {item.image && !item.image.includes('placehold.co') && (
             <div className="relative h-48 -mx-6 -mt-6 mb-4">
-              <Image src={item.imageUrl} alt={item.name} data-ai-hint={item.imageHint} fill className="rounded-t-lg object-cover" />
+              <Image src={item.image!} alt={item.name} data-ai-hint={item.imageHint} fill className="rounded-t-lg object-cover" />
             </div>
           )}
           <DialogTitle className="font-headline text-2xl">{item.name}</DialogTitle>
@@ -217,7 +217,7 @@ function MenuItemDialog({
                   <div key={addon.id} className="flex items-center justify-between rounded-md border p-3">
                     <div>
                       <Label htmlFor={addon.name} className="font-medium">{addon.name}</Label>
-                      <p className="text-sm text-muted-foreground">+{currencySymbol}{addon.price.toFixed(2)}</p>
+                      <p className="text-sm text-muted-foreground">+{currencySymbol}{parseFloat(String(addon.price || '0')).toFixed(2)}</p>
                     </div>
                     <Button
                       variant={selectedAddons.find((a) => a.id === addon.id) ? 'default' : 'outline'}
@@ -268,7 +268,7 @@ function MenuItem({
   currencySymbol: string;
 }) {
   const [isDialogOpen, setIsDialogOpen] = React.useState(false);
-  const hasImage = item.imageUrl && !item.imageUrl.includes('placehold.co');
+  const hasImage = item.image && !item.image.includes('placehold.co');
 
   const hasAddons = item.addons && item.addons.length > 0;
   const isBasePriceZero = item.price === 0;
@@ -294,7 +294,7 @@ function MenuItem({
           {hasImage && (
             <div className="relative h-16 w-16 sm:h-20 sm:w-20 flex-shrink-0">
                 <Image
-                    src={item.imageUrl}
+                    src={item.image!}
                     alt={item.name}
                     data-ai-hint={item.imageHint}
                     fill
@@ -708,7 +708,7 @@ function OrderSummary({
             name: item.name,
             description: item.description || '',
             price: item.price,
-            imageUrl: item.imageUrl || '',
+            image: item.image || '',
             imageHint: item.imageHint || '',
             categoryId: item.categoryId,
             available: item.available || true,
@@ -1321,7 +1321,7 @@ function CustomerHeader() {
 
 // Main Tenant Customer Interface Component
 export default function TenantCustomerInterface() {
-    const { getMenuWithCategories, restaurantSettings, isLoading } = useTenantData();
+    const { getMenuWithCategoriesForCustomer, restaurantSettings, isLoading } = useTenantData();
     const { tenantData } = useTenant();
     const { toast } = useToast();
     
@@ -1329,7 +1329,7 @@ export default function TenantCustomerInterface() {
     const [searchQuery, setSearchQuery] = React.useState('');
 
     // Process menu data to match customer page structure
-    const menuItems = getMenuWithCategories();
+    const menuItems = getMenuWithCategoriesForCustomer();
     
     // Group items by categories and handle sub-categories
     const menuData = React.useMemo(() => {
@@ -1384,7 +1384,7 @@ export default function TenantCustomerInterface() {
             name: item.name,
             description: item.description,
             price: item.price,
-            imageUrl: item.imageUrl,
+            image: item.image,
             categoryId: item.categoryId,
             available: item.available || true,
             selectedAddons: addons,

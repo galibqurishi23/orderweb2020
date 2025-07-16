@@ -165,8 +165,6 @@ export async function createTenant(data: {
         phone: data.phone || '',
         email: data.email,
         address: data.address || '',
-        orderPrefix: 'ORD',
-        advanceOrderPrefix: 'ADV',
         openingHours: {
           monday: { closed: false, timeMode: 'single', openTime: '09:00', closeTime: '17:00' },
           tuesday: { closed: false, timeMode: 'single', openTime: '09:00', closeTime: '17:00' },
@@ -661,14 +659,14 @@ export async function getTenantOrderStats(tenantId: string): Promise<{
     
     // Get today's orders count
     const [todayOrdersResult] = await pool.execute(
-      'SELECT COUNT(*) as count FROM orders WHERE tenant_id = ? AND created_at >= ?',
+      'SELECT COUNT(*) as count FROM orders WHERE tenant_id = ? AND createdAt >= ?',
       [tenantId, todayStart]
     );
     const todayOrders = (todayOrdersResult as any[])[0].count;
     
     // Get advance orders count (orders marked as advance orders)
     const [advanceOrdersResult] = await pool.execute(
-      'SELECT COUNT(*) as count FROM orders WHERE tenant_id = ? AND is_advance_order = 1',
+      'SELECT COUNT(*) as count FROM orders WHERE tenant_id = ? AND isAdvanceOrder = 1',
       [tenantId]
     );
     const advanceOrders = (advanceOrdersResult as any[])[0].count;
@@ -682,7 +680,7 @@ export async function getTenantOrderStats(tenantId: string): Promise<{
     
     // Get today's revenue
     const [todayRevenueResult] = await pool.execute(
-      'SELECT SUM(total) as total FROM orders WHERE tenant_id = ? AND created_at >= ? AND status != ?',
+      'SELECT SUM(total) as total FROM orders WHERE tenant_id = ? AND createdAt >= ? AND status != ?',
       [tenantId, todayStart, 'cancelled']
     );
     const todayRevenue = (todayRevenueResult as any[])[0].total || 0;
@@ -711,11 +709,11 @@ export async function getTenantOrderStats(tenantId: string): Promise<{
 export async function getRecentTenantOrders(tenantId: string, limit: number = 10): Promise<any[]> {
   try {
     const [orders] = await pool.execute(
-      `SELECT o.id, o.order_number as orderNumber, o.total, o.status, o.created_at as createdAt, 
-              o.customer_name as customerName, o.customer_email as customerEmail
+      `SELECT o.id, o.order_number as orderNumber, o.total, o.status, o.createdAt as createdAt, 
+              o.customerName as customerName, o.customerEmail as customerEmail
        FROM orders o
        WHERE o.tenant_id = ?
-       ORDER BY o.created_at DESC
+       ORDER BY o.createdAt DESC
        LIMIT ?`,
       [tenantId, limit]
     );
@@ -729,11 +727,11 @@ export async function getRecentTenantOrders(tenantId: string, limit: number = 10
 export async function getTenantOrders(tenantId: string, limit: number = 50): Promise<any[]> {
   try {
     const [orders] = await pool.execute(
-      `SELECT o.id, o.order_number as orderNumber, o.total, o.status, o.created_at as createdAt,
-              o.customer_name as customerName, o.customer_email as customerEmail
+      `SELECT o.id, o.order_number as orderNumber, o.total, o.status, o.createdAt as createdAt,
+              o.customerName as customerName, o.customerEmail as customerEmail
        FROM orders o
        WHERE o.tenant_id = ?
-       ORDER BY o.created_at DESC
+       ORDER BY o.createdAt DESC
        LIMIT ?`,
       [tenantId, limit]
     );

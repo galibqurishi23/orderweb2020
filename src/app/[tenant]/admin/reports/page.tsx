@@ -43,7 +43,7 @@ const generateReport = (orders: Order[]): ReportData => {
     return { totalRevenue: 0, totalOrders: 0, averageOrderValue: 0, salesByDay: [], topItems: [] };
   }
 
-  const totalRevenue = orders.reduce((sum, order) => sum + order.total, 0);
+  const totalRevenue = orders.reduce((sum, order) => sum + (parseFloat(order.total?.toString() || '0') || 0), 0);
   const totalOrders = orders.length;
   const averageOrderValue = totalOrders > 0 ? totalRevenue / totalOrders : 0;
 
@@ -51,7 +51,8 @@ const generateReport = (orders: Order[]): ReportData => {
   orders.forEach(order => {
     const day = format(order.createdAt, 'yyyy-MM-dd');
     const currentRevenue = salesByDayMap.get(day) || 0;
-    salesByDayMap.set(day, currentRevenue + order.total);
+    const orderTotal = parseFloat(order.total?.toString() || '0') || 0;
+    salesByDayMap.set(day, currentRevenue + orderTotal);
   });
   const salesByDay = Array.from(salesByDayMap, ([date, revenue]) => ({ date, revenue })).sort((a,b) => new Date(a.date).getTime() - new Date(b.date).getTime());
 
@@ -61,7 +62,9 @@ const generateReport = (orders: Order[]): ReportData => {
     order.items.forEach(item => {
       const current = itemSalesMap.get(item.menuItem.name) || { quantity: 0, revenue: 0 };
       current.quantity += item.quantity;
-      current.revenue += (item.menuItem.price + item.selectedAddons.reduce((sum, addon) => sum + addon.price, 0)) * item.quantity;
+      const itemPrice = parseFloat(item.menuItem.price?.toString() || '0') || 0;
+      const addonPrice = item.selectedAddons.reduce((sum, addon) => sum + (parseFloat(addon.price?.toString() || '0') || 0), 0);
+      current.revenue += (itemPrice + addonPrice) * item.quantity;
       itemSalesMap.set(item.menuItem.name, current);
     });
   });
@@ -113,17 +116,20 @@ export default function ReportsPage() {
         if (granularity === 'daily') {
             filteredOrders.forEach(order => {
                 const day = format(order.createdAt, 'yyyy-MM-dd');
-                dataMap.set(day, (dataMap.get(day) || 0) + order.total);
+                const orderTotal = parseFloat(order.total?.toString() || '0') || 0;
+                dataMap.set(day, (dataMap.get(day) || 0) + orderTotal);
             });
         } else if (granularity === 'weekly') {
             filteredOrders.forEach(order => {
                 const weekStart = format(startOfWeek(order.createdAt, { weekStartsOn: 1 }), 'yyyy-MM-dd');
-                dataMap.set(weekStart, (dataMap.get(weekStart) || 0) + order.total);
+                const orderTotal = parseFloat(order.total?.toString() || '0') || 0;
+                dataMap.set(weekStart, (dataMap.get(weekStart) || 0) + orderTotal);
             });
         } else if (granularity === 'monthly') {
             filteredOrders.forEach(order => {
                 const month = format(order.createdAt, 'yyyy-MM');
-                dataMap.set(month, (dataMap.get(month) || 0) + order.total);
+                const orderTotal = parseFloat(order.total?.toString() || '0') || 0;
+                dataMap.set(month, (dataMap.get(month) || 0) + orderTotal);
             });
         }
     
@@ -156,8 +162,8 @@ export default function ReportsPage() {
                 format(order.createdAt, 'yyyy-MM-dd HH:mm:ss'),
                 `"${order.customerName.replace(/"/g, '""')}"`, // Handle commas in names
                 order.customerPhone || 'N/A',
-                order.total.toFixed(2),
-                order.tax.toFixed(2)
+                (parseFloat(order.total?.toString() || '0') || 0).toFixed(2),
+                (parseFloat(order.tax?.toString() || '0') || 0).toFixed(2)
             ].join(','))
         ];
         const csvString = csvRows.join('\n');
@@ -241,7 +247,7 @@ export default function ReportsPage() {
                             <Banknote className="h-4 w-4 text-muted-foreground" />
                         </CardHeader>
                         <CardContent>
-                            <div className="text-2xl font-bold">{currencySymbol}{reportData.totalRevenue.toFixed(2)}</div>
+                            <div className="text-2xl font-bold">{currencySymbol}{(parseFloat(reportData.totalRevenue?.toString() || '0') || 0).toFixed(2)}</div>
                             <p className="text-xs text-muted-foreground">in the selected period</p>
                         </CardContent>
                     </Card>
@@ -261,7 +267,7 @@ export default function ReportsPage() {
                             <Banknote className="h-4 w-4 text-muted-foreground" />
                         </CardHeader>
                         <CardContent>
-                            <div className="text-2xl font-bold">{currencySymbol}{reportData.averageOrderValue.toFixed(2)}</div>
+                            <div className="text-2xl font-bold">{currencySymbol}{(parseFloat(reportData.averageOrderValue?.toString() || '0') || 0).toFixed(2)}</div>
                              <p className="text-xs text-muted-foreground">per order</p>
                         </CardContent>
                     </Card>
@@ -283,8 +289,8 @@ export default function ReportsPage() {
                            <ResponsiveContainer width="100%" height={300}>
                                 <BarChart data={salesTrendData}>
                                     <XAxis dataKey="date" tickFormatter={formatXAxis} />
-                                    <YAxis tickFormatter={(tick) => `${currencySymbol}${tick}`} />
-                                    <Tooltip formatter={(value) => `${currencySymbol}${(value as number).toFixed(2)}`} />
+                                    <YAxis tickFormatter={(tick) => `${currencySymbol}${parseFloat(tick?.toString() || '0') || 0}`} />
+                                    <Tooltip formatter={(value) => `${currencySymbol}${(parseFloat(value?.toString() || '0') || 0).toFixed(2)}`} />
                                     <Legend />
                                     <Bar dataKey="revenue" fill="hsl(var(--primary))" name="Revenue" />
                                 </BarChart>
@@ -303,7 +309,7 @@ export default function ReportsPage() {
                                             <Cell key={`cell-${index}`} fill={PIE_COLORS[index % PIE_COLORS.length]} />
                                         ))}
                                     </Pie>
-                                    <Tooltip formatter={(value, name) => [`${currencySymbol}${(value as number).toFixed(2)}`, name]} />
+                                    <Tooltip formatter={(value, name) => [`${currencySymbol}${(parseFloat(value?.toString() || '0') || 0).toFixed(2)}`, name]} />
                                     <Legend />
                                 </PieChart>
                             </ResponsiveContainer>
@@ -336,8 +342,8 @@ export default function ReportsPage() {
                                             <TableCell>{format(order.createdAt, 'yyyy-MM-dd HH:mm')}</TableCell>
                                             <TableCell>{order.customerName}</TableCell>
                                             <TableCell>{order.customerPhone || 'N/A'}</TableCell>
-                                            <TableCell className="text-right">{currencySymbol}{order.total.toFixed(2)}</TableCell>
-                                            <TableCell className="text-right">{currencySymbol}{order.tax.toFixed(2)}</TableCell>
+                                            <TableCell className="text-right">{currencySymbol}{(parseFloat(order.total?.toString() || '0') || 0).toFixed(2)}</TableCell>
+                                            <TableCell className="text-right">{currencySymbol}{(parseFloat(order.tax?.toString() || '0') || 0).toFixed(2)}</TableCell>
                                         </TableRow>
                                     ))
                                 ) : (

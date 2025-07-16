@@ -1,6 +1,6 @@
 // NOTE: This file cannot use 'use server' because it exports an object
 
-import mysql from 'mysql2/promise';
+import mysql, { RowDataPacket } from 'mysql2/promise';
 
 // Use MariaDB/MySQL exclusively
 const dbType = 'mariadb';
@@ -60,9 +60,9 @@ const db = {
     return mysqlPool.execute(sql, params || []);
   },
   
-  async query(sql: string, params?: any[]) {
+  async query<T extends RowDataPacket[]>(sql: string, params?: any[]) {
     if (!mysqlPool) throw new Error('Database access is only available on the server');
-    return mysqlPool.query(sql, params || []);
+    return mysqlPool.query<T>(sql, params || []);
   },
   
   async getConnection() {

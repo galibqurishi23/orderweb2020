@@ -96,80 +96,104 @@ export default function TenantAdminLayout({
 
   return (
     <TenantDataProvider>
-      <div className="flex h-screen bg-background">
-        <div className="w-64 bg-card shadow-lg border-r border-border flex flex-col">
-          <div className="p-6 border-b border-border flex flex-col items-start space-y-2">
-            <div className="flex items-center space-x-3 w-full">
-              {/* Use tenant logo if available, else show AdminLogo */}
-              <div className="w-10 h-10 bg-primary rounded-xl flex items-center justify-center shadow-lg overflow-hidden">
-                {tenantData.settings?.logo ? (
-                  <img src={tenantData.settings.logo} alt={tenantData.name} className="w-10 h-10 object-cover rounded-xl" />
-                ) : (
-                  <AdminLogo className="w-8 h-8" />
-                )}
+      <div className="flex h-screen bg-slate-50">
+        {/* Sidebar */}
+        <div className="w-72 bg-white shadow-xl border-r border-slate-200 flex flex-col">
+          {/* Header */}
+          <div className="p-6 border-b border-slate-200">
+            <div className="flex items-center space-x-3 mb-4">
+              <div className="relative">
+                <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-purple-600 rounded-xl flex items-center justify-center shadow-lg overflow-hidden">
+                  {tenantData.settings?.logo ? (
+                    <img src={tenantData.settings.logo} alt={tenantData.name} className="w-12 h-12 object-cover rounded-xl" />
+                  ) : (
+                    <AdminLogo className="w-8 h-8 text-white" />
+                  )}
+                </div>
+                <div className="absolute -bottom-1 -right-1 w-4 h-4 bg-green-500 rounded-full border-2 border-white"></div>
               </div>
               <div className="flex-1">
-                <span className="text-lg font-bold bg-gradient-to-r from-primary to-blue-800 bg-clip-text text-transparent">
+                <h1 className="text-xl font-bold text-slate-800 leading-tight">
                   {tenantData.name}
-                </span>
-                <p className="text-xs text-gray-500">Admin Panel</p>
+                </h1>
+                <p className="text-sm text-slate-500 font-medium">Restaurant Admin</p>
               </div>
             </div>
             
-            {/* Quick links */}
-            <div className="flex space-x-2 w-full">
+            {/* Quick Actions */}
+            <div className="space-y-2">
               <Link
                 href={`/${tenant}`}
                 target="_blank"
-                className="flex-1 text-center text-xs text-blue-600 hover:text-blue-800 bg-blue-50 hover:bg-blue-100 px-2 py-1 rounded transition-colors"
+                className="flex items-center justify-center space-x-2 w-full px-4 py-2.5 text-sm font-medium text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors duration-200"
               >
-                View Store
+                <span>👀</span>
+                <span>View Live Store</span>
               </Link>
+              <button
+                onClick={handleLogout}
+                className="flex items-center justify-center space-x-2 w-full px-4 py-2.5 text-sm font-medium text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors duration-200"
+              >
+                <LogOut className="w-4 h-4" />
+                <span>Sign Out</span>
+              </button>
             </div>
-            
-            {/* Logout button */}
-            <button
-              onClick={handleLogout}
-              className="flex items-center space-x-2 text-foreground hover:text-destructive transition-colors px-4 py-2 rounded-md border border-border bg-card shadow mt-2 w-full justify-center"
-            >
-              <LogOut className="w-4 h-4" />
-              <span className="text-sm">Logout</span>
-            </button>
           </div>
 
-          <nav className="mt-6 flex-grow">
-            {navItems.map(item => {
-              const Icon = item.icon;
-              const isActive = pathname === item.href;
-              
-              return (
-                <Link
-                  key={item.href}
-                  href={item.href}
-                  className={cn(
-                      'flex items-center space-x-3 px-6 py-4 text-left hover:bg-muted hover:text-primary transition-all duration-200',
-                      isActive ? 'bg-gradient-to-r from-muted to-background text-primary border-r-4 border-primary font-bold' : 'text-foreground'
-                  )}
-                >
-                  <Icon className="w-5 h-5" />
-                  <span>{item.label}</span>
-                </Link>
-              );
-            })}
+          {/* Navigation */}
+          <nav className="flex-1 py-6">
+            <div className="space-y-1 px-4">
+              {navItems.map(item => {
+                const Icon = item.icon;
+                const isActive = pathname === item.href;
+                
+                return (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    className={cn(
+                      'flex items-center space-x-3 px-4 py-3 text-sm font-medium rounded-lg transition-all duration-200 group',
+                      isActive 
+                        ? 'bg-gradient-to-r from-blue-500 to-purple-600 text-white shadow-lg' 
+                        : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+                    )}
+                  >
+                    <Icon className={cn(
+                      'w-5 h-5 transition-transform duration-200',
+                      isActive ? 'scale-110' : 'group-hover:scale-105'
+                    )} />
+                    <span>{item.label}</span>
+                    {isActive && (
+                      <div className="ml-auto w-2 h-2 bg-white rounded-full animate-pulse"></div>
+                    )}
+                  </Link>
+                );
+              })}
+            </div>
           </nav>
           
-          {/* Tenant info */}
-          <div className="p-4 border-t border-border bg-muted/30">
-            <div className="text-center">
-              <p className="text-xs text-gray-500">Plan: {tenantData.plan}</p>
-              <p className="text-xs text-gray-500">Status: {tenantData.status}</p>
+          {/* Footer */}
+          <div className="p-4 border-t border-slate-200 bg-slate-50">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs font-medium text-slate-700">Plan: {tenantData.plan}</p>
+                <p className="text-xs text-slate-500">Status: {tenantData.status}</p>
+              </div>
+              <div className="w-8 h-8 bg-gradient-to-br from-green-400 to-blue-500 rounded-lg flex items-center justify-center">
+                <span className="text-white text-xs font-bold">✓</span>
+              </div>
             </div>
           </div>
         </div>
         
-        <div className="flex-1 overflow-hidden relative">
-          <main className="h-full overflow-y-auto p-8">
-            {children}
+        {/* Main Content */}
+        <div className="flex-1 overflow-hidden">
+          <main className="h-full overflow-y-auto">
+            <div className="p-8">
+              <div className="max-w-7xl mx-auto">
+                {children}
+              </div>
+            </div>
           </main>
         </div>
       </div>
