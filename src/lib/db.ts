@@ -18,8 +18,8 @@ if (typeof window === 'undefined') {
     password: process.env.DB_PASSWORD || process.env.DATABASE_PASSWORD || 'root',
     database: process.env.DB_NAME || process.env.DATABASE_NAME || 'dinedesk_db',
     waitForConnections: true,
-    connectionLimit: process.env.NODE_ENV === 'production' ? 50 : 20, // Increased for production
-    queueLimit: 0,
+    connectionLimit: process.env.NODE_ENV === 'production' ? 25 : 10, // Reduced to prevent connection exhaustion
+    queueLimit: 20, // Limit queued connections
     multipleStatements: true, // Allow multiple SQL statements for initialization
     charset: 'utf8mb4',
     // Additional optimizations
@@ -92,17 +92,58 @@ if (typeof window === 'undefined') {
 const db = {
   async execute(sql: string, params?: any[]) {
     if (!mysqlPool) throw new Error('Database access is only available on the server');
-    return mysqlPool.execute(sql, params || []);
+    try {
+      return await mysqlPool.execute(sql, params || []);
+    } catch (error) {
+      console.error('Database execute error:', error);
+      throw error;
+    }
   },
   
   async query<T extends RowDataPacket[]>(sql: string, params?: any[]) {
     if (!mysqlPool) throw new Error('Database access is only available on the server');
-    return mysqlPool.query<T>(sql, params || []);
+    try {
+      return await mysqlPool.query<T>(sql, params || []);
+    } catch (error) {
+      console.error('Database query error:', error);
+      throw error;
+    }
   },
   
   async getConnection() {
     if (!mysqlPool) throw new Error('Database access is only available on the server');
-    return mysqlPool.getConnection();
+    try {
+      return await mysqlPool.getConnection();
+    } catch (error) {
+      console.error('Database connection error:', error);
+      throw error;
+    }
+  },
+
+  // Add method to safely use connections with automatic cleanup
+  async withConnection<T>(callback: (connection: mysql.PoolConnection) => Promise<T>): Promise<T> {
+    if (!mysqlPool) throw new Error('Database access is only available on the server');
+    
+    const connection = await mysqlPool.getConnection();
+    try {
+      return await callback(connection);
+    } finally {
+      connection.release();
+    }
+  },
+
+  // Method to check pool status
+  getPoolStatus() {
+    if (!mysqlPool) return null;
+    
+    // TypeScript doesn't have these properties in the type definitions, but they exist at runtime
+    const pool = mysqlPool as any;
+    return {
+      allConnections: pool._allConnections?.length || 0,
+      freeConnections: pool._freeConnections?.length || 0,
+      connectionQueue: pool._connectionQueue?.length || 0,
+      acquiringConnections: pool._acquiringConnections?.length || 0
+    };
   }
 };
 

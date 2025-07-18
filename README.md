@@ -48,6 +48,49 @@ npm start
 
 ---
 
+## 📧 Email Configuration
+
+### System-Wide Email Settings (Optional)
+Configure system-wide email settings as fallback when restaurants don't have their own SMTP:
+
+```bash
+# System Email Configuration
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=587
+SMTP_SECURE=false
+SMTP_USER=your_email@gmail.com
+SMTP_PASSWORD=your_app_password
+SMTP_FROM=noreply@yourdomain.com
+
+# Public URL for feedback links
+NEXT_PUBLIC_APP_URL=https://yourdomain.com
+```
+
+### Restaurant-Specific Email Settings
+Each restaurant can configure their own SMTP settings through the admin panel:
+
+1. Navigate to **Restaurant Admin** → **Email Management**
+2. Configure SMTP settings in the **SMTP Settings** tab
+3. Customize email templates in the **Email Templates** tab
+4. Monitor email delivery in the **Email Logs** tab
+
+### Email Features
+- **Order Confirmation**: Sent automatically when customer places order
+- **Order Completion**: Sent when order is ready, includes feedback link
+- **Restaurant Notification**: Sent to restaurant when new order is received
+- **Customer Feedback**: Rating and review collection system
+- **Email Templates**: Fully customizable HTML templates
+- **Template Variables**: Dynamic content like customer name, order details, etc.
+
+### Supported Email Providers
+- **Gmail**: Use app passwords for authentication
+- **Outlook/Hotmail**: Use app passwords
+- **SendGrid**: Configure SMTP settings
+- **AWS SES**: Configure SMTP settings
+- **Custom SMTP**: Any SMTP server
+
+---
+
 ## 🌍 Cloud Platform Deployment
 
 ## 🟦 Hostinger Deployment
@@ -339,7 +382,7 @@ gsutil mb gs://your-restaurant-uploads
 
 ---
 
-## 🔧 System Features
+## 🎯 System Features
 
 ### 🏪 Multi-Tenant Architecture
 - **Super Admin Dashboard** - Manage all restaurants
@@ -353,6 +396,15 @@ gsutil mb gs://your-restaurant-uploads
 - **Delivery Zones** - Postcode-based delivery areas
 - **Voucher System** - Discount codes and promotions
 - **Staff Management** - Multi-level user access
+- **Email Notifications** - Automated order confirmations and feedback collection
+
+### 📧 Email Notification System
+- **Order Confirmation** - Automatic email to customers when order is placed
+- **Order Completion** - Notification when order is ready with feedback link
+- **Restaurant Alerts** - New order notifications to restaurant staff
+- **Customer Feedback** - Rating and review collection system
+- **Email Templates** - Customizable email templates per restaurant
+- **SMTP Configuration** - Restaurant-specific email settings
 
 ### 🔒 Security & Performance
 - **JWT Authentication** - Secure token-based authentication
