@@ -32,7 +32,11 @@ export async function POST(request: NextRequest) {
   try {
     const tenantId = request.headers.get('X-Tenant-ID');
     
+    console.log('=== VOUCHER API REQUEST ===');
+    console.log('Tenant ID:', tenantId);
+    
     if (!tenantId) {
+      console.error('Missing tenant ID');
       return NextResponse.json(
         { success: false, error: 'Tenant ID is required' },
         { status: 400 }
@@ -40,25 +44,38 @@ export async function POST(request: NextRequest) {
     }
 
     const voucherData = await request.json();
+    console.log('Received voucher data:', voucherData);
     
-    // Validate required fields
-    if (!voucherData.code || !voucherData.value || !voucherData.type) {
+    // Basic validation
+    if (!voucherData.code || !voucherData.type || !voucherData.value) {
+      console.error('Missing required fields:', { 
+        code: voucherData.code, 
+        type: voucherData.type, 
+        value: voucherData.value 
+      });
       return NextResponse.json(
-        { success: false, error: 'Missing required voucher fields' },
+        { success: false, error: 'Missing required fields: code, type, and value' },
         { status: 400 }
       );
     }
 
+    // Save the voucher
     await saveTenantVoucher(tenantId, voucherData);
     
+    console.log('Voucher saved successfully');
     return NextResponse.json({
       success: true,
       message: 'Voucher saved successfully'
     });
+    
   } catch (error) {
-    console.error('Error saving tenant voucher:', error);
+    console.error('=== VOUCHER API ERROR ===');
+    console.error('Full error:', error);
+    console.error('Error message:', error instanceof Error ? error.message : String(error));
+    console.error('Error stack:', error instanceof Error ? error.stack : 'No stack');
+    
     return NextResponse.json(
-      { success: false, error: 'Failed to save voucher' },
+      { success: false, error: 'Internal server error' },
       { status: 500 }
     );
   }

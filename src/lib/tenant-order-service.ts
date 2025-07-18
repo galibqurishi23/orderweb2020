@@ -75,7 +75,14 @@ export async function getTenantOrders(tenantId: string): Promise<Order[]> {
     }));
 }
 
-export async function createTenantOrder(tenantId: string, orderData: Omit<Order, 'id' | 'createdAt' | 'status' | 'orderNumber'>): Promise<void> {
+export async function createTenantOrder(tenantId: string, orderData: Omit<Order, 'id' | 'createdAt' | 'status' | 'orderNumber'>): Promise<{
+    id: string;
+    orderNumber: string;
+    total: number;
+    customerName: string;
+    orderType: string;
+    scheduledTime?: Date;
+}> {
     const orderId = uuidv4();
     const createdAt = new Date();
     
@@ -131,6 +138,16 @@ export async function createTenantOrder(tenantId: string, orderData: Omit<Order,
             flatValues
         );
     }
+    
+    // Return order details for confirmation page
+    return {
+        id: orderId,
+        orderNumber,
+        total: orderData.total,
+        customerName: orderData.customerName,
+        orderType: orderData.orderType,
+        scheduledTime: orderData.scheduledTime
+    };
 }
 
 export async function updateTenantOrderStatus(tenantId: string, orderId: string, status: OrderStatus): Promise<void> {

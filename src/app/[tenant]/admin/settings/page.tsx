@@ -208,6 +208,16 @@ export default function SettingsPage() {
             advanceOrderEnabled: true,
             collectionEnabled: true
         },
+        collectionTimeSettings: {
+            collectionTimeMinutes: 30,
+            enabled: true,
+            displayMessage: "Your order will be ready for collection in {time} minutes"
+        },
+        deliveryTimeSettings: {
+            deliveryTimeMinutes: 45,
+            enabled: true,
+            displayMessage: "Your order will be delivered in {time} minutes"
+        },
         theme: {
             primary: '224 82% 57%',
             primaryForeground: '210 40% 98%',
@@ -472,17 +482,6 @@ export default function SettingsPage() {
             }
         }));
     };
-    
-    const handleOrderTypeSettingChange = (field: keyof RestaurantSettings['orderTypeSettings'], value: boolean) => {
-        setSettings(prev => ({
-            ...prev,
-            orderTypeSettings: {
-                // @ts-ignore
-                ...prev.orderTypeSettings,
-                [field]: value
-            }
-        }));
-    };
 
     const applyTimePreset = (preset: 'standard' | 'weekend') => {
         let newHours = { ...settings.openingHours };
@@ -668,53 +667,6 @@ export default function SettingsPage() {
                                         </div>
                                     </CardContent>
                                 </Card>
-                            </div>
-                            <Separator className="my-4" />
-                            <div>
-                                <h3 className="text-lg font-medium">Order Settings</h3>
-                                <p className="text-sm text-muted-foreground mb-4">Configure available fulfillment options.</p>
-                                <div className="mt-6 space-y-4 rounded-lg border p-4">
-                                    <h4 className="font-medium">Available Order Types</h4>
-                                    <div className="flex items-center justify-between">
-                                        <Label htmlFor="deliveryEnabled" className="flex flex-col space-y-1">
-                                            <span>Delivery</span>
-                                            <span className="font-normal leading-snug text-muted-foreground">
-                                                Allow customers to have orders delivered.
-                                            </span>
-                                        </Label>
-                                        <Switch
-                                            id="deliveryEnabled"
-                                            checked={settings.orderTypeSettings?.deliveryEnabled}
-                                            onCheckedChange={(checked) => handleOrderTypeSettingChange('deliveryEnabled', checked)}
-                                        />
-                                    </div>
-                                    <div className="flex items-center justify-between">
-                                        <Label htmlFor="advanceOrderEnabled" className="flex flex-col space-y-1">
-                                            <span>Advance Orders</span>
-                                            <span className="font-normal leading-snug text-muted-foreground">
-                                                Allow customers to schedule orders for the future.
-                                            </span>
-                                        </Label>
-                                        <Switch
-                                            id="advanceOrderEnabled"
-                                            checked={settings.orderTypeSettings?.advanceOrderEnabled}
-                                            onCheckedChange={(checked) => handleOrderTypeSettingChange('advanceOrderEnabled', checked)}
-                                        />
-                                    </div>
-                                    <div className="flex items-center justify-between">
-                                        <Label htmlFor="collectionEnabled" className="flex flex-col space-y-1">
-                                            <span>Collection</span>
-                                            <span className="font-normal leading-snug text-muted-foreground">
-                                                Allow customers to collect orders from the restaurant.
-                                            </span>
-                                        </Label>
-                                        <Switch
-                                            id="collectionEnabled"
-                                            checked={settings.orderTypeSettings?.collectionEnabled}
-                                            onCheckedChange={(checked) => handleOrderTypeSettingChange('collectionEnabled', checked)}
-                                        />
-                                    </div>
-                                </div>
                             </div>
                         </CardContent>
                     </Card>

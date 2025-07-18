@@ -11,14 +11,14 @@ let mysqlPool: mysql.Pool | null = null;
 // Only create the pool if running on the server
 if (typeof window === 'undefined') {
   // MariaDB/MySQL connection pool with environment variables and optimized settings
-  mysqlPool = mysql.createPool({
+  const poolConfig: mysql.PoolOptions = {
     host: process.env.DB_HOST || process.env.DATABASE_HOST || 'localhost',
     port: Number(process.env.DB_PORT || process.env.DATABASE_PORT) || 3306,
     user: process.env.DB_USER || process.env.DATABASE_USER || 'root',
     password: process.env.DB_PASSWORD || process.env.DATABASE_PASSWORD || 'root',
     database: process.env.DB_NAME || process.env.DATABASE_NAME || 'dinedesk_db',
     waitForConnections: true,
-    connectionLimit: 20, // Increased for better performance
+    connectionLimit: process.env.NODE_ENV === 'production' ? 50 : 20, // Increased for production
     queueLimit: 0,
     multipleStatements: true, // Allow multiple SQL statements for initialization
     charset: 'utf8mb4',
@@ -26,7 +26,16 @@ if (typeof window === 'undefined') {
     dateStrings: false,
     supportBigNumbers: true,
     bigNumberStrings: false
-  });
+  };
+
+  // Add SSL configuration only if enabled
+  if (process.env.DB_SSL === 'true') {
+    poolConfig.ssl = {
+      rejectUnauthorized: false
+    };
+  }
+
+  mysqlPool = mysql.createPool(poolConfig);
   
   // Test connection on startup (only in development)
   async function testConnection() {
@@ -42,7 +51,7 @@ if (typeof window === 'undefined') {
       console.error('❌ Database connection failed:', error instanceof Error ? error.message : 'Unknown error');
       console.error('Please check your database configuration in .env file');
       if (process.env.NODE_ENV === 'development') {
-        console.error('Run: npm run setup-db to initialize the database');
+        console.error('Run: npm run setup to initialize the database');
       }
     }
   }

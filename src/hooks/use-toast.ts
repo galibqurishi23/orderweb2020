@@ -11,7 +11,7 @@ import type {
 const TOAST_LIMIT = 1
 const TOAST_REMOVE_DELAY = 1000000
 
-type ToasterToast = ToastProps & {
+type ToasterToast = Omit<ToastProps, "title"> & {
   id: string
   title?: React.ReactNode
   description?: React.ReactNode
@@ -142,7 +142,15 @@ function dispatch(action: Action) {
 
 type Toast = Omit<ToasterToast, "id">
 
-function toast({ ...props }: Toast) {
+function formatMessage(message: React.ReactNode): React.ReactNode {
+  if (typeof message === 'string' && message.trim()) {
+    // Convert to bullet point format if it's a simple string and not empty
+    return `• ${message}`;
+  }
+  return message;
+}
+
+function toast({ title, description, ...props }: Toast) {
   const id = genId()
 
   const update = (props: ToasterToast) =>
@@ -156,6 +164,8 @@ function toast({ ...props }: Toast) {
     type: "ADD_TOAST",
     toast: {
       ...props,
+      title: title ? formatMessage(title) : undefined,
+      description: description ? formatMessage(description) : undefined,
       id,
       open: true,
       onOpenChange: (open) => {

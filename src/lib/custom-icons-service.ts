@@ -10,7 +10,7 @@ const CUSTOM_ICONS_PATH = '/icons/dietary';
 export interface CustomIconData {
   id: string;
   label: string;
-  category: 'allergen' | 'dietary' | 'dietary-restriction';
+  category: 'dietary' | 'dietary-restriction';
   svgPath?: string;
   isCustom: boolean;
 }
@@ -21,7 +21,7 @@ let customIconsStorage: Map<string, CustomIconData> = new Map();
 /**
  * Saves a custom icon to storage
  */
-export function saveCustomIcon(id: string, label: string, category: 'allergen' | 'dietary' | 'dietary-restriction', svgContent?: string): void {
+export function saveCustomIcon(id: string, label: string, category: 'dietary' | 'dietary-restriction', svgContent?: string): void {
   const iconData: CustomIconData = {
     id,
     label,
@@ -142,9 +142,6 @@ export function initializeSampleCustomIcons(): void {
   // This would typically load from a database or configuration file
   // For demo purposes, we'll mark some icons as "customizable"
   const sampleIcons = [
-    { id: 'fish', label: 'Fish', category: 'allergen' as const },
-    { id: 'wheat', label: 'Wheat', category: 'allergen' as const },
-    { id: 'dairy', label: 'Dairy', category: 'allergen' as const },
     { id: 'vegetarian', label: 'Vegetarian', category: 'dietary' as const },
     { id: 'vegan', label: 'Vegan', category: 'dietary' as const },
     { id: 'spicy-1', label: 'Spicy', category: 'dietary' as const },

@@ -15,8 +15,7 @@ import {
   Tag,
   Clock,
   CreditCard,
-  Network,
-  Wheat
+  ClipboardList
 } from 'lucide-react';
 import { DineDeskLogo } from '@/components/icons/logo';
 import AdminLogo from '@/components/icons/admin-logo';
@@ -56,11 +55,11 @@ export default function TenantAdminLayout({
     { href: `/${tenant}/admin/advance-orders`, icon: Clock, label: 'Advance Orders' },
     { href: `/${tenant}/admin/menu`, icon: ChefHat, label: 'Menu' },
     { href: `/${tenant}/admin/vouchers`, icon: Tag, label: 'Vouchers' },
-    { href: `/${tenant}/admin/zones`, icon: MapPin, label: 'Order Zones' },
+    { href: `/${tenant}/admin/zones`, icon: MapPin, label: 'Delivery Zones' },
+    { href: `/${tenant}/admin/order-timing`, icon: Clock, label: 'Order Timing' },
+    { href: `/${tenant}/admin/order-management`, icon: ClipboardList, label: 'Order Management' },
     { href: `/${tenant}/admin/printers`, icon: Printer, label: 'Printers' },
     { href: `/${tenant}/admin/payments`, icon: CreditCard, label: 'Payments' },
-    { href: `/${tenant}/admin/allergens`, icon: Wheat, label: 'Allergen Icons' },
-    { href: `/${tenant}/admin/connect-pos`, icon: Network, label: 'Connect POS' },
     { href: `/${tenant}/admin/reports`, icon: BarChart3, label: 'Reports' },
     { href: `/${tenant}/admin/settings`, icon: Settings, label: 'Settings' }
   ];
@@ -174,14 +173,10 @@ export default function TenantAdminLayout({
           
           {/* Footer */}
           <div className="p-4 border-t border-slate-200 bg-slate-50">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-xs font-medium text-slate-700">Plan: {tenantData.plan}</p>
-                <p className="text-xs text-slate-500">Status: {tenantData.status}</p>
-              </div>
-              <div className="w-8 h-8 bg-gradient-to-br from-green-400 to-blue-500 rounded-lg flex items-center justify-center">
-                <span className="text-white text-xs font-bold">✓</span>
-              </div>
+            <div className="flex items-center justify-center">
+              <p className="text-xs text-slate-600 font-medium">
+                Powered by Order Web LTD
+              </p>
             </div>
           </div>
         </div>
