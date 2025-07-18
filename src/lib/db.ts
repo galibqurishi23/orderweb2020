@@ -37,14 +37,40 @@ if (typeof window === 'undefined') {
 
   mysqlPool = mysql.createPool(poolConfig);
   
-  // Test connection on startup (only in development)
+  // Test connection and auto-initialize on startup
   async function testConnection() {
     try {
       if (mysqlPool) {
         const connection = await mysqlPool.getConnection();
-        if (process.env.NODE_ENV === 'development') {
-          console.log('✅ Database connected successfully');
+        
+        // Check if database is initialized
+        try {
+          await connection.execute('SELECT 1 FROM super_admin_users LIMIT 1');
+          if (process.env.NODE_ENV === 'development') {
+            console.log('✅ Database connected and initialized');
+          }
+        } catch (tableError) {
+          // Database not initialized, try to auto-initialize
+          console.log('🔄 Database not initialized, attempting auto-setup...');
+          
+          // Import and run database setup
+          try {
+            const { default: DatabaseSetup } = await import('./database-setup');
+            const setup = new DatabaseSetup();
+            const success = await setup.setupDatabase();
+            
+            if (success) {
+              console.log('✅ Database auto-initialization completed');
+            } else {
+              console.error('❌ Database auto-initialization failed');
+              console.error('💡 Please run: npm run setup or call /api/setup');
+            }
+          } catch (setupError) {
+            console.error('❌ Database setup import failed:', setupError);
+            console.error('💡 Please run: npm run setup or call /api/setup');
+          }
         }
+        
         connection.release();
       }
     } catch (error) {
