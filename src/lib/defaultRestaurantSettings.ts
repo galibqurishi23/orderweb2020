@@ -30,12 +30,22 @@ export const defaultRestaurantSettings: RestaurantSettings = {
     cash: { enabled: true },
     stripe: { enabled: false, apiKey: '', apiSecret: '' },
     globalPayments: { enabled: false, merchantId: '', apiSecret: '' },
-    worldpay: { enabled: false, apiKey: '', merchantId: '' }
+    worldpay: { enabled: false, username: '', password: '', merchantId: '', environment: 'sandbox' }
   },
   orderTypeSettings: {
     deliveryEnabled: true,
     advanceOrderEnabled: true,
     collectionEnabled: true
+  },
+  collectionTimeSettings: {
+    collectionTimeMinutes: 30,
+    enabled: true,
+    displayMessage: "Your order will be ready for collection in {time} minutes"
+  },
+  deliveryTimeSettings: {
+    deliveryTimeMinutes: 45,
+    enabled: true,
+    displayMessage: "Your order will be delivered in {time} minutes"
   },
   theme: {
     primary: '224 82% 57%',

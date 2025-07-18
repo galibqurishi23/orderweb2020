@@ -2,7 +2,7 @@
 
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { getCurrencySymbol } from '@/lib/currency-utils';
-import { ShoppingBag, Printer, Eye, CheckCircle, Search, Trash2, Calendar } from 'lucide-react';
+import { ShoppingBag, Printer, Eye, CheckCircle, Search, Trash2, Calendar, CreditCard, Wallet, Gift } from 'lucide-react';
 import { useTenantData } from '@/context/TenantDataContext';
 import type { Order, OrderStatus } from '@/lib/types';
 import {
@@ -149,7 +149,7 @@ export default function TenantOrdersPage() {
               <ShoppingBag className="w-7 h-7 text-white" />
             </div>
             <div>
-              <h1 className="text-4xl font-bold text-slate-900">Order Management</h1>
+              <h1 className="text-4xl font-bold text-slate-900">All Orders</h1>
               <p className="text-slate-600 mt-1">
                 View, track and manage all customer orders in real-time
               </p>
@@ -233,6 +233,7 @@ export default function TenantOrdersPage() {
                   <TableHead>Date</TableHead>
                   <TableHead>Customer</TableHead>
                   <TableHead>Type</TableHead>
+                  <TableHead>Payment Method</TableHead>
                   <TableHead className="text-right">Total</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead className="text-center">Print Status</TableHead>
@@ -262,6 +263,34 @@ export default function TenantOrdersPage() {
                         <Badge variant={order.isAdvanceOrder ? "outline" : "secondary"} className="capitalize">
                           {order.isAdvanceOrder ? 'Advance' : 'Regular'}
                         </Badge>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-2">
+                          {order.paymentMethod === 'cash' && (
+                            <>
+                              <Wallet className="w-4 h-4 text-green-600" />
+                              <Badge variant="secondary" className="bg-green-100 text-green-800 border-green-200">
+                                Cash
+                              </Badge>
+                            </>
+                          )}
+                          {order.paymentMethod === 'card' && (
+                            <>
+                              <CreditCard className="w-4 h-4 text-blue-600" />
+                              <Badge variant="secondary" className="bg-blue-100 text-blue-800 border-blue-200">
+                                Card
+                              </Badge>
+                            </>
+                          )}
+                          {order.paymentMethod === 'voucher' && (
+                            <>
+                              <Gift className="w-4 h-4 text-purple-600" />
+                              <Badge variant="secondary" className="bg-purple-100 text-purple-800 border-purple-200">
+                                Voucher
+                              </Badge>
+                            </>
+                          )}
+                        </div>
                       </TableCell>
                       <TableCell className="text-right font-medium">{currencySymbol}{Number(order.total).toFixed(2)}</TableCell>
                       <TableCell>
@@ -293,7 +322,7 @@ export default function TenantOrdersPage() {
                   ))
                 ) : (
                     <TableRow>
-                        <TableCell colSpan={8} className="h-24 text-center">
+                        <TableCell colSpan={9} className="h-24 text-center">
                             {searchQuery ? `No orders found for "${searchQuery}".` : "No orders available."}
                         </TableCell>
                     </TableRow>

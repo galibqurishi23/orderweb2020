@@ -307,6 +307,65 @@ export async function getTenantSettings(tenantId: string): Promise<RestaurantSet
   }
 }
 
+// Get tenant settings by slug
+export async function getTenantSettingsBySlug(slug: string): Promise<RestaurantSettings | null> {
+  try {
+    if (process.env.NODE_ENV === 'development') {
+      console.log('Getting settings for tenant slug:', slug);
+    }
+    
+    const connection = await pool.getConnection();
+    if (process.env.NODE_ENV === 'development') {
+      console.log('Got connection from pool');
+    }
+    
+    try {
+      // First get the tenant ID from the slug
+      const [tenantRows] = await connection.execute(
+        'SELECT id FROM tenants WHERE slug = ? AND status IN ("active", "trial")',
+        [slug]
+      );
+      const tenants = tenantRows as any[];
+      
+      if (tenants.length === 0) {
+        if (process.env.NODE_ENV === 'development') {
+          console.log('No tenant found with slug:', slug);
+        }
+        return null;
+      }
+      
+      const tenantId = tenants[0].id;
+      if (process.env.NODE_ENV === 'development') {
+        console.log('Found tenant ID:', tenantId);
+      }
+      
+      // Now get the settings
+      const [rows] = await connection.execute(
+        'SELECT settings_json FROM tenant_settings WHERE tenant_id = ?',
+        [tenantId]
+      );
+      const settings = rows as any[];
+      
+      if (process.env.NODE_ENV === 'development') {
+        console.log('Settings rows found:', settings.length);
+      }
+      
+      if (settings.length > 0) {
+        if (process.env.NODE_ENV === 'development') {
+          console.log('Settings JSON:', settings[0].settings_json);
+        }
+        return JSON.parse(settings[0].settings_json) as RestaurantSettings;
+      }
+      return null;
+    } finally {
+      connection.release();
+    }
+  } catch (error) {
+    console.error('Error fetching tenant settings by slug:', error);
+    return null;
+  }
+}
+
 // Update tenant settings
 export async function updateTenantSettings(tenantId: string, settings: RestaurantSettings): Promise<void> {
   try {
@@ -639,23 +698,14 @@ export async function changeTenantAdminEmail(
 
 // Order Service for tenant statistics
 export async function getTenantOrderStats(tenantId: string): Promise<{
-  totalOrders: number;
   todayOrders: number;
-  advanceOrders: number;
-  totalRevenue: number;
   todayRevenue: number;
   totalCustomers: number;
+  totalRefunds: number;
 }> {
   try {
     const today = new Date();
     const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate());
-    
-    // Get total orders count
-    const [totalOrdersResult] = await pool.execute(
-      'SELECT COUNT(*) as count FROM orders WHERE tenant_id = ?',
-      [tenantId]
-    );
-    const totalOrders = (totalOrdersResult as any[])[0].count;
     
     // Get today's orders count
     const [todayOrdersResult] = await pool.execute(
@@ -663,20 +713,6 @@ export async function getTenantOrderStats(tenantId: string): Promise<{
       [tenantId, todayStart]
     );
     const todayOrders = (todayOrdersResult as any[])[0].count;
-    
-    // Get advance orders count (orders marked as advance orders)
-    const [advanceOrdersResult] = await pool.execute(
-      'SELECT COUNT(*) as count FROM orders WHERE tenant_id = ? AND isAdvanceOrder = 1',
-      [tenantId]
-    );
-    const advanceOrders = (advanceOrdersResult as any[])[0].count;
-    
-    // Get total revenue
-    const [totalRevenueResult] = await pool.execute(
-      'SELECT SUM(total) as total FROM orders WHERE tenant_id = ? AND status != ?',
-      [tenantId, 'cancelled']
-    );
-    const totalRevenue = (totalRevenueResult as any[])[0].total || 0;
     
     // Get today's revenue
     const [todayRevenueResult] = await pool.execute(
@@ -687,18 +723,23 @@ export async function getTenantOrderStats(tenantId: string): Promise<{
     
     // Get total customers count
     const [totalCustomersResult] = await pool.execute(
-      'SELECT COUNT(DISTINCT customer_id) as count FROM orders WHERE tenant_id = ? AND customer_id IS NOT NULL',
+      'SELECT COUNT(DISTINCT customerId) as count FROM orders WHERE tenant_id = ? AND customerId IS NOT NULL',
       [tenantId]
     );
     const totalCustomers = (totalCustomersResult as any[])[0].count;
     
+    // Get total refunds (assuming refunded orders or refund amount)
+    const [totalRefundsResult] = await pool.execute(
+      'SELECT SUM(total) as total FROM orders WHERE tenant_id = ? AND status = ?',
+      [tenantId, 'refunded']
+    );
+    const totalRefunds = (totalRefundsResult as any[])[0].total || 0;
+    
     return {
-      totalOrders,
       todayOrders,
-      advanceOrders,
-      totalRevenue: parseFloat(totalRevenue.toString()),
       todayRevenue: parseFloat(todayRevenue.toString()),
-      totalCustomers
+      totalCustomers,
+      totalRefunds: parseFloat(totalRefunds.toString())
     };
   } catch (error) {
     console.error('Error fetching tenant order stats:', error);

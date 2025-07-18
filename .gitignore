@@ -45,9 +45,6 @@ firebase-debug.log
 firestore-debug.log
 
 # Development files
-*.md
-*.sql
-*.js
 test-*
 *test*
 *debug*
@@ -60,7 +57,51 @@ test-*
 .idx/
 docs/
 scripts/
+database-updates/
+migrations/
+.kiro/
 
 # OS files
 .DS_Store
 Thumbs.db
+
+# Uploads and user data
+uploads/
+*.log
+*.pid
+*.seed
+*.pid.lock
+
+# Runtime data
+pids
+*.pid
+*.seed
+*.pid.lock
+
+# Optional npm cache directory
+.npm
+
+# Optional eslint cache
+.eslintcache
+
+# Microbundle cache
+.rpt2_cache/
+.rts2_cache_cjs/
+.rts2_cache_es/
+.rts2_cache_umd/
+
+# Optional REPL history
+.node_repl_history
+
+# Output of 'npm pack'
+*.tgz
+
+# Yarn Integrity file
+.yarn-integrity
+
+# dotenv environment variables file
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local

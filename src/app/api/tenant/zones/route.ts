@@ -32,7 +32,11 @@ export async function POST(request: NextRequest) {
   try {
     const tenantId = request.headers.get('X-Tenant-ID');
     
+    console.log('=== ZONE API REQUEST ===');
+    console.log('Tenant ID:', tenantId);
+    
     if (!tenantId) {
+      console.error('Missing tenant ID');
       return NextResponse.json(
         { success: false, error: 'Tenant ID is required' },
         { status: 400 }
@@ -40,25 +44,34 @@ export async function POST(request: NextRequest) {
     }
 
     const zoneData = await request.json();
+    console.log('Received zone data:', zoneData);
     
-    // Validate required fields
-    if (!zoneData.name || !zoneData.deliveryFee || !zoneData.minOrder) {
+    // Basic validation
+    if (!zoneData.name || zoneData.name.trim().length === 0) {
+      console.error('Missing or empty zone name');
       return NextResponse.json(
-        { success: false, error: 'Missing required delivery zone fields' },
+        { success: false, error: 'Zone name is required' },
         { status: 400 }
       );
     }
 
+    // Save the zone
     await saveTenantDeliveryZone(tenantId, zoneData);
     
+    console.log('Zone saved successfully');
     return NextResponse.json({
       success: true,
       message: 'Delivery zone saved successfully'
     });
+    
   } catch (error) {
-    console.error('Error saving tenant delivery zone:', error);
+    console.error('=== ZONE API ERROR ===');
+    console.error('Full error:', error);
+    console.error('Error message:', error instanceof Error ? error.message : String(error));
+    console.error('Error stack:', error instanceof Error ? error.stack : 'No stack');
+    
     return NextResponse.json(
-      { success: false, error: 'Failed to save delivery zone' },
+      { success: false, error: 'Internal server error' },
       { status: 500 }
     );
   }

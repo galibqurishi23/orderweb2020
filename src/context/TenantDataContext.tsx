@@ -56,7 +56,14 @@ interface TenantDataContextType {
     isLoading: boolean;
 
     // Handler functions to abstract away state setting logic
-    createOrder: (order: Omit<Order, 'id' | 'createdAt' | 'status' | 'orderNumber'>) => Promise<void>;
+    createOrder: (order: Omit<Order, 'id' | 'createdAt' | 'status' | 'orderNumber'>) => Promise<{
+        orderId: string;
+        orderNumber: string;
+        total: number;
+        customerName: string;
+        orderType: string;
+        scheduledTime?: Date;
+    }>;
     saveMenuItem: (item: MenuItem) => Promise<void>;
     deleteMenuItem: (itemId: string) => Promise<void>;
     saveCategory: (category: MenuCategory) => Promise<void>;
@@ -256,7 +263,11 @@ export const TenantDataProvider = ({ children }: { children: ReactNode }) => {
             throw new Error('Failed to create order');
         }
         
+        const result = await response.json();
         await refreshData();
+        
+        // Return order details for redirect
+        return result.data;
     };
 
     const saveMenuItem = async (item: MenuItem) => {
@@ -496,34 +507,62 @@ export const TenantDataProvider = ({ children }: { children: ReactNode }) => {
     };
 
     const saveVoucher = async (voucher: Voucher) => {
-        if (!tenantData?.id) throw new Error('No tenant selected');
-        
-        console.log('Saving voucher:', voucher);
-        console.log('Tenant ID:', tenantData.id);
-        
-        const response = await fetch(`/api/tenant/vouchers`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-Tenant-ID': tenantData.id
-            },
-            body: JSON.stringify(voucher)
-        });
-
-        if (!response.ok) {
-            const errorText = await response.text();
-            console.error('Save voucher error response:', errorText);
-            console.error('Response status:', response.status);
-            
-            try {
-                const errorData = JSON.parse(errorText);
-                throw new Error(errorData.error || 'Failed to save voucher');
-            } catch (parseError) {
-                throw new Error(`Failed to save voucher: ${errorText}`);
-            }
+        if (!tenantData?.id) {
+            throw new Error('No tenant selected');
         }
 
-        await refreshData();
+        try {
+            // Prepare the voucher data with proper validation
+            const voucherPayload = {
+                id: voucher.id,
+                code: voucher.code,
+                type: voucher.type,
+                value: Number(voucher.value),
+                minOrder: Number(voucher.minOrder || 0),
+                maxDiscount: voucher.maxDiscount ? Number(voucher.maxDiscount) : null,
+                expiryDate: voucher.expiryDate instanceof Date ? voucher.expiryDate.toISOString() : voucher.expiryDate,
+                active: Boolean(voucher.active),
+                usageLimit: voucher.usageLimit ? Number(voucher.usageLimit) : null,
+                usedCount: Number(voucher.usedCount || 0)
+            };
+
+            console.log('Sending voucher payload:', voucherPayload);
+
+            const response = await fetch(`/api/tenant/vouchers`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-Tenant-ID': tenantData.id
+                },
+                body: JSON.stringify(voucherPayload)
+            });
+
+            if (!response.ok) {
+                const errorText = await response.text();
+                console.error('API Error Response:', errorText);
+                console.error('Response Status:', response.status);
+                
+                let errorMessage = 'Failed to save voucher';
+                try {
+                    const errorData = JSON.parse(errorText);
+                    errorMessage = errorData.error || errorMessage;
+                } catch (parseError) {
+                    errorMessage = `Server error: ${response.status}`;
+                }
+                
+                throw new Error(errorMessage);
+            }
+
+            const result = await response.json();
+            console.log('Voucher saved successfully:', result);
+            
+            // Refresh the data after successful save
+            await refreshData();
+            
+        } catch (error) {
+            console.error('Save voucher error:', error);
+            throw error;
+        }
     };
 
     const deleteVoucher = async (voucherId: string) => {
@@ -555,22 +594,60 @@ export const TenantDataProvider = ({ children }: { children: ReactNode }) => {
     };
 
     const saveDeliveryZone = async (zone: DeliveryZone) => {
-        if (!tenantData?.id) throw new Error('No tenant selected');
-        
-        const response = await fetch(`/api/tenant/zones`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-Tenant-ID': tenantData.id
-            },
-            body: JSON.stringify(zone)
-        });
-
-        if (!response.ok) {
-            throw new Error('Failed to save delivery zone');
+        if (!tenantData?.id) {
+            throw new Error('No tenant selected');
         }
 
-        await refreshData();
+        try {
+            // Prepare the zone data with proper validation
+            const zonePayload = {
+                id: zone.id,
+                name: zone.name?.trim(),
+                type: zone.type || 'postcode',
+                postcodes: Array.isArray(zone.postcodes) ? zone.postcodes : [],
+                deliveryFee: Number(zone.deliveryFee || 0),
+                minOrder: Number(zone.minOrder || 0),
+                deliveryTime: Number(zone.deliveryTime || 30),
+                collectionTime: Number(zone.collectionTime || 15)
+            };
+
+            console.log('Sending zone payload:', zonePayload);
+
+            const response = await fetch(`/api/tenant/zones`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-Tenant-ID': tenantData.id
+                },
+                body: JSON.stringify(zonePayload)
+            });
+
+            if (!response.ok) {
+                const errorText = await response.text();
+                console.error('Zone API Error Response:', errorText);
+                console.error('Response Status:', response.status);
+                
+                let errorMessage = 'Failed to save delivery zone';
+                try {
+                    const errorData = JSON.parse(errorText);
+                    errorMessage = errorData.error || errorMessage;
+                } catch (parseError) {
+                    errorMessage = `Server error: ${response.status}`;
+                }
+                
+                throw new Error(errorMessage);
+            }
+
+            const result = await response.json();
+            console.log('Zone saved successfully:', result);
+            
+            // Refresh the data after successful save
+            await refreshData();
+            
+        } catch (error) {
+            console.error('Save zone error:', error);
+            throw error;
+        }
     };
 
     const deleteDeliveryZone = async (zoneId: string) => {

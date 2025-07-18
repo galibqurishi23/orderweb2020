@@ -82,38 +82,73 @@ export async function calculateVoucherDiscount(voucher: Voucher, orderTotal: num
 }
 
 export async function saveTenantVoucher(tenantId: string, voucher: Voucher): Promise<void> {
-    // Database expects 'amount' not 'fixed'
-    const voucherType = voucher.type;
-    
-    if (voucher.id && !voucher.id.startsWith('voucher-')) {
-        // Update existing voucher
-        const { id, code, value, minOrder, maxDiscount, expiryDate, active, usageLimit, usedCount } = voucher;
+    try {
+        console.log('=== SAVING VOUCHER ===');
+        console.log('Tenant ID:', tenantId);
+        console.log('Voucher:', voucher);
         
-        const sql = `
-            UPDATE vouchers 
-            SET code = ?, type = ?, value = ?, minOrder = ?, maxDiscount = ?, 
-                expiryDate = ?, active = ?, usageLimit = ?, usedCount = ?
-            WHERE id = ? AND tenant_id = ?
-        `;
+        // Generate new ID if needed
+        const voucherId = (voucher.id && !voucher.id.startsWith('voucher-')) ? voucher.id : uuidv4();
+        const isNewVoucher = !voucher.id || voucher.id.startsWith('voucher-');
         
-        await pool.execute(sql, [
-            code, voucherType, value, minOrder, maxDiscount, 
-            expiryDate, active, usageLimit || null, usedCount, id, tenantId
-        ]);
-    } else {
-        // Create new voucher
-        const id = uuidv4();
-        const { code, value, minOrder, maxDiscount, expiryDate, active, usageLimit, usedCount } = voucher;
+        // Prepare the data
+        const code = voucher.code?.trim();
+        const type = voucher.type;
+        const value = Number(voucher.value);
+        const minOrder = Number(voucher.minOrder || 0);
+        const maxDiscount = voucher.maxDiscount ? Number(voucher.maxDiscount) : null;
+        const expiryDate = voucher.expiryDate instanceof Date ? 
+            voucher.expiryDate.toISOString().split('T')[0] : 
+            new Date(voucher.expiryDate).toISOString().split('T')[0];
+        const active = voucher.active ? 1 : 0;
+        const usageLimit = voucher.usageLimit ? Number(voucher.usageLimit) : null;
+        const usedCount = Number(voucher.usedCount || 0);
         
-        const sql = `
-            INSERT INTO vouchers (id, tenant_id, code, type, value, minOrder, maxDiscount, expiryDate, active, usageLimit, usedCount)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        `;
+        console.log('Prepared data:', {
+            voucherId, isNewVoucher, code, type, value, minOrder, maxDiscount, 
+            expiryDate, active, usageLimit, usedCount
+        });
         
-        await pool.execute(sql, [
-            id, tenantId, code, voucherType, value, minOrder, maxDiscount, 
-            expiryDate, active, usageLimit || null, usedCount || 0
-        ]);
+        if (isNewVoucher) {
+            // Create new voucher
+            const sql = `
+                INSERT INTO vouchers (id, tenant_id, code, type, value, minOrder, maxDiscount, expiryDate, active, usageLimit, usedCount)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            `;
+            
+            const params = [voucherId, tenantId, code, type, value, minOrder, maxDiscount, expiryDate, active, usageLimit, usedCount];
+            
+            console.log('INSERT SQL:', sql);
+            console.log('INSERT params:', params);
+            
+            await pool.execute(sql, params);
+            console.log('New voucher created successfully');
+            
+        } else {
+            // Update existing voucher
+            const sql = `
+                UPDATE vouchers 
+                SET code = ?, type = ?, value = ?, minOrder = ?, maxDiscount = ?, expiryDate = ?, active = ?, usageLimit = ?, usedCount = ?
+                WHERE id = ? AND tenant_id = ?
+            `;
+            
+            const params = [code, type, value, minOrder, maxDiscount, expiryDate, active, usageLimit, usedCount, voucherId, tenantId];
+            
+            console.log('UPDATE SQL:', sql);
+            console.log('UPDATE params:', params);
+            
+            await pool.execute(sql, params);
+            console.log('Existing voucher updated successfully');
+        }
+        
+        console.log('=== VOUCHER SAVED SUCCESSFULLY ===');
+        
+    } catch (error) {
+        console.error('=== VOUCHER SAVE ERROR ===');
+        console.error('Error details:', error);
+        console.error('Error message:', error instanceof Error ? error.message : String(error));
+        console.error('Error stack:', error instanceof Error ? error.stack : 'No stack');
+        throw error;
     }
 }
 
@@ -129,7 +164,7 @@ export async function updateTenantVoucher(tenantId: string, voucher: Voucher): P
     `;
     
     await pool.execute(sql, [
-        code, voucherType, value, minOrder, maxDiscount, 
+        code, voucherType, value, minOrder, maxDiscount || null, 
         expiryDate, active, usageLimit || null, usedCount, id, tenantId
     ]);
 }

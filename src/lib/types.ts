@@ -111,6 +111,7 @@ export interface Order {
     printed: boolean;
     customerId?: string;
     paymentMethod: 'cash' | 'card' | 'voucher'; // Now supports voucher as a payment method
+    paymentTransactionId?: string; // For storing payment gateway transaction reference
 }
 
 export interface Address {
@@ -152,6 +153,15 @@ export interface Printer {
   port: number;
   type: PrinterType;
   active: boolean;
+  tenantId?: string;
+  createdAt?: Date;
+  updatedAt?: Date;
+  lastTestResult?: {
+    success: boolean;
+    message: string;
+    testedAt: Date;
+    responseTime?: number;
+  };
 }
 
 export interface OpeningHoursPerDay {
@@ -200,6 +210,19 @@ export interface PaymentGatewaySettings {
     apiKey?: string;
     apiSecret?: string;
     merchantId?: string;
+    environment?: 'sandbox' | 'production';
+    accountId?: string;
+    appId?: string; // For Global Payments REST API
+    appKey?: string; // For Global Payments REST API
+    // Stripe-specific fields
+    publishableKey?: string; // Stripe publishable key
+    secretKey?: string; // Stripe secret key
+    // Global Payments specific fields
+    webhookSecret?: string; // For webhook signature verification
+    // Worldpay-specific fields
+    username?: string; // Worldpay username
+    password?: string; // Worldpay password
+    entity?: string; // Worldpay entity (default is 'default')
 }
 
 export interface PaymentSettings {
@@ -239,6 +262,16 @@ export interface RestaurantSettings {
     deliveryEnabled: boolean;
     advanceOrderEnabled: boolean;
     collectionEnabled: boolean;
+  };
+  collectionTimeSettings: {
+    collectionTimeMinutes: number;
+    enabled: boolean;
+    displayMessage: string;
+  };
+  deliveryTimeSettings: {
+    deliveryTimeMinutes: number;
+    enabled: boolean;
+    displayMessage: string;
   };
   theme: ThemeSettings;
 }
