@@ -15,7 +15,9 @@ import {
   Tag,
   Clock,
   CreditCard,
-  ClipboardList
+  ClipboardList,
+  Mail,
+  Star
 } from 'lucide-react';
 import { DineDeskLogo } from '@/components/icons/logo';
 import AdminLogo from '@/components/icons/admin-logo';
@@ -60,6 +62,8 @@ export default function TenantAdminLayout({
     { href: `/${tenant}/admin/order-management`, icon: ClipboardList, label: 'Order Management' },
     { href: `/${tenant}/admin/printers`, icon: Printer, label: 'Printers' },
     { href: `/${tenant}/admin/payments`, icon: CreditCard, label: 'Payments' },
+    { href: `/${tenant}/admin/email`, icon: Mail, label: 'Email Management' },
+    { href: `/${tenant}/admin/feedback`, icon: Star, label: 'Customer Feedback' },
     { href: `/${tenant}/admin/reports`, icon: BarChart3, label: 'Reports' },
     { href: `/${tenant}/admin/settings`, icon: Settings, label: 'Settings' }
   ];

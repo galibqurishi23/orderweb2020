@@ -8,71 +8,73 @@ import { getTenantSettings } from './tenant-service';
 import { defaultRestaurantSettings } from './defaultRestaurantSettings';
 
 export async function getTenantOrders(tenantId: string): Promise<Order[]> {
-    const [orderRows] = await pool.query(
-        `SELECT o.*, 
-                o.createdAt as createdAt,
-                o.customerName as customerName,
-                o.customerPhone as customerPhone,
-                o.customerEmail as customerEmail,
-                o.orderType as orderType,
-                o.isAdvanceOrder as isAdvanceOrder,
-                o.scheduledTime as scheduledTime,
-                o.subtotal,
-                o.deliveryFee as deliveryFee,
-                o.discount,
-                o.tax,
-                o.voucherCode as voucherCode,
-                o.printed,
-                o.customerId as customerId,
-                o.paymentMethod as paymentMethod
-         FROM orders o 
-         WHERE o.tenant_id = ? 
-         ORDER BY o.createdAt DESC`,
-        [tenantId]
-    );
-    
-    const orders = orderRows as any[];
-    
-    // Get order items for all orders
-    const orderIds = orders.map(order => order.id);
-    if (orderIds.length === 0) return [];
-    
-    const [itemRows] = await pool.query(
-        `SELECT oi.*, mi.name as menuItemName, mi.price as menuItemPrice 
-         FROM order_items oi 
-         LEFT JOIN menu_items mi ON oi.menuItemId = mi.id 
-         WHERE oi.orderId IN (${orderIds.map(() => '?').join(',')})`,
-        orderIds
-    );
-    
-    const items = itemRows as any[];
-    
-    // Group items by order
-    const itemsByOrder: { [orderId: string]: any[] } = {};
-    items.forEach(item => {
-        if (!itemsByOrder[item.orderId]) {
-            itemsByOrder[item.orderId] = [];
-        }
-        itemsByOrder[item.orderId].push({
-            ...item,
-            selectedAddons: item.selectedAddons ? 
-                (typeof item.selectedAddons === 'string' ? JSON.parse(item.selectedAddons) : item.selectedAddons) : 
-                [],
-            specialInstructions: item.specialInstructions,
-            menuItem: {
-                id: item.menuItemId,
-                name: item.menuItemName,
-                price: item.menuItemPrice
+    return await pool.withConnection(async (connection) => {
+        const [orderRows] = await connection.query(
+            `SELECT o.*, 
+                    o.createdAt as createdAt,
+                    o.customerName as customerName,
+                    o.customerPhone as customerPhone,
+                    o.customerEmail as customerEmail,
+                    o.orderType as orderType,
+                    o.isAdvanceOrder as isAdvanceOrder,
+                    o.scheduledTime as scheduledTime,
+                    o.subtotal,
+                    o.deliveryFee as deliveryFee,
+                    o.discount,
+                    o.tax,
+                    o.voucherCode as voucherCode,
+                    o.printed,
+                    o.customerId as customerId,
+                    o.paymentMethod as paymentMethod
+             FROM orders o 
+             WHERE o.tenant_id = ? 
+             ORDER BY o.createdAt DESC`,
+            [tenantId]
+        );
+        
+        const orders = orderRows as any[];
+        
+        // Get order items for all orders
+        const orderIds = orders.map(order => order.id);
+        if (orderIds.length === 0) return [];
+        
+        const [itemRows] = await connection.query(
+            `SELECT oi.*, mi.name as menuItemName, mi.price as menuItemPrice 
+             FROM order_items oi 
+             LEFT JOIN menu_items mi ON oi.menuItemId = mi.id 
+             WHERE oi.orderId IN (${orderIds.map(() => '?').join(',')})`,
+            orderIds
+        );
+        
+        const items = itemRows as any[];
+        
+        // Group items by order
+        const itemsByOrder: { [orderId: string]: any[] } = {};
+        items.forEach(item => {
+            if (!itemsByOrder[item.orderId]) {
+                itemsByOrder[item.orderId] = [];
             }
+            itemsByOrder[item.orderId].push({
+                ...item,
+                selectedAddons: item.selectedAddons ? 
+                    (typeof item.selectedAddons === 'string' ? JSON.parse(item.selectedAddons) : item.selectedAddons) : 
+                    [],
+                specialInstructions: item.specialInstructions,
+                menuItem: {
+                    id: item.menuItemId,
+                    name: item.menuItemName,
+                    price: item.menuItemPrice
+                }
+            });
         });
-    });
-    
-    // Attach items to orders and ensure orderNumber exists
-    return orders.map(order => ({
-        ...order,
-        orderNumber: order.orderNumber || `ORD-${Math.floor(1000 + Math.random() * 9000)}`, // Fallback for old orders
-        items: itemsByOrder[order.id] || []
-    }));
+        
+        // Attach items to orders and ensure orderNumber exists
+        return orders.map(order => ({
+            ...order,
+            orderNumber: order.orderNumber || `ORD-${Math.floor(1000 + Math.random() * 9000)}`, // Fallback for old orders
+            items: itemsByOrder[order.id] || []
+        }));
+    }); // Close the withConnection function
 }
 
 export async function createTenantOrder(tenantId: string, orderData: Omit<Order, 'id' | 'createdAt' | 'status' | 'orderNumber'>): Promise<{

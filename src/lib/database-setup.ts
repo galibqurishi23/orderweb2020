@@ -67,6 +67,12 @@ class DatabaseSetup {
                 subscription_plan VARCHAR(50) DEFAULT 'starter',
                 subscription_status ENUM('active', 'trialing', 'past_due', 'canceled', 'unpaid') DEFAULT 'trialing',
                 trial_ends_at TIMESTAMP NULL,
+                smtp_host VARCHAR(255),
+                smtp_port INT DEFAULT 587,
+                smtp_secure TINYINT(1) DEFAULT 0,
+                smtp_user VARCHAR(255),
+                smtp_password VARCHAR(255),
+                smtp_from VARCHAR(255),
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
@@ -248,6 +254,59 @@ class DatabaseSetup {
                 FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE CASCADE,
                 UNIQUE KEY unique_tenant_voucher_code (tenant_id, code),
                 INDEX idx_tenant_vouchers (tenant_id)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
+
+            // Email templates table
+            `CREATE TABLE IF NOT EXISTS email_templates (
+                id VARCHAR(255) PRIMARY KEY,
+                tenant_id VARCHAR(255) NOT NULL,
+                template_type ENUM('order_confirmation', 'order_complete', 'restaurant_notification') NOT NULL,
+                subject VARCHAR(255) NOT NULL,
+                html_content TEXT NOT NULL,
+                variables JSON,
+                active TINYINT(1) DEFAULT 1,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE CASCADE,
+                UNIQUE KEY unique_tenant_template (tenant_id, template_type),
+                INDEX idx_tenant_templates (tenant_id)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
+
+            // Order feedback table
+            `CREATE TABLE IF NOT EXISTS order_feedback (
+                id VARCHAR(255) PRIMARY KEY,
+                order_id VARCHAR(255) NOT NULL,
+                tenant_id VARCHAR(255) NOT NULL,
+                customer_email VARCHAR(255) NOT NULL,
+                customer_name VARCHAR(255),
+                rating INT(1) NOT NULL CHECK (rating >= 1 AND rating <= 5),
+                review TEXT,
+                feedback_token VARCHAR(255) UNIQUE NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (order_id) REFERENCES orders(id) ON DELETE CASCADE,
+                FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE CASCADE,
+                INDEX idx_tenant_feedback (tenant_id),
+                INDEX idx_order_feedback (order_id),
+                INDEX idx_feedback_token (feedback_token)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
+
+            // Email logs table
+            `CREATE TABLE IF NOT EXISTS email_logs (
+                id VARCHAR(255) PRIMARY KEY,
+                tenant_id VARCHAR(255) NOT NULL,
+                order_id VARCHAR(255),
+                email_type ENUM('order_confirmation', 'order_complete', 'restaurant_notification') NOT NULL,
+                recipient_email VARCHAR(255) NOT NULL,
+                subject VARCHAR(255) NOT NULL,
+                status ENUM('sent', 'failed', 'pending') DEFAULT 'pending',
+                sent_at TIMESTAMP NULL,
+                error_message TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE CASCADE,
+                FOREIGN KEY (order_id) REFERENCES orders(id) ON DELETE CASCADE,
+                INDEX idx_tenant_email_logs (tenant_id),
+                INDEX idx_order_email_logs (order_id),
+                INDEX idx_email_status (status)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`
         ];
 
