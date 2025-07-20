@@ -1,97 +1,122 @@
-// NOTE: This file cannot use 'use server' because it exports an object
+// Production Database Configuration for Oracle Linux
+// Simple and robust database setup with clear environment variable requirements
 
 import mysql, { RowDataPacket } from 'mysql2/promise';
 
-// Use MariaDB/MySQL exclusively
-const dbType = 'mariadb';
+// Production-optimized database configuration
+const createDatabaseConfig = () => {
+  // Validate required environment variables
+  const requiredVars = ['DB_HOST', 'DB_USER', 'DB_PASSWORD', 'DB_NAME'];
+  const missingVars = requiredVars.filter(varName => !process.env[varName]);
+  
+  if (missingVars.length > 0) {
+    throw new Error(`Missing required environment variables: ${missingVars.join(', ')}`);
+  }
 
-// Check if we're running on the server
-let mysqlPool: mysql.Pool | null = null;
-
-// Only create the pool if running on the server
-if (typeof window === 'undefined') {
-  // MariaDB/MySQL connection pool with environment variables and optimized settings
-  const poolConfig: mysql.PoolOptions = {
-    host: process.env.DB_HOST || process.env.DATABASE_HOST || 'localhost',
+  const config: mysql.PoolOptions = {
+    // Primary database variables (supports both DB_ and DATABASE_ prefixes)
+    host: process.env.DB_HOST || process.env.DATABASE_HOST,
     port: Number(process.env.DB_PORT || process.env.DATABASE_PORT) || 3306,
-    user: process.env.DB_USER || process.env.DATABASE_USER || 'root',
-    password: process.env.DB_PASSWORD || process.env.DATABASE_PASSWORD || 'root',
-    database: process.env.DB_NAME || process.env.DATABASE_NAME || 'dinedesk_db',
+    user: process.env.DB_USER || process.env.DATABASE_USER,
+    password: process.env.DB_PASSWORD || process.env.DATABASE_PASSWORD,
+    database: process.env.DB_NAME || process.env.DATABASE_NAME,
+    
+    // Production-optimized pool settings
     waitForConnections: true,
-    connectionLimit: process.env.NODE_ENV === 'production' ? 25 : 10, // Reduced to prevent connection exhaustion
-    queueLimit: 20, // Limit queued connections
-    multipleStatements: true, // Allow multiple SQL statements for initialization
+    connectionLimit: process.env.NODE_ENV === 'production' ? 25 : 10,
+    queueLimit: 50,
+    multipleStatements: true,
+    
+    // Character set and collation
     charset: 'utf8mb4',
-    // Additional optimizations
+    
+    // Performance optimizations
     dateStrings: false,
     supportBigNumbers: true,
     bigNumberStrings: false
   };
 
-  // Add SSL configuration only if enabled
+  // Add SSL configuration if enabled
   if (process.env.DB_SSL === 'true') {
-    poolConfig.ssl = {
+    config.ssl = {
       rejectUnauthorized: false
     };
   }
 
-  mysqlPool = mysql.createPool(poolConfig);
-  
-  // Test connection and auto-initialize on startup
-  async function testConnection() {
-    try {
-      if (mysqlPool) {
-        const connection = await mysqlPool.getConnection();
-        
-        // Check if database is initialized
-        try {
-          await connection.execute('SELECT 1 FROM super_admin_users LIMIT 1');
-          if (process.env.NODE_ENV === 'development') {
-            console.log('✅ Database connected and initialized');
-          }
-        } catch (tableError) {
-          // Database not initialized, try to auto-initialize
-          console.log('🔄 Database not initialized, attempting auto-setup...');
+  return config;
+};
+
+// Create database pool
+let mysqlPool: mysql.Pool | null = null;
+
+// Only create pool on server side
+if (typeof window === 'undefined') {
+  try {
+    const config = createDatabaseConfig();
+    mysqlPool = mysql.createPool(config);
+    
+    // Test connection and auto-initialize on startup
+    const testConnection = async () => {
+      try {
+        if (mysqlPool) {
+          const connection = await mysqlPool.getConnection();
+          console.log('✅ Database connection established successfully');
           
-          // Import and run database setup
+          // Test if database is initialized
           try {
-            const { default: DatabaseSetup } = await import('./database-setup');
-            const setup = new DatabaseSetup();
-            const success = await setup.setupDatabase();
+            await connection.execute('SELECT 1 FROM super_admin_users LIMIT 1');
+            console.log('✅ Database tables verified and ready');
+          } catch (tableError) {
+            console.log('⚠️  Database not initialized. Run setup to initialize.');
             
-            if (success) {
-              console.log('✅ Database auto-initialization completed');
-            } else {
-              console.error('❌ Database auto-initialization failed');
-              console.error('💡 Please run: npm run setup or call /api/setup');
+            // Auto-initialize in development
+            if (process.env.NODE_ENV === 'development') {
+              try {
+                const { default: DatabaseSetup } = await import('./database-setup');
+                const setup = new DatabaseSetup();
+                const success = await setup.setupDatabase();
+                
+                if (success) {
+                  console.log('✅ Database auto-initialization completed');
+                } else {
+                  console.error('❌ Database auto-initialization failed');
+                  console.error('💡 Please run: npm run setup');
+                }
+              } catch (setupError) {
+                console.error('❌ Database setup import failed:', setupError);
+                console.error('💡 Please run: npm run setup');
+              }
             }
-          } catch (setupError) {
-            console.error('❌ Database setup import failed:', setupError);
-            console.error('💡 Please run: npm run setup or call /api/setup');
           }
+          
+          connection.release();
         }
-        
-        connection.release();
+      } catch (error) {
+        console.error('❌ Database connection failed:', error instanceof Error ? error.message : 'Unknown error');
+        console.error('Please verify your database configuration:');
+        console.error('- Check .env.production file exists and has correct values');
+        console.error('- Verify MySQL/MariaDB is running and accessible');
+        console.error('- Ensure database user has proper permissions');
       }
-    } catch (error) {
-      console.error('❌ Database connection failed:', error instanceof Error ? error.message : 'Unknown error');
-      console.error('Please check your database configuration in .env file');
-      if (process.env.NODE_ENV === 'development') {
-        console.error('Run: npm run setup to initialize the database');
-      }
+    };
+
+    // Only test connection in non-test environments
+    if (process.env.NODE_ENV !== 'test') {
+      testConnection();
     }
-  }
-  
-  // Initialize connection test
-  if (process.env.NODE_ENV !== 'test') {
-    testConnection();
+  } catch (configError) {
+    console.error('❌ Database configuration error:', configError instanceof Error ? configError.message : 'Unknown error');
+    console.error('Please check your environment variables in .env.production');
   }
 }
 
-// Create a unified database interface that works with MariaDB/MySQL
+// Unified database interface with enhanced error handling
 const db = {
   async execute(sql: string, params?: any[]) {
-    if (!mysqlPool) throw new Error('Database access is only available on the server');
+    if (!mysqlPool) {
+      throw new Error('Database pool not initialized. Check your environment configuration.');
+    }
+    
     try {
       return await mysqlPool.execute(sql, params || []);
     } catch (error) {
@@ -101,7 +126,10 @@ const db = {
   },
   
   async query<T extends RowDataPacket[]>(sql: string, params?: any[]) {
-    if (!mysqlPool) throw new Error('Database access is only available on the server');
+    if (!mysqlPool) {
+      throw new Error('Database pool not initialized. Check your environment configuration.');
+    }
+    
     try {
       return await mysqlPool.query<T>(sql, params || []);
     } catch (error) {
@@ -111,7 +139,10 @@ const db = {
   },
   
   async getConnection() {
-    if (!mysqlPool) throw new Error('Database access is only available on the server');
+    if (!mysqlPool) {
+      throw new Error('Database pool not initialized. Check your environment configuration.');
+    }
+    
     try {
       return await mysqlPool.getConnection();
     } catch (error) {
@@ -120,9 +151,11 @@ const db = {
     }
   },
 
-  // Add method to safely use connections with automatic cleanup
+  // Safe connection management with automatic cleanup
   async withConnection<T>(callback: (connection: mysql.PoolConnection) => Promise<T>): Promise<T> {
-    if (!mysqlPool) throw new Error('Database access is only available on the server');
+    if (!mysqlPool) {
+      throw new Error('Database pool not initialized. Check your environment configuration.');
+    }
     
     const connection = await mysqlPool.getConnection();
     try {
@@ -132,11 +165,29 @@ const db = {
     }
   },
 
-  // Method to check pool status
+  // Health check method for monitoring
+  async healthCheck() {
+    if (!mysqlPool) {
+      return { status: 'error', message: 'Database pool not initialized' };
+    }
+    
+    try {
+      const connection = await mysqlPool.getConnection();
+      await connection.execute('SELECT 1');
+      connection.release();
+      return { status: 'healthy', message: 'Database connection successful' };
+    } catch (error) {
+      return { 
+        status: 'error', 
+        message: error instanceof Error ? error.message : 'Unknown error' 
+      };
+    }
+  },
+
+  // Pool status monitoring for production debugging
   getPoolStatus() {
     if (!mysqlPool) return null;
     
-    // TypeScript doesn't have these properties in the type definitions, but they exist at runtime
     const pool = mysqlPool as any;
     return {
       allConnections: pool._allConnections?.length || 0,

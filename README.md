@@ -1,52 +1,140 @@
-# OrderWeb - Multi-Tenant Restaurant Ordering System
+# OrderWeb Restaurant System
 
-**Built by OrderWeb LTD**
+A modern, multi-tenant restaurant ordering system built with Next.js and MySQL/MariaDB.
 
-A comprehensive multi-tenant restaurant ordering system designed for modern food service businesses. Complete with payment processing, order management, and customer interfaces.
-
----
-
-## 🚀 Quick Setup
+## 🚀 Quick Start for Oracle Linux
 
 ### Prerequisites
-- Node.js 18 or higher
-- MySQL/MariaDB database
-- Domain name (for production)
-
-### Environment Configuration
-Create `.env` file with your database credentials:
-
-```bash
-# Database Configuration (Required)
-DB_HOST=localhost
-DB_USER=your_database_user
-DB_PASSWORD=your_database_password
-DB_NAME=your_database_name
-
-# Application Settings (Required)
-NEXTAUTH_URL=https://yourdomain.com
-NEXTAUTH_SECRET=your-random-32-character-secret
-
-# Optional: Super Admin (will be created automatically)
-SUPER_ADMIN_EMAIL=admin@yourdomain.com
-SUPER_ADMIN_PASSWORD=your_admin_password
-```
+- Oracle Linux with sudo access
+- MySQL/MariaDB server
+- Node.js 18+
 
 ### Installation
+
+1. **Configure your database settings**:
+   ```bash
+   nano .env.production
+   ```
+   Update database credentials and domain settings.
+
+2. **Run the deployment script**:
+   ```bash
+   chmod +x deploy-production.sh
+   ./deploy-production.sh
+   ```
+
+3. **Start the application**:
+   ```bash
+   npm start
+   ```
+
+That's it! Your restaurant system will be running at `http://localhost:3000`
+
+## 📖 Documentation
+
+- **[Complete Installation Guide](INSTALLATION.md)** - Detailed setup instructions
+- **Admin Panel**: Access at `/super-admin` with credentials from `.env.production`
+
+## 🔧 Configuration
+
+All configuration is done through `.env.production`:
+
 ```bash
-# Install dependencies
-npm install
+# Database (Required)
+DB_HOST=localhost
+DB_USER=your_username
+DB_PASSWORD=your_password
+DB_NAME=your_database
 
-# Build application
-npm run build
+# Application (Required)
+PRODUCTION_DOMAIN=yourdomain.com
+NEXTAUTH_URL=https://yourdomain.com
+NEXTAUTH_SECRET=your-secure-secret
 
-# Start server (database will be auto-initialized)
-npm start
+# Admin Access (Required)
+SUPER_ADMIN_EMAIL=admin@yourdomain.com
+SUPER_ADMIN_PASSWORD=secure_password
 ```
 
-**That's it!** Your restaurant system is now running with automatic database setup.
+## 🏗️ System Requirements
+
+- **Operating System**: Oracle Linux (or any Linux distribution)
+- **Runtime**: Node.js 18+
+- **Database**: MySQL 8.0+ or MariaDB 10.5+
+- **Memory**: 2GB RAM minimum
+- **Storage**: 5GB available space
+
+## 🔒 Security Features
+
+- Secure authentication with NextAuth.js
+- Password hashing with bcrypt
+- SQL injection protection
+- Environment-based configuration
+- Production-ready database connection pooling
+
+## 📱 Features
+
+- **Multi-tenant Architecture**: Support multiple restaurants
+- **Online Ordering**: Complete customer ordering system
+- **Menu Management**: Easy menu setup and customization
+- **Order Management**: Real-time order processing
+- **Customer Interface**: Mobile-responsive ordering interface
+- **Admin Dashboard**: Comprehensive management tools
+
+## 🛠️ Management Commands
+
+```bash
+# Start application
+npm start
+
+# Setup/reset database
+npm run setup
+
+# Build for production
+npm run build
+
+# Run complete production deployment
+npm run production
+
+# Check application health
+npm run health-check
+```
+
+## 🔄 System Service
+
+The deployment script can optionally create a systemd service:
+
+```bash
+# Start service
+sudo systemctl start orderweb
+
+# Stop service
+sudo systemctl stop orderweb
+
+# Check status
+sudo systemctl status orderweb
+
+# View logs
+sudo journalctl -u orderweb -f
+```
+
+## 🌐 Production Deployment
+
+1. **Database**: Ensure MySQL/MariaDB is properly configured
+2. **Reverse Proxy**: Set up nginx or apache for HTTPS
+3. **SSL Certificate**: Configure SSL for secure connections
+4. **Firewall**: Open necessary ports (default: 3000)
+5. **Backups**: Set up regular database backups
+
+## 📞 Support
+
+- Check application logs: `sudo journalctl -u orderweb -f`
+- Database health check: `npm run health-check`
+- Configuration validation: Review `.env.production`
 
 ---
+
+**OrderWeb LTD** - Professional Restaurant Ordering System
 
 ## 📧 Email Configuration
 
