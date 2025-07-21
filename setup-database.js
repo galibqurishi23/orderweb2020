@@ -1,5 +1,8 @@
 #!/usr/bin/env node
 
+// Load environment variables
+require('dotenv').config();
+
 const mysql = require('mysql2/promise');
 const fs = require('fs');
 const path = require('path');
@@ -362,16 +365,19 @@ async function createDatabase(host, port, user, password, database) {
         // Create default super admin
         const bcrypt = require('bcryptjs');
         const adminId = 'super-admin-' + Date.now();
-        const hashedPassword = await bcrypt.hash('admin123', 12);
+        const adminEmail = process.env.DEFAULT_ADMIN_EMAIL || 'admin@dinedesk.com';
+        const adminPassword = process.env.DEFAULT_ADMIN_PASSWORD || 'admin123';
+        const adminName = process.env.DEFAULT_ADMIN_NAME || 'Super Admin';
+        const hashedPassword = await bcrypt.hash(adminPassword, 12);
         
         await connection.query(
             `INSERT IGNORE INTO ${database}.super_admin_users (id, name, email, password) VALUES (?, ?, ?, ?)`,
-            [adminId, 'Super Admin', 'admin@restaurant.com', hashedPassword]
+            [adminId, adminName, adminEmail, hashedPassword]
         );
         
         log('✅ Default super admin created!', colors.green);
-        log('   Email: admin@restaurant.com', colors.cyan);
-        log('   Password: admin123', colors.cyan);
+        log(`   Email: ${adminEmail}`, colors.cyan);
+        log(`   Password: ${adminPassword}`, colors.cyan);
         log('   (Please change this password after first login)', colors.yellow);
         
         await connection.end();

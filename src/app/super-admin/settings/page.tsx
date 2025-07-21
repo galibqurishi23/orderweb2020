@@ -33,6 +33,15 @@ export default function SuperAdminSettings() {
   const [logoFile, setLogoFile] = useState<File | null>(null);
   const [logoPreview, setLogoPreview] = useState<string>('');
   
+  // Super Admin Credentials State
+  const [adminCredentials, setAdminCredentials] = useState({
+    email: '',
+    currentPassword: '',
+    newPassword: '',
+    confirmPassword: '',
+  });
+  const [isUpdatingCredentials, setIsUpdatingCredentials] = useState(false);
+  
   const [settings, setSettings] = useState<ApplicationSettings>({
     appName: 'OrderWeb',
     appLogo: '/icons/logo.svg', // Current default logo
@@ -140,6 +149,77 @@ export default function SuperAdminSettings() {
       });
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handleUpdateCredentials = async () => {
+    if (!adminCredentials.email || !adminCredentials.currentPassword || !adminCredentials.newPassword) {
+      toast({
+        variant: 'destructive',
+        title: '❌ Missing Information',
+        description: 'Please fill in all required fields',
+      });
+      return;
+    }
+
+    if (adminCredentials.newPassword !== adminCredentials.confirmPassword) {
+      toast({
+        variant: 'destructive',
+        title: '❌ Password Mismatch',
+        description: 'New password and confirmation do not match',
+      });
+      return;
+    }
+
+    if (adminCredentials.newPassword.length < 6) {
+      toast({
+        variant: 'destructive',
+        title: '❌ Password Too Short',
+        description: 'Password must be at least 6 characters long',
+      });
+      return;
+    }
+
+    setIsUpdatingCredentials(true);
+    try {
+      const response = await fetch('/api/super-admin/update-credentials', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: adminCredentials.email,
+          currentPassword: adminCredentials.currentPassword,
+          newPassword: adminCredentials.newPassword,
+        }),
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.message || 'Failed to update credentials');
+      }
+
+      toast({
+        title: '✅ Credentials Updated',
+        description: 'Super admin credentials have been updated successfully',
+        duration: 3000
+      });
+
+      // Clear form
+      setAdminCredentials({
+        email: '',
+        currentPassword: '',
+        newPassword: '',
+        confirmPassword: '',
+      });
+
+    } catch (error) {
+      toast({
+        variant: 'destructive',
+        title: '❌ Update Failed',
+        description: error instanceof Error ? error.message : 'Failed to update credentials',
+        duration: 5000
+      });
+    } finally {
+      setIsUpdatingCredentials(false);
     }
   };
 
@@ -343,7 +423,88 @@ export default function SuperAdminSettings() {
         </CardContent>
       </Card>
 
-      {/* Save Button */}
+      {/* Super Admin Credentials */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-red-600">
+            <Settings className="h-5 w-5" />
+            Super Admin Credentials
+          </CardTitle>
+          <p className="text-sm text-gray-600">
+            Update your super admin login credentials. Use this to change the default login.
+          </p>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="admin-email">New Email</Label>
+              <Input
+                id="admin-email"
+                type="email"
+                value={adminCredentials.email}
+                onChange={(e) => setAdminCredentials(prev => ({ ...prev, email: e.target.value }))}
+                placeholder="admin@dinedesk.com"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="current-password">Current Password</Label>
+              <Input
+                id="current-password"
+                type="password"
+                value={adminCredentials.currentPassword}
+                onChange={(e) => setAdminCredentials(prev => ({ ...prev, currentPassword: e.target.value }))}
+                placeholder="Enter current password"
+              />
+            </div>
+          </div>
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="new-password">New Password</Label>
+              <Input
+                id="new-password"
+                type="password"
+                value={adminCredentials.newPassword}
+                onChange={(e) => setAdminCredentials(prev => ({ ...prev, newPassword: e.target.value }))}
+                placeholder="Enter new password"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="confirm-password">Confirm New Password</Label>
+              <Input
+                id="confirm-password"
+                type="password"
+                value={adminCredentials.confirmPassword}
+                onChange={(e) => setAdminCredentials(prev => ({ ...prev, confirmPassword: e.target.value }))}
+                placeholder="Confirm new password"
+              />
+            </div>
+          </div>
+
+          <div className="flex justify-end pt-4 border-t">
+            <Button
+              onClick={handleUpdateCredentials}
+              disabled={isUpdatingCredentials || !adminCredentials.email || !adminCredentials.currentPassword || !adminCredentials.newPassword}
+              variant="destructive"
+              className="flex items-center gap-2"
+            >
+              {isUpdatingCredentials ? (
+                <>
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                  Updating...
+                </>
+              ) : (
+                <>
+                  <Save className="h-4 w-4" />
+                  Update Credentials
+                </>
+              )}
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Save Platform Settings Button */}
       <div className="flex justify-end">
         <Button
           onClick={handleSaveSettings}
@@ -358,7 +519,7 @@ export default function SuperAdminSettings() {
           ) : (
             <>
               <Save className="h-4 w-4" />
-              Save Settings
+              Save Platform Settings
             </>
           )}
         </Button>
