@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { EmailService } from '@/lib/email-service';
+import { emailService } from '@/lib/universal-email-service';
 import db from '@/lib/db';
 
 export async function POST(request: NextRequest) {
@@ -45,7 +45,6 @@ export async function POST(request: NextRequest) {
     }));
 
     // Send order completion email
-    const emailService = new EmailService();
     
     const emailOrderData = {
       id: orderData.id,
@@ -71,7 +70,25 @@ export async function POST(request: NextRequest) {
       primary_color: orderData.primary_color
     };
 
-    await emailService.sendOrderComplete(tenantId, emailOrderData, emailTenantData);
+    await emailService.sendEmail({
+      to: emailOrderData.customer_email,
+      subject: `Order Complete #${emailOrderData.id} - ${emailTenantData.business_name}`,
+      html: `
+        <h2>Order Complete!</h2>
+        <p>Dear ${emailOrderData.customer_name},</p>
+        <p>Your order is now complete and ready for collection/delivery!</p>
+        <h3>Order Details:</h3>
+        <ul>
+          ${emailOrderData.items.map((item: any) => `
+            <li>${item.name} x ${item.quantity} - £${item.price.toFixed(2)}</li>
+          `).join('')}
+        </ul>
+        <p><strong>Total: £${emailOrderData.total.toFixed(2)}</strong></p>
+        <p>Order Type: ${emailOrderData.order_type}</p>
+        ${emailOrderData.delivery_address ? `<p>Delivery Address: ${emailOrderData.delivery_address}</p>` : ''}
+        <p>Thank you for choosing ${emailTenantData.business_name}!</p>
+      `
+    }, { type: 'tenant', tenantId, userId: emailOrderData.id });
 
     return NextResponse.json({ success: true });
 

@@ -4,6 +4,7 @@ import pool from './db';
 import { v4 as uuidv4 } from 'uuid';
 import bcrypt from 'bcryptjs';
 import type { Tenant, TenantUser, SuperAdminUser, RestaurantSettings } from './types';
+import { emailService } from './universal-email-service';
 
 // Email Service for notifications
 export async function sendWelcomeEmail(
@@ -13,39 +14,25 @@ export async function sendWelcomeEmail(
   password: string, 
   tenantSlug: string
 ): Promise<void> {
-  // In a real application, you would integrate with an email service like SendGrid, AWS SES, etc.
-  // For now, we'll log the email details (in production, replace with actual email sending)
-  if (process.env.NODE_ENV === 'development') {
-    console.log('=== RESTAURANT ADMIN WELCOME EMAIL ===');
-    console.log('To:', adminEmail);
-    console.log('Subject: Welcome to OrderWeb - Your Restaurant Dashboard is Ready!');
-    console.log('---');
-    console.log(`Dear ${adminName},`);
-    console.log('');
-    console.log(`Welcome to OrderWeb! Your restaurant "${restaurantName}" has been successfully set up.`);
-    console.log('');
-    console.log('Your admin dashboard login details:');
-    console.log(`Dashboard URL: https://orderWeb.com/${tenantSlug}/admin`);
-    console.log(`Email: ${adminEmail}`);
-    console.log(`Password: ${password}`);
-    console.log('');
-    console.log('Please log in and change your password for security.');
-    console.log('');
-    console.log('Your restaurant starts with default settings that you can customize:');
-    console.log('- Business hours (Monday-Saturday 9 AM - 5 PM, Sunday closed)');
-    console.log('- Currency (GBP)');
-    console.log('- Tax rate (10%)');
-    console.log('- Payment methods (Cash enabled by default)');
-    console.log('- Empty menu (ready for you to add your items)');
-    console.log('');
-    console.log('You have a 14-day free trial. Enjoy setting up your restaurant!');
-    console.log('');
-    console.log('Best regards,');
-    console.log('The OrderWeb Team');
-    console.log('=====================================');
+  try {
+    // Use the universal email service to send welcome email
+    const success = await emailService.sendWelcomeEmail({
+      restaurant_name: restaurantName,
+      admin_email: adminEmail,
+      admin_name: adminName,
+      plan_name: 'Online Order (Trial)',
+      trial_days: 3,
+      admin_panel_url: `${process.env.NEXT_PUBLIC_APP_URL || 'https://ordertest.co.uk'}/${tenantSlug}/admin`
+    });
+
+    if (success) {
+      console.log(`✅ Welcome email sent successfully to ${adminEmail}`);
+    } else {
+      console.error(`❌ Failed to send welcome email to ${adminEmail}`);
+    }
+  } catch (error) {
+    console.error('Error sending welcome email:', error);
   }
-  
-  // TODO: Replace with actual email service integration
 }
 
 // Get all tenants (Super Admin)
@@ -104,7 +91,7 @@ export async function createTenant(data: {
       // Create the tenant record
       const tenantId = uuidv4();
       const now = new Date().toISOString().slice(0, 19).replace('T', ' ');
-      const trialEndsAt = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000) // 14 days from now
+      const trialEndsAt = new Date(Date.now() + 3 * 24 * 60 * 60 * 1000) // 3 days from now
         .toISOString().slice(0, 19).replace('T', ' ');
       
       await connection.execute(

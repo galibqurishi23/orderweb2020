@@ -193,7 +193,7 @@ Your Order:
 - \{{\{quantity\}\}}x \{{\{name\}\}} - $\{{\{price\}\}}
 {{/each}}
 
-Total: ${{total}}
+Total: $\{{\{total\}\}}
 
 {{#if special_instructions}}
 Special Instructions: {{special_instructions}}
@@ -325,14 +325,14 @@ Thank you for your business!
                                     </div>
                                     <div style="text-align: right;">
                                         <div style="font-size: 14px; color: #7f8c8d;">{{quantity}}x</div>
-                                        <div style="font-weight: 600; color: #2c3e50;">${{price}}</div>
+                                        <div style="font-weight: 600; color: #2c3e50;">$\{{\{price\}\}}</div>
                                     </div>
                                 </div>
                                 {{/each}}
                                 
                                 <div style="display: flex; justify-content: space-between; align-items: center; padding: 20px 0; border-top: 2px solid #2c3e50; margin-top: 10px;">
                                     <span style="font-size: 18px; font-weight: 700; color: #2c3e50;">Total</span>
-                                    <span style="font-size: 18px; font-weight: 700; color: #27ae60;">${{total}}</span>
+                                    <span style="font-size: 18px; font-weight: 700; color: #27ae60;">$\{{\{total\}\}}</span>
                                 </div>
                             </div>
                             
@@ -382,10 +382,10 @@ Order Details:
 
 Items:
 {{#each items}}
-{{quantity}}x {{name}} - ${{price}}
+\{{\{quantity\}\}}x \{{\{name\}\}} - $\{{\{price\}\}}
 {{/each}}
 
-Total: ${{total}}
+Total: $\{{\{total\}\}}
 
 {{#if special_instructions}}
 Note: {{special_instructions}}
@@ -519,14 +519,14 @@ Note: {{special_instructions}}
                                         </div>
                                         <div style="text-align: right;">
                                             <div style="background-color: #74b9ff; color: white; padding: 4px 8px; border-radius: 10px; font-size: 12px; margin-bottom: 5px;">{{quantity}}x</div>
-                                            <div style="font-weight: bold; color: #2d3436; font-size: 16px;">${{price}}</div>
+                                            <div style="font-weight: bold; color: #2d3436; font-size: 16px;">$\{{\{price\}\}}</div>
                                         </div>
                                     </div>
                                     {{/each}}
                                     
                                     <div style="display: flex; justify-content: space-between; align-items: center; padding: 20px 0; border-top: 3px solid #00b894; margin-top: 15px;">
                                         <span style="font-size: 20px; font-weight: bold; color: #2d3436;">💰 Total:</span>
-                                        <span style="font-size: 24px; font-weight: bold; color: #00b894;">${{total}}</span>
+                                        <span style="font-size: 24px; font-weight: bold; color: #00b894;">$\{{\{total\}\}}</span>
                                     </div>
                                 </div>
                             </div>
@@ -590,10 +590,10 @@ Order Details:
 
 Your Goodies:
 {{#each items}}
-{{quantity}}x {{name}} - ${{price}}
+\{{\{quantity\}\}}x \{{\{name\}\}} - $\{{\{price\}\}}
 {{/each}}
 
-Total: ${{total}}
+Total: $\{{\{total\}\}}
 
 {{#if special_instructions}}
 Special Instructions: "{{special_instructions}}"

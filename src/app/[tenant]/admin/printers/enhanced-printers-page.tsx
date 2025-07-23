@@ -51,6 +51,7 @@ const printerTypeOptions = [
   { value: 'bar', label: 'Bar Printer', icon: '🍺' },
   { value: 'dot-matrix', label: 'Dot Matrix', icon: '📄' },
   { value: 'label', label: 'Label Printer', icon: '🏷️' },
+  { value: 'kitchen-display', label: 'Kitchen Display System', icon: '🖥️' },
 ];
 
 export default function PrintersPage() {

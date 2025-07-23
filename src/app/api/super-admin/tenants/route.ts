@@ -1,13 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAllTenants, createTenant } from '@/lib/tenant-service';
+import { TenantLicenseChecker } from '@/lib/tenant-license-checker';
 
 export async function GET() {
   try {
-    const tenants = await getAllTenants();
+    // Get tenants with license status information
+    const tenantsWithLicenseStatus = await TenantLicenseChecker.getTenantsWithLicenseStatus();
     
     return NextResponse.json({
       success: true,
-      data: tenants
+      data: tenantsWithLicenseStatus
     });
   } catch (error) {
     console.error('Error fetching tenants:', error);

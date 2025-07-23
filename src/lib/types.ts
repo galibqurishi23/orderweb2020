@@ -144,7 +144,7 @@ export interface DeliveryZone {
     collectionTime: number; // in minutes
 }
 
-export type PrinterType = 'kitchen' | 'receipt' | 'bar' | 'dot-matrix' | 'label';
+export type PrinterType = 'kitchen' | 'receipt' | 'bar' | 'dot-matrix' | 'label' | 'kitchen-display';
 
 export interface Printer {
   id: string;
@@ -303,6 +303,18 @@ export interface Tenant {
   trial_ends_at?: string;
   created_at: string;
   updated_at: string;
+  
+  // License information
+  license_id?: string;
+  license_expires_at?: string;
+  license_status?: string;
+  key_code?: string;
+  duration_days?: number;
+  isTrialActive?: boolean;
+  trialDaysRemaining?: number;
+  licenseDaysRemaining?: number;
+  licenseStatus?: string;
+  overallStatus?: string;
 }
 
 export interface TenantUser {
