@@ -64,11 +64,41 @@ export default function EmailManagementPage() {
   const [customizingTemplate, setCustomizingTemplate] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [activeTemplates, setActiveTemplates] = useState<{
+    templateStatus: {
+      order_confirmation?: { id: string; name: string; };
+      order_complete?: { id: string; name: string; };
+      restaurant_notification?: { id: string; name: string; };
+    };
+    smtpStatus: {
+      configured: boolean;
+      host?: string;
+      port?: number;
+      secure?: boolean;
+      from?: string;
+    };
+  }>({
+    templateStatus: {},
+    smtpStatus: { configured: false }
+  });
   const { toast } = useToast();
 
   useEffect(() => {
     fetchEmailData();
+    fetchActiveTemplates();
   }, []);
+
+  const fetchActiveTemplates = async () => {
+    try {
+      const response = await fetch('/api/tenant/email/active-templates');
+      if (response.ok) {
+        const data = await response.json();
+        setActiveTemplates(data);
+      }
+    } catch (error) {
+      console.error('Error fetching active templates:', error);
+    }
+  };
 
   const fetchEmailData = async () => {
     try {

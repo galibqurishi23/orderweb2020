@@ -17,7 +17,9 @@ import {
   CreditCard,
   ClipboardList,
   Mail,
-  Star
+  Star,
+  Users2,
+  Heart
 } from 'lucide-react';
 import { DineDeskLogo } from '@/components/icons/logo';
 import AdminLogo from '@/components/icons/admin-logo';
@@ -56,13 +58,14 @@ export default function TenantAdminLayout({
     { href: `/${tenant}/admin/orders`, icon: ShoppingBag, label: 'All Orders' },
     { href: `/${tenant}/admin/advance-orders`, icon: Clock, label: 'Advance Orders' },
     { href: `/${tenant}/admin/menu`, icon: ChefHat, label: 'Menu' },
+    { href: `/${tenant}/admin/customer-crm`, icon: Users2, label: 'Customer CRM' },
     { href: `/${tenant}/admin/vouchers`, icon: Tag, label: 'Vouchers' },
     { href: `/${tenant}/admin/zones`, icon: MapPin, label: 'Delivery Zones' },
     { href: `/${tenant}/admin/order-timing`, icon: Clock, label: 'Order Timing' },
     { href: `/${tenant}/admin/order-management`, icon: ClipboardList, label: 'Order Management' },
     { href: `/${tenant}/admin/printers`, icon: Printer, label: 'Printers' },
     { href: `/${tenant}/admin/payments`, icon: CreditCard, label: 'Payments' },
-    { href: `/${tenant}/admin/email`, icon: Mail, label: 'Email Management' },
+    { href: `/${tenant}/admin/email-management`, icon: Mail, label: 'Email Management' },
     { href: `/${tenant}/admin/feedback`, icon: Star, label: 'Customer Feedback' },
     { href: `/${tenant}/admin/reports`, icon: BarChart3, label: 'Reports' },
     { href: `/${tenant}/admin/settings`, icon: Settings, label: 'Settings' }

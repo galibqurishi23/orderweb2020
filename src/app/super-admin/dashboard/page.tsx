@@ -12,9 +12,11 @@ import {
   AlertCircle,
   Loader2,
   Plus,
-  Store
+  Store,
+  Key
 } from "lucide-react";
 import Link from 'next/link';
+import LicenseReminderDashboard from '@/components/license/LicenseReminderDashboard';
 import type { PlatformStats } from '@/lib/types';
 
 export default function SuperAdminDashboard() {
@@ -221,6 +223,21 @@ export default function SuperAdminDashboard() {
           )}
         </CardContent>
       </Card>
+
+      {/* License Management Section */}
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <h2 className="text-xl font-semibold text-gray-900">License Management</h2>
+          <Link href="/super-admin/license-management">
+            <Button variant="outline" size="sm">
+              <Key className="w-4 h-4 mr-2" />
+              Manage Licenses
+            </Button>
+          </Link>
+        </div>
+        
+        <LicenseReminderDashboard />
+      </div>
 
       {/* Quick Actions */}
       <div className="grid gap-4 md:grid-cols-3">

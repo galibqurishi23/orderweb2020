@@ -44,10 +44,14 @@ export default function RestaurantsPage() {
   const [isEditing, setIsEditing] = useState(false);
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [showEditDialog, setShowEditDialog] = useState(false);
+  const [showLicenseDialog, setShowLicenseDialog] = useState(false);
   const [deletingRestaurantId, setDeletingRestaurantId] = useState<string | null>(null);
   const [editingRestaurant, setEditingRestaurant] = useState<any>(null);
+  const [selectedRestaurant, setSelectedRestaurant] = useState<any>(null);
   const [showCreatePassword, setShowCreatePassword] = useState(false);
   const [showEditPassword, setShowEditPassword] = useState(false);
+  const [licenseKey, setLicenseKey] = useState('');
+  const [isAssigningLicense, setIsAssigningLicense] = useState(false);
   const [formData, setFormData] = useState({
     name: '',
     slug: '',
@@ -253,6 +257,45 @@ export default function RestaurantsPage() {
       console.error('Error deleting restaurant:', err);
     } finally {
       setDeletingRestaurantId(null);
+    }
+  };
+
+  const handleAssignLicense = async () => {
+    if (!licenseKey.trim() || !selectedRestaurant) {
+      setError('Please enter a license key');
+      return;
+    }
+
+    setIsAssigningLicense(true);
+    setError(null);
+
+    try {
+      const response = await fetch('/api/tenant/license', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          licenseKey: licenseKey.trim().toUpperCase(),
+          tenantId: selectedRestaurant.id
+        })
+      });
+
+      const result = await response.json();
+
+      if (result.success) {
+        setSuccessMessage(`License key assigned successfully to ${selectedRestaurant.name}`);
+        setShowLicenseDialog(false);
+        setLicenseKey('');
+        setSelectedRestaurant(null);
+        await fetchRestaurants(); // Refresh the list
+        setTimeout(() => setSuccessMessage(null), 3000);
+      } else {
+        setError(result.error || 'Failed to assign license key');
+      }
+    } catch (err) {
+      setError('Failed to assign license key');
+      console.error('Error assigning license:', err);
+    } finally {
+      setIsAssigningLicense(false);
     }
   };
 
@@ -833,41 +876,91 @@ export default function RestaurantsPage() {
                       <Calendar className="h-4 w-4 text-gray-400" />
                       <span>Created {new Date(restaurant.created_at).toLocaleDateString()}</span>
                     </div>
+                    
+                    {/* License Information */}
+                    {restaurant.key_code && (
+                      <div className="flex items-center space-x-3 text-sm text-gray-600">
+                        <Key className="h-4 w-4 text-green-500" />
+                        <span className="font-medium">License: {restaurant.key_code}</span>
+                      </div>
+                    )}
+                    
+                    {restaurant.license_expires_at && (
+                      <div className="flex items-center space-x-3 text-sm">
+                        <Calendar className="h-4 w-4 text-blue-500" />
+                        <span className={`font-medium ${
+                          (restaurant.licenseDaysRemaining ?? 0) <= 7 ? 'text-red-600' :
+                          (restaurant.licenseDaysRemaining ?? 0) <= 30 ? 'text-orange-600' : 'text-green-600'
+                        }`}>
+                          Expires: {new Date(restaurant.license_expires_at).toLocaleDateString()}
+                          {restaurant.licenseDaysRemaining !== undefined && restaurant.licenseDaysRemaining > 0 && (
+                            <span className="ml-1">({restaurant.licenseDaysRemaining} days left)</span>
+                          )}
+                        </span>
+                      </div>
+                    )}
+                    
+                    {restaurant.isTrialActive && (
+                      <div className="flex items-center space-x-3 text-sm">
+                        <AlertCircle className="h-4 w-4 text-orange-500" />
+                        <span className="font-medium text-orange-600">
+                          Trial: {restaurant.trialDaysRemaining} day(s) remaining
+                        </span>
+                      </div>
+                    )}
                   </div>
 
-                  {/* Subscription Info */}
+                  {/* Status Info */}
                   <div className="flex flex-wrap gap-2 pt-2 border-t border-gray-100">
                     <Badge variant="outline" className="text-xs">
-                      {restaurant.subscription_plan}
+                      {restaurant.subscription_plan || 'Free'}
                     </Badge>
-                    <Badge variant={restaurant.subscription_status === 'active' ? 'default' : 'secondary'} className="text-xs">
-                      {restaurant.subscription_status}
+                    <Badge variant={restaurant.overallStatus === 'licensed' ? 'default' : 
+                                   restaurant.overallStatus === 'trial' ? 'secondary' : 'destructive'} 
+                           className="text-xs">
+                      {restaurant.overallStatus}
                     </Badge>
+                    {restaurant.licenseStatus && restaurant.licenseStatus !== 'none' && (
+                      <Badge variant={restaurant.licenseStatus === 'active' ? 'default' : 'destructive'} 
+                             className="text-xs">
+                        License: {restaurant.licenseStatus}
+                      </Badge>
+                    )}
                   </div>
 
                   {/* Action Buttons */}
                   <div className="pt-4 border-t border-gray-100">
                     {/* Quick Links */}
-                    {restaurant.status === 'active' && (
-                      <div className="grid grid-cols-2 gap-2 mb-3">
-                        <Button asChild variant="outline" size="sm" className="text-xs h-8">
-                          <Link href={`/${restaurant.slug}/admin`} target="_blank" className="flex items-center">
-                            <ExternalLink className="h-3 w-3 mr-1" />
-                            Admin
-                          </Link>
-                        </Button>
-                        <Button asChild variant="outline" size="sm" className="text-xs h-8">
-                          <Link href={`/${restaurant.slug}`} target="_blank" className="flex items-center">
-                            <Eye className="h-3 w-3 mr-1" />
-                            View Store
-                          </Link>
-                        </Button>
-                      </div>
-                    )}
+                    <div className="grid grid-cols-2 gap-2 mb-3">
+                      <Button asChild variant="outline" size="sm" className="text-xs h-8">
+                        <Link href={`/${restaurant.slug}/admin`} target="_blank" className="flex items-center">
+                          <ExternalLink className="h-3 w-3 mr-1" />
+                          Admin
+                        </Link>
+                      </Button>
+                      <Button asChild variant="outline" size="sm" className="text-xs h-8">
+                        <Link href={`/${restaurant.slug}`} target="_blank" className="flex items-center">
+                          <Eye className="h-3 w-3 mr-1" />
+                          View Store
+                        </Link>
+                      </Button>
+                    </div>
 
                     {/* Management Actions */}
                     <div className="flex justify-between items-center">
                       <div className="flex space-x-2">
+                        <Button 
+                          variant="outline" 
+                          size="sm"
+                          onClick={() => {
+                            setSelectedRestaurant(restaurant);
+                            setShowLicenseDialog(true);
+                          }}
+                          className="h-8 w-8 p-0 hover:bg-green-50 hover:border-green-200 hover:text-green-600"
+                          title="Assign License Key"
+                        >
+                          <Key className="h-3 w-3" />
+                        </Button>
                         <Button 
                           variant="outline" 
                           size="sm"
@@ -962,6 +1055,64 @@ export default function RestaurantsPage() {
           </div>
         )}
       </div>
+
+      {/* License Assignment Dialog */}
+      <Dialog open={showLicenseDialog} onOpenChange={setShowLicenseDialog}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Key className="h-5 w-5 text-blue-600" />
+              Assign License Key
+            </DialogTitle>
+            <DialogDescription>
+              Enter a license key for {selectedRestaurant?.name}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="license-key" className="text-right">
+                License Key
+              </Label>
+              <Input
+                id="license-key"
+                value={licenseKey}
+                onChange={(e) => setLicenseKey(e.target.value)}
+                placeholder="Enter license key"
+                className="col-span-3"
+              />
+            </div>
+          </div>
+          <div className="flex justify-end gap-3">
+            <Button 
+              variant="outline" 
+              onClick={() => {
+                setShowLicenseDialog(false);
+                setLicenseKey('');
+                setSelectedRestaurant(null);
+              }}
+            >
+              Cancel
+            </Button>
+            <Button 
+              onClick={handleAssignLicense}
+              disabled={isAssigningLicense || !licenseKey.trim()}
+              className="bg-blue-600 hover:bg-blue-700"
+            >
+              {isAssigningLicense ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Assigning...
+                </>
+              ) : (
+                <>
+                  <Key className="mr-2 h-4 w-4" />
+                  Assign License
+                </>
+              )}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

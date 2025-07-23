@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createTenantOrder } from '@/lib/tenant-order-service';
 import { getTenantSettings } from '@/lib/tenant-service';
 import { checkOrderCapacity } from '@/lib/order-capacity-service';
-import { EmailService } from '@/lib/email-service';
+import { emailService } from '@/lib/universal-email-service';
 import db from '@/lib/db';
 
 export async function POST(request: NextRequest) {
@@ -94,8 +94,6 @@ export async function POST(request: NextRequest) {
       const tenantData = (tenantRows as any[])[0];
       
       if (tenantData && orderData.customerEmail) {
-        const emailService = new EmailService();
-        
         // Prepare order data for email
         const emailOrderData = {
           id: orderResult.id,
@@ -127,7 +125,54 @@ export async function POST(request: NextRequest) {
         };
         
         // Send order confirmation and restaurant notification emails
-        await emailService.sendAllOrderEmails(tenantId, emailOrderData, emailTenantData);
+        try {
+          // Send customer order confirmation email
+          await emailService.sendEmail({
+            to: emailOrderData.customer_email,
+            subject: `Order Confirmation #${emailOrderData.id} - ${emailTenantData.business_name}`,
+            html: `
+              <h2>Order Confirmation</h2>
+              <p>Dear ${emailOrderData.customer_name},</p>
+              <p>Thank you for your order!</p>
+              <h3>Order Details:</h3>
+              <ul>
+                ${emailOrderData.items.map((item: any) => `
+                  <li>${item.name} x ${item.quantity} - £${item.price.toFixed(2)}</li>
+                `).join('')}
+              </ul>
+              <p><strong>Total: £${emailOrderData.total.toFixed(2)}</strong></p>
+              <p>Order Type: ${emailOrderData.order_type}</p>
+              ${emailOrderData.delivery_address ? `<p>Delivery Address: ${emailOrderData.delivery_address}</p>` : ''}
+              ${emailOrderData.special_instructions ? `<p>Special Instructions: ${emailOrderData.special_instructions}</p>` : ''}
+              <p>Best regards,<br>${emailTenantData.business_name}</p>
+            `
+          }, { type: 'tenant', tenantId, userId: emailOrderData.id });
+
+          // Send restaurant notification email
+          await emailService.sendEmail({
+            to: emailTenantData.email,
+            subject: `New Order #${emailOrderData.id} - ${emailTenantData.business_name}`,
+            html: `
+              <h2>New Order Received</h2>
+              <h3>Customer Details:</h3>
+              <p>Name: ${emailOrderData.customer_name}</p>
+              <p>Phone: ${emailOrderData.phone}</p>
+              <p>Email: ${emailOrderData.customer_email}</p>
+              <h3>Order Details:</h3>
+              <ul>
+                ${emailOrderData.items.map((item: any) => `
+                  <li>${item.name} x ${item.quantity} - £${item.price.toFixed(2)}</li>
+                `).join('')}
+              </ul>
+              <p><strong>Total: £${emailOrderData.total.toFixed(2)}</strong></p>
+              <p>Order Type: ${emailOrderData.order_type}</p>
+              ${emailOrderData.delivery_address ? `<p>Delivery Address: ${emailOrderData.delivery_address}</p>` : ''}
+              ${emailOrderData.special_instructions ? `<p>Special Instructions: ${emailOrderData.special_instructions}</p>` : ''}
+            `
+          }, { type: 'tenant', tenantId, userId: emailOrderData.id });
+        } catch (emailSendError) {
+          console.error('❌ Error sending order emails:', emailSendError);
+        }
         
         console.log('✅ Email notifications sent successfully');
       }
