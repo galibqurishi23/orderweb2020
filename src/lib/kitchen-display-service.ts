@@ -315,7 +315,7 @@ export class KitchenDisplayService {
   ): Promise<void> {
     try {
       const updateFields = ['status = ?', 'updated_at = NOW()'];
-      const updateValues = [newStatus];
+      const updateValues: any[] = [newStatus];
 
       if (newStatus === 'preparing') {
         updateFields.push('acknowledged_at = NOW()');
