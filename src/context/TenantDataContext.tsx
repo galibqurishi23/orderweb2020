@@ -129,13 +129,26 @@ export const TenantDataProvider = ({ children }: { children: ReactNode }) => {
             ]);
             
             // Fetch menu data using new API
-            const menuResponse = await fetch(`/api/menu?tenantId=${tenantData.id}&action=menu`);
+            const menuResponse = await fetch(`/api/menu?tenantId=${tenantData.slug}&action=menu`);
             const menuData = await menuResponse.json();
             
             if (menuData.success) {
                 const menuWithCategories = menuData.data;
                 setCategories(menuWithCategories.map((item: any) => item.category));
-                setMenuItems(menuWithCategories.flatMap((item: any) => item.items));
+                
+                // Process menu items 
+                const processedMenuItems = menuWithCategories.flatMap((categoryData: any) => 
+                    categoryData.items.map((item: any) => {
+                        return {
+                            ...item,
+                            // Remove addons property
+                            addons: undefined
+                        };
+                    })
+                );
+                
+                console.log('🔍 TenantDataContext refreshData - Setting processed menu items:', processedMenuItems.length);
+                setMenuItems(processedMenuItems);
             }
             
             setCustomers(dbCustomers);
@@ -179,6 +192,18 @@ export const TenantDataProvider = ({ children }: { children: ReactNode }) => {
                     orderTypeSettings: {
                         ...defaultRestaurantSettings.orderTypeSettings,
                         ...(parsedSettings.orderTypeSettings || {})
+                    },
+                    collectionTimeSettings: {
+                        ...defaultRestaurantSettings.collectionTimeSettings,
+                        ...(parsedSettings.collectionTimeSettings || {})
+                    },
+                    deliveryTimeSettings: {
+                        ...defaultRestaurantSettings.deliveryTimeSettings,
+                        ...(parsedSettings.deliveryTimeSettings || {})
+                    },
+                    advanceOrderSettings: {
+                        ...defaultRestaurantSettings.advanceOrderSettings,
+                        ...(parsedSettings.advanceOrderSettings || {})
                     },
                     theme: {
                         ...defaultRestaurantSettings.theme,
@@ -249,6 +274,33 @@ export const TenantDataProvider = ({ children }: { children: ReactNode }) => {
         }
     }, [restaurantSettings?.theme]);
 
+    // Check for existing authentication on load
+    useEffect(() => {
+        const checkAuth = async () => {
+            if (!tenantData?.id) return;
+            
+            try {
+                const response = await fetch('/api/customer/auth/logout', {
+                    method: 'GET',
+                    credentials: 'include'
+                });
+                
+                const result = await response.json();
+                
+                if (result.authenticated && result.customer) {
+                    // Get customer addresses
+                    const addresses = await TenantCustomerService.getTenantCustomerAddresses(tenantData.id, result.customer.id);
+                    result.customer.addresses = addresses;
+                    setCurrentUser(result.customer);
+                }
+            } catch (error) {
+                console.error('Auth check error:', error);
+            }
+        };
+        
+        checkAuth();
+    }, [tenantData?.id]);
+
     // --- Handler Functions ---
     const createOrder = async (orderData: Omit<Order, 'id' | 'createdAt' | 'status' | 'orderNumber'>) => {
         if (!tenantData?.id) throw new Error('No tenant selected');
@@ -273,13 +325,27 @@ export const TenantDataProvider = ({ children }: { children: ReactNode }) => {
     const saveMenuItem = async (item: MenuItem) => {
         if (!tenantData?.id) throw new Error('No tenant selected');
         
+        console.log('🔍 TenantDataContext - Saving menu item:', {
+            itemId: item.id,
+            itemName: item.name,
+            tenantId: tenantData.id,
+            hasAddons: !!(item as any).addons && (item as any).addons.length > 0,
+            addonsCount: (item as any).addons?.length || 0
+        });
+        
         // Determine if this is an update or create based on whether the item has an ID
         // and whether we can find it in the existing items
         const isUpdate = item.id && item.id.length > 0 && menuItems?.some(existingItem => existingItem.id === item.id);
         const action = isUpdate ? 'update-menu-item' : 'create-menu-item';
         const method = isUpdate ? 'PUT' : 'POST';
         
-        const response = await fetch(`/api/menu?tenantId=${tenantData.id}&action=${action}`, {
+        console.log('📡 API Request:', {
+            url: `/api/menu?tenantId=${tenantData.slug}&action=${action}`,
+            method,
+            isUpdate
+        });
+        
+        const response = await fetch(`/api/menu?tenantId=${tenantData.slug}&action=${action}`, {
             method: method,
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(item)
@@ -287,16 +353,22 @@ export const TenantDataProvider = ({ children }: { children: ReactNode }) => {
         
         if (!response.ok) {
             const errorData = await response.json();
+            console.error('❌ API Error Response:', {
+                status: response.status,
+                statusText: response.statusText,
+                errorData
+            });
             throw new Error(errorData.error || 'Failed to save menu item');
         }
         
+        console.log('✅ Menu item saved successfully');
         await refreshData();
     };
 
     const deleteMenuItem = async (itemId: string) => {
         if (!tenantData?.id) throw new Error('No tenant selected');
         
-        const response = await fetch(`/api/menu?tenantId=${tenantData.id}&action=delete-menu-item&id=${itemId}`, {
+        const response = await fetch(`/api/menu?tenantId=${tenantData.slug}&action=delete-menu-item&id=${itemId}`, {
             method: 'DELETE'
         });
         
@@ -316,7 +388,7 @@ export const TenantDataProvider = ({ children }: { children: ReactNode }) => {
         const action = isUpdate ? 'update-category' : 'create-category';
         const method = isUpdate ? 'PUT' : 'POST';
         
-        const response = await fetch(`/api/menu?tenantId=${tenantData.id}&action=${action}`, {
+        const response = await fetch(`/api/menu?tenantId=${tenantData.slug}&action=${action}`, {
             method: method,
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(category)
@@ -333,7 +405,7 @@ export const TenantDataProvider = ({ children }: { children: ReactNode }) => {
     const deleteCategory = async (categoryId: string) => {
         if (!tenantData?.id) throw new Error('No tenant selected');
         
-        const response = await fetch(`/api/menu?tenantId=${tenantData.id}&action=delete-category&id=${categoryId}`, {
+        const response = await fetch(`/api/menu?tenantId=${tenantData.slug}&action=delete-category&id=${categoryId}`, {
             method: 'DELETE'
         });
         
@@ -394,19 +466,47 @@ export const TenantDataProvider = ({ children }: { children: ReactNode }) => {
     const login = async (email: string, password: string): Promise<boolean> => {
         if (!tenantData?.id) return false;
         
-        const customer = await TenantCustomerService.authenticateTenantCustomer(tenantData.id, email, password);
-        if (customer) {
-            // Get customer addresses
-            const addresses = await TenantCustomerService.getTenantCustomerAddresses(tenantData.id, customer.id);
-            customer.addresses = addresses;
-            setCurrentUser(customer);
-            return true;
+        try {
+            const response = await fetch('/api/customer/auth/login', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                credentials: 'include', // Important for cookies
+                body: JSON.stringify({
+                    email,
+                    password,
+                    tenantId: tenantData.id
+                })
+            });
+
+            const result = await response.json();
+
+            if (result.success && result.customer) {
+                // Get customer addresses
+                const addresses = await TenantCustomerService.getTenantCustomerAddresses(tenantData.id, result.customer.id);
+                result.customer.addresses = addresses;
+                setCurrentUser(result.customer);
+                return true;
+            }
+            return false;
+        } catch (error) {
+            console.error('Login error:', error);
+            return false;
         }
-        return false;
     };
 
-    const logout = () => {
-        setCurrentUser(null);
+    const logout = async () => {
+        try {
+            await fetch('/api/customer/auth/logout', {
+                method: 'POST',
+                credentials: 'include'
+            });
+        } catch (error) {
+            console.error('Logout error:', error);
+        } finally {
+            setCurrentUser(null);
+        }
     };
 
     const updateUserDetails = async (updatedDetails: Partial<Customer>) => {
@@ -457,33 +557,27 @@ export const TenantDataProvider = ({ children }: { children: ReactNode }) => {
                 icon: category.icon,
                 color: category.color
             },
-            items: menuItems.filter(item => item.categoryId === category.id).map(item => ({
-                id: item.id,
-                name: item.name,
-                description: item.description || '',
-                price: item.price,
-                imageUrl: item.imageUrl,
-                imageHint: item.imageHint,
-                available: item.available,
-                categoryId: item.categoryId || '',
-                addons: item.addons ? item.addons.flatMap(group => 
-                    group.options.map(option => ({
-                        id: option.id,
-                        name: option.name,
-                        price: option.price,
-                        type: 'extra' as const,
-                        required: group.required,
-                        multiple: group.multiple,
-                        maxSelections: group.maxSelections
-                    }))
-                ) : [],
-                characteristics: item.characteristics || [],
-                nutrition: item.nutrition || {},
-                isSetMenu: item.isSetMenu,
-                setMenuItems: item.setMenuItems || [],
-                preparationTime: item.preparationTime,
-                tags: item.tags || []
-            }))
+            items: menuItems.filter(item => item.categoryId === category.id).map(item => {
+                const processedItem = {
+                    id: item.id,
+                    name: item.name,
+                    description: item.description || '',
+                    price: item.price,
+                    image: item.image, // Fixed: use 'image' instead of 'imageUrl'
+                    imageHint: item.imageHint,
+                    available: item.available,
+                    categoryId: item.categoryId || '',
+                    addons: [],
+                    characteristics: item.characteristics || [],
+                    nutrition: item.nutrition || {},
+                    isSetMenu: item.isSetMenu,
+                    setMenuItems: item.setMenuItems || [],
+                    preparationTime: item.preparationTime,
+                    tags: item.tags || []
+                };
+                
+                return processedItem;
+            })
         }));
     };
 

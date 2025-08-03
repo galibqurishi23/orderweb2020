@@ -17,12 +17,25 @@ export async function GET(request: NextRequest) {
 
     // Get customer addresses
     const query = `
-      SELECT * FROM customer_addresses 
+      SELECT * FROM addresses 
       WHERE customer_id = ? 
       ORDER BY is_default DESC, created_at DESC
     `;
 
-    const addresses = await db.query(query, [customerId]);
+    const dbAddresses = await db.query(query, [customerId]);
+    
+    // Map database fields to frontend format
+    const addresses = (dbAddresses as any[]).map(addr => ({
+      id: addr.id,
+      type: addr.type === 'delivery' ? 'home' : 'work', // Map to frontend type
+      isDefault: !!addr.is_default,
+      addressLine1: addr.street_address.split(', ')[0] || addr.street_address,
+      addressLine2: addr.street_address.split(', ')[1] || '',
+      city: addr.city,
+      postcode: addr.postal_code,
+      country: addr.country,
+      createdAt: addr.created_at
+    }));
 
     return NextResponse.json({ addresses });
 
@@ -61,29 +74,34 @@ export async function POST(request: NextRequest) {
     // If this is being set as default, update all other addresses to not be default
     if (isDefault) {
       await db.query(
-        'UPDATE customer_addresses SET is_default = FALSE WHERE customer_id = ?',
+        'UPDATE addresses SET is_default = FALSE WHERE customer_id = ?',
         [customerId]
       );
     }
 
-    // Insert new address
+    // Generate ID for the new address
+    const addressId = `addr_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+
+    // Insert new address - mapping to actual database schema
     const insertQuery = `
-      INSERT INTO customer_addresses 
-      (customer_id, type, is_default, address_line_1, address_line_2, city, postcode, county, country, delivery_instructions)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO addresses 
+      (id, customer_id, type, street_address, city, postal_code, country, is_default)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     `;
 
+    // Map the form data to database schema
+    const addressType = type === 'home' || type === 'work' ? 'delivery' : 'delivery'; // addresses table only has delivery/billing
+    const streetAddress = addressLine2 ? `${addressLine1}, ${addressLine2}` : addressLine1;
+
     await db.query(insertQuery, [
+      addressId,
       customerId,
-      type,
-      isDefault,
-      addressLine1,
-      addressLine2 || null,
+      addressType,
+      streetAddress,
       city,
       postcode,
-      county || null,
       country,
-      deliveryInstructions || null
+      isDefault ? 1 : 0
     ]);
 
     return NextResponse.json({ success: true });

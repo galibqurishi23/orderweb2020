@@ -1,73 +1,83 @@
 import { NextRequest, NextResponse } from 'next/server';
+import PhoneLoyaltyService from '@/lib/phone-loyalty-service';
 import db from '@/lib/db';
+import jwt from 'jsonwebtoken';
 
+/**
+ * Get current customer's loyalty data
+ * GET /api/customer/loyalty
+ */
 export async function GET(request: NextRequest) {
   try {
-    const { searchParams } = new URL(request.url);
-    const customerId = searchParams.get('customerId');
-    const tenantId = searchParams.get('tenantId');
+    // Get JWT token from cookie
+    const token = request.cookies.get('customer_token')?.value;
+    
+    if (!token) {
+      return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
+    }
 
-    if (!customerId || !tenantId) {
+    // Verify JWT token
+    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'fallback_secret') as any;
+    const customerId = decoded.customerId;
+    const tenantId = decoded.tenantId;
+
+    // Get customer data including phone number
+    const [customerResult] = await db.execute(
+      'SELECT phone, name, email FROM customers WHERE id = ? AND tenant_id = ?',
+      [customerId, tenantId]
+    );
+
+    const customer = (customerResult as any[])[0];
+    if (!customer || !customer.phone) {
       return NextResponse.json({
         success: false,
-        error: 'Customer ID and Tenant ID are required'
-      }, { status: 400 });
+        error: 'Customer not found or no phone number registered',
+        needsPhone: !customer?.phone
+      }, { status: 404 });
     }
 
-    // Get customer loyalty data
-    const [loyaltyResult] = await db.execute(`
-      SELECT 
-        lp.points_balance,
-        lp.total_points_earned,
-        lp.total_points_redeemed,
-        lp.tier_level,
-        lps.silver_min_points,
-        lps.gold_min_points,
-        lps.platinum_min_points
-      FROM customer_loyalty_points lp
-      LEFT JOIN loyalty_program_settings lps ON lp.tenant_id = lps.tenant_id
-      WHERE lp.customer_id = ? AND lp.tenant_id = ?
-    `, [customerId, tenantId]);
+    // Get loyalty data by phone
+    const loyaltyCustomer = await PhoneLoyaltyService.lookupByPhone(customer.phone, tenantId);
 
-    const loyalty = (loyaltyResult as any[])[0];
-    
-    if (!loyalty) {
-      // Create loyalty record if it doesn't exist
-      await db.execute(
-        'INSERT INTO customer_loyalty_points (customer_id, tenant_id, points_balance, tier_level) VALUES (?, ?, 0, "bronze")',
-        [customerId, tenantId]
-      );
-      
+    if (!loyaltyCustomer) {
+      // Customer exists but not in loyalty program
       return NextResponse.json({
-        success: true,
-        loyalty: {
-          points_balance: 0,
-          total_points_earned: 0,
-          total_points_redeemed: 0,
-          tier_level: 'bronze',
-          next_tier_points: 500
-        }
-      });
+        success: false,
+        error: 'Not enrolled in loyalty program',
+        canJoin: true,
+        phone: customer.phone,
+        customerName: customer.name
+      }, { status: 404 });
     }
 
-    // Calculate next tier points needed
-    let nextTierPoints = 0;
-    if (loyalty.tier_level === 'bronze') {
-      nextTierPoints = loyalty.silver_min_points || 500;
-    } else if (loyalty.tier_level === 'silver') {
-      nextTierPoints = loyalty.gold_min_points || 1500;
-    } else if (loyalty.tier_level === 'gold') {
-      nextTierPoints = loyalty.platinum_min_points || 3000;
-    } else {
-      nextTierPoints = loyalty.total_points_earned; // Already at max tier
-    }
+    // Get recent transaction history
+    const recentTransactions = await PhoneLoyaltyService.getTransactionHistory(
+      customer.phone,
+      tenantId,
+      10
+    );
+
+    // Get loyalty program settings
+    const loyaltySettings = await PhoneLoyaltyService.getLoyaltySettings(tenantId);
 
     return NextResponse.json({
       success: true,
       loyalty: {
-        ...loyalty,
-        next_tier_points: nextTierPoints
-      }
+        phone: loyaltyCustomer.phone,
+        displayPhone: loyaltyCustomer.displayPhone,
+        loyaltyCardNumber: loyaltyCustomer.loyaltyCardNumber,
+        pointsBalance: loyaltyCustomer.pointsBalance,
+        totalPointsEarned: loyaltyCustomer.totalPointsEarned,
+        totalPointsRedeemed: loyaltyCustomer.totalPointsRedeemed,
+        tierLevel: loyaltyCustomer.tierLevel,
+        nextTierPoints: loyaltyCustomer.nextTierPoints,
+        totalOrders: loyaltyCustomer.totalOrders,
+        totalSpent: loyaltyCustomer.totalSpent,
+        joinedDate: loyaltyCustomer.joinedDate,
+        lastOrderDate: loyaltyCustomer.lastOrderDate
+      },
+      recentTransactions,
+      settings: loyaltySettings
     });
 
   } catch (error) {
@@ -75,6 +85,88 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({
       success: false,
       error: 'Failed to fetch loyalty data'
+    }, { status: 500 });
+  }
+}
+
+/**
+ * Join loyalty program
+ * POST /api/customer/loyalty
+ */
+export async function POST(request: NextRequest) {
+  try {
+    // Get JWT token from cookie
+    const token = request.cookies.get('customer_token')?.value;
+    
+    if (!token) {
+      return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
+    }
+
+    // Verify JWT token
+    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'fallback_secret') as any;
+    const customerId = decoded.customerId;
+    const tenantId = decoded.tenantId;
+
+    // Get customer data
+    const [customerResult] = await db.execute(
+      'SELECT phone, name, email FROM customers WHERE id = ? AND tenant_id = ?',
+      [customerId, tenantId]
+    );
+
+    const customer = (customerResult as any[])[0];
+    if (!customer) {
+      return NextResponse.json({
+        success: false,
+        error: 'Customer not found'
+      }, { status: 404 });
+    }
+
+    if (!customer.phone) {
+      return NextResponse.json({
+        success: false,
+        error: 'Phone number required to join loyalty program',
+        needsPhone: true
+      }, { status: 400 });
+    }
+
+    // Check if already enrolled
+    const existingLoyalty = await PhoneLoyaltyService.lookupByPhone(customer.phone, tenantId);
+    if (existingLoyalty) {
+      return NextResponse.json({
+        success: false,
+        error: 'Already enrolled in loyalty program',
+        loyalty: existingLoyalty
+      }, { status: 409 });
+    }
+
+    // Create loyalty membership
+    const newLoyaltyCustomer = await PhoneLoyaltyService.createLoyaltyMember(
+      customer.phone,
+      tenantId,
+      customer.name,
+      customerId
+    );
+
+    if (!newLoyaltyCustomer) {
+      return NextResponse.json({
+        success: false,
+        error: 'Failed to join loyalty program'
+      }, { status: 500 });
+    }
+
+    console.log(`🎉 Customer ${customer.name} joined loyalty program with card: ${newLoyaltyCustomer.loyaltyCardNumber}`);
+
+    return NextResponse.json({
+      success: true,
+      message: `Welcome to our loyalty program! You've earned ${newLoyaltyCustomer.pointsBalance} welcome bonus points.`,
+      loyalty: newLoyaltyCustomer
+    }, { status: 201 });
+
+  } catch (error) {
+    console.error('Error joining loyalty program:', error);
+    return NextResponse.json({
+      success: false,
+      error: 'Failed to join loyalty program'
     }, { status: 500 });
   }
 }

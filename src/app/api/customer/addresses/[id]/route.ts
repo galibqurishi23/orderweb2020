@@ -29,7 +29,7 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
     } = body;
 
     // Verify the address belongs to the customer
-    const checkQuery = 'SELECT id FROM customer_addresses WHERE id = ? AND customer_id = ?';
+    const checkQuery = 'SELECT id FROM addresses WHERE id = ? AND customer_id = ?';
     const existingAddresses = await db.query(checkQuery, [params.id, customerId]);
     
     if (!existingAddresses || (existingAddresses as any[]).length === 0) {
@@ -39,29 +39,28 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
     // If this is being set as default, update all other addresses to not be default
     if (isDefault) {
       await db.query(
-        'UPDATE customer_addresses SET is_default = FALSE WHERE customer_id = ? AND id != ?',
+        'UPDATE addresses SET is_default = FALSE WHERE customer_id = ? AND id != ?',
         [customerId, params.id]
       );
     }
 
-    // Update address
+    // Update address - mapping to actual database schema
+    const addressType = type === 'home' || type === 'work' ? 'delivery' : 'delivery';
+    const streetAddress = addressLine2 ? `${addressLine1}, ${addressLine2}` : addressLine1;
+    
     const updateQuery = `
-      UPDATE customer_addresses 
-      SET type = ?, is_default = ?, address_line_1 = ?, address_line_2 = ?, 
-          city = ?, postcode = ?, county = ?, country = ?, delivery_instructions = ?
+      UPDATE addresses 
+      SET type = ?, is_default = ?, street_address = ?, city = ?, postal_code = ?, country = ?
       WHERE id = ? AND customer_id = ?
     `;
 
     await db.query(updateQuery, [
-      type,
-      isDefault,
-      addressLine1,
-      addressLine2 || null,
+      addressType,
+      isDefault ? 1 : 0,
+      streetAddress,
       city,
       postcode,
-      county || null,
       country,
-      deliveryInstructions || null,
       params.id,
       customerId
     ]);
@@ -88,7 +87,7 @@ export async function DELETE(request: NextRequest, { params }: { params: { id: s
     const customerId = decoded.customerId;
 
     // Verify the address belongs to the customer
-    const checkQuery = 'SELECT id, is_default FROM customer_addresses WHERE id = ? AND customer_id = ?';
+    const checkQuery = 'SELECT id, is_default FROM addresses WHERE id = ? AND customer_id = ?';
     const existingAddresses = await db.query(checkQuery, [params.id, customerId]);
     
     if (!existingAddresses || (existingAddresses as any[]).length === 0) {
@@ -99,7 +98,7 @@ export async function DELETE(request: NextRequest, { params }: { params: { id: s
 
     // Don't allow deletion of the default address if it's the only one
     if (address.is_default) {
-      const countQuery = 'SELECT COUNT(*) as count FROM customer_addresses WHERE customer_id = ?';
+      const countQuery = 'SELECT COUNT(*) as count FROM addresses WHERE customer_id = ?';
       const countResult = await db.query(countQuery, [customerId]);
       const totalAddresses = (countResult[0] as any).count;
 
@@ -111,7 +110,7 @@ export async function DELETE(request: NextRequest, { params }: { params: { id: s
 
       // If deleting default address and there are others, make the next one default
       await db.query(
-        `UPDATE customer_addresses 
+        `UPDATE addresses 
          SET is_default = TRUE 
          WHERE customer_id = ? AND id != ? 
          ORDER BY created_at ASC 
@@ -122,7 +121,7 @@ export async function DELETE(request: NextRequest, { params }: { params: { id: s
 
     // Delete the address
     await db.query(
-      'DELETE FROM customer_addresses WHERE id = ? AND customer_id = ?',
+      'DELETE FROM addresses WHERE id = ? AND customer_id = ?',
       [params.id, customerId]
     );
 

@@ -154,7 +154,8 @@ export default function ReportsPage() {
             return;
         }
 
-        const headers = ['Order ID', 'Date', 'Customer Name', 'Phone Number', 'Total Bill', 'VAT'];
+        const headers = ['Order ID', 'Date', 'Customer Name', 'Phone Number', 'Total Bill'];
+        // VAT/Tax column removed - application is tax-free
         const csvRows = [
             headers.join(','),
             ...filteredOrders.map(order => [
@@ -162,8 +163,8 @@ export default function ReportsPage() {
                 format(order.createdAt, 'yyyy-MM-dd HH:mm:ss'),
                 `"${order.customerName.replace(/"/g, '""')}"`, // Handle commas in names
                 order.customerPhone || 'N/A',
-                (parseFloat(order.total?.toString() || '0') || 0).toFixed(2),
-                (parseFloat(order.tax?.toString() || '0') || 0).toFixed(2)
+                (parseFloat(order.total?.toString() || '0') || 0).toFixed(2)
+                // Tax removed - application is tax-free
             ].join(','))
         ];
         const csvString = csvRows.join('\n');
@@ -331,7 +332,7 @@ export default function ReportsPage() {
                                     <TableHead>Customer Name</TableHead>
                                     <TableHead>Phone Number</TableHead>
                                     <TableHead className="text-right">Total Bill</TableHead>
-                                    <TableHead className="text-right">VAT</TableHead>
+                                    {/* VAT/Tax column removed - application is tax-free */}
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
@@ -343,7 +344,7 @@ export default function ReportsPage() {
                                             <TableCell>{order.customerName}</TableCell>
                                             <TableCell>{order.customerPhone || 'N/A'}</TableCell>
                                             <TableCell className="text-right">{currencySymbol}{(parseFloat(order.total?.toString() || '0') || 0).toFixed(2)}</TableCell>
-                                            <TableCell className="text-right">{currencySymbol}{(parseFloat(order.tax?.toString() || '0') || 0).toFixed(2)}</TableCell>
+                                            {/* Tax column removed - application is tax-free */}
                                         </TableRow>
                                     ))
                                 ) : (

@@ -13,12 +13,24 @@ import {
     getMenuWithCategories,
     getMenuStats
 } from '@/lib/new-menu-service';
+import { getTenantBySlug } from '@/lib/tenant-service';
 import { MenuApiResponse } from '@/lib/menu-types';
 
 // Helper function to get tenant ID from request
 function getTenantId(request: NextRequest): string | null {
     const { searchParams } = new URL(request.url);
     return searchParams.get('tenantId');
+}
+
+// Helper function to get tenant UUID from slug
+async function getTenantUUID(tenantSlug: string): Promise<string | null> {
+    try {
+        const tenant = await getTenantBySlug(tenantSlug);
+        return tenant?.id || null;
+    } catch (error) {
+        console.error('Error getting tenant UUID:', error);
+        return null;
+    }
 }
 
 // Helper function to create error response
@@ -42,9 +54,15 @@ function createSuccessResponse<T>(data: T, message?: string): NextResponse {
 
 export async function GET(request: NextRequest): Promise<NextResponse> {
     try {
-        const tenantId = getTenantId(request);
-        if (!tenantId) {
+        const tenantSlug = getTenantId(request);
+        if (!tenantSlug) {
             return createErrorResponse('Tenant ID is required', 400);
+        }
+
+        // Convert tenant slug to UUID for database operations
+        const tenantUUID = await getTenantUUID(tenantSlug);
+        if (!tenantUUID) {
+            return createErrorResponse('Tenant not found', 404);
         }
 
         const { searchParams } = new URL(request.url);
@@ -54,34 +72,34 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
         switch (action) {
             case 'categories':
                 if (id) {
-                    const category = await getCategoryById(tenantId, id);
+                    const category = await getCategoryById(tenantUUID, id);
                     if (!category) {
                         return createErrorResponse('Category not found', 404);
                     }
                     return createSuccessResponse(category);
                 } else {
-                    const categories = await getCategories(tenantId);
+                    const categories = await getCategories(tenantUUID);
                     return createSuccessResponse(categories);
                 }
 
             case 'menu-items':
                 if (id) {
-                    const menuItem = await getMenuItemById(tenantId, id);
+                    const menuItem = await getMenuItemById(tenantUUID, id);
                     if (!menuItem) {
                         return createErrorResponse('Menu item not found', 404);
                     }
                     return createSuccessResponse(menuItem);
                 } else {
-                    const menuItems = await getMenuItems(tenantId);
+                    const menuItems = await getMenuItems(tenantUUID);
                     return createSuccessResponse(menuItems);
                 }
 
             case 'menu':
-                const menuData = await getMenuWithCategories(tenantId);
+                const menuData = await getMenuWithCategories(tenantUUID);
                 return createSuccessResponse(menuData);
 
             case 'stats':
-                const stats = await getMenuStats(tenantId);
+                const stats = await getMenuStats(tenantUUID);
                 return createSuccessResponse(stats);
 
             default:
@@ -100,9 +118,15 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
 
 export async function POST(request: NextRequest): Promise<NextResponse> {
     try {
-        const tenantId = getTenantId(request);
-        if (!tenantId) {
+        const tenantSlug = getTenantId(request);
+        if (!tenantSlug) {
             return createErrorResponse('Tenant ID is required', 400);
+        }
+
+        // Convert tenant slug to UUID for database operations
+        const tenantUUID = await getTenantUUID(tenantSlug);
+        if (!tenantUUID) {
+            return createErrorResponse('Tenant not found', 404);
         }
 
         const { searchParams } = new URL(request.url);
@@ -113,14 +137,31 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         }
 
         const requestBody = await request.json();
+        
+        console.log('🔍 API /menu POST - Request details:', {
+            tenantSlug,
+            tenantUUID,
+            action,
+            itemName: requestBody.name,
+            hasAddons: !!(requestBody as any).addons && (requestBody as any).addons.length > 0,
+            addonsCount: (requestBody as any).addons?.length || 0,
+            itemData: {
+                id: requestBody.id,
+                name: requestBody.name,
+                price: requestBody.price,
+                categoryId: requestBody.categoryId
+            }
+        });
 
         switch (action) {
             case 'create-category':
-                const newCategory = await createCategory(tenantId, requestBody);
+                const newCategory = await createCategory(tenantUUID, requestBody);
                 return createSuccessResponse(newCategory, 'Category created successfully');
 
             case 'create-menu-item':
-                const newMenuItem = await createMenuItem(tenantId, requestBody);
+                console.log('📝 Creating menu item with data:', requestBody);
+                const newMenuItem = await createMenuItem(tenantUUID, requestBody);
+                console.log('✅ Menu item created successfully:', newMenuItem.id);
                 return createSuccessResponse(newMenuItem, 'Menu item created successfully');
 
             default:
@@ -139,9 +180,15 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
 export async function PUT(request: NextRequest): Promise<NextResponse> {
     try {
-        const tenantId = getTenantId(request);
-        if (!tenantId) {
+        const tenantSlug = getTenantId(request);
+        if (!tenantSlug) {
             return createErrorResponse('Tenant ID is required', 400);
+        }
+
+        // Convert tenant slug to UUID for database operations
+        const tenantUUID = await getTenantUUID(tenantSlug);
+        if (!tenantUUID) {
+            return createErrorResponse('Tenant not found', 404);
         }
 
         const { searchParams } = new URL(request.url);
@@ -155,11 +202,11 @@ export async function PUT(request: NextRequest): Promise<NextResponse> {
 
         switch (action) {
             case 'update-category':
-                const updatedCategory = await updateCategory(tenantId, requestBody);
+                const updatedCategory = await updateCategory(tenantUUID, requestBody);
                 return createSuccessResponse(updatedCategory, 'Category updated successfully');
 
             case 'update-menu-item':
-                const updatedMenuItem = await updateMenuItem(tenantId, requestBody);
+                const updatedMenuItem = await updateMenuItem(tenantUUID, requestBody);
                 return createSuccessResponse(updatedMenuItem, 'Menu item updated successfully');
 
             default:
@@ -178,9 +225,15 @@ export async function PUT(request: NextRequest): Promise<NextResponse> {
 
 export async function DELETE(request: NextRequest): Promise<NextResponse> {
     try {
-        const tenantId = getTenantId(request);
-        if (!tenantId) {
+        const tenantSlug = getTenantId(request);
+        if (!tenantSlug) {
             return createErrorResponse('Tenant ID is required', 400);
+        }
+
+        // Convert tenant slug to UUID for database operations
+        const tenantUUID = await getTenantUUID(tenantSlug);
+        if (!tenantUUID) {
+            return createErrorResponse('Tenant not found', 404);
         }
 
         const { searchParams } = new URL(request.url);
@@ -197,11 +250,11 @@ export async function DELETE(request: NextRequest): Promise<NextResponse> {
 
         switch (action) {
             case 'delete-category':
-                await deleteCategory(tenantId, id);
+                await deleteCategory(tenantUUID, id);
                 return createSuccessResponse(null, 'Category deleted successfully');
 
             case 'delete-menu-item':
-                await deleteMenuItem(tenantId, id);
+                await deleteMenuItem(tenantUUID, id);
                 return createSuccessResponse(null, 'Menu item deleted successfully');
 
             default:

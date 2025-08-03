@@ -100,7 +100,9 @@ export default function CustomerAddressesPage() {
         resetForm();
         setIsDialogOpen(false);
       } else {
-        throw new Error('Failed to save address');
+        const errorData = await response.json();
+        console.error('API Error:', errorData);
+        throw new Error(errorData.error || 'Failed to save address');
       }
     } catch (error) {
       console.error('Error saving address:', error);
@@ -210,9 +212,9 @@ export default function CustomerAddressesPage() {
 
   const getAddressTypeColor = (type: string) => {
     switch (type) {
-      case 'home': return 'bg-green-100 text-green-800';
-      case 'work': return 'bg-blue-100 text-blue-800';
-      default: return 'bg-gray-100 text-gray-800';
+      case 'home': return 'bg-green-100 text-green-800 border-green-200';
+      case 'work': return 'bg-blue-100 text-blue-800 border-blue-200';
+      default: return 'bg-gray-100 text-gray-800 border-gray-200';
     }
   };
 
@@ -242,15 +244,16 @@ export default function CustomerAddressesPage() {
                 variant="outline"
                 size="sm"
                 onClick={() => router.push(`/${params.tenant}/customer/dashboard`)}
+                className="border-blue-200 text-blue-600 hover:bg-blue-50"
               >
                 <ArrowLeft className="h-4 w-4 mr-2" />
                 Back
               </Button>
-              <h1 className="text-2xl font-bold text-gray-900">My Addresses</h1>
+              <h1 className="text-2xl font-bold text-blue-800">My Addresses</h1>
             </div>
             <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
               <DialogTrigger asChild>
-                <Button onClick={openAddDialog} className="bg-orange-600 hover:bg-orange-700">
+                <Button onClick={openAddDialog} className="bg-green-600 hover:bg-green-700 text-white">
                   <Plus className="h-4 w-4 mr-2" />
                   Add Address
                 </Button>
@@ -350,10 +353,10 @@ export default function CustomerAddressesPage() {
                   </div>
 
                   <div className="flex gap-2 pt-4">
-                    <Button onClick={saveAddress} className="flex-1 bg-orange-600 hover:bg-orange-700">
+                    <Button onClick={saveAddress} className="flex-1 bg-blue-600 hover:bg-blue-700 text-white">
                       {editingAddress ? 'Update Address' : 'Add Address'}
                     </Button>
-                    <Button variant="outline" onClick={() => setIsDialogOpen(false)}>
+                    <Button variant="outline" onClick={() => setIsDialogOpen(false)} className="border-gray-300 text-gray-600 hover:bg-gray-50">
                       Cancel
                     </Button>
                   </div>
@@ -367,14 +370,14 @@ export default function CustomerAddressesPage() {
       {/* Addresses List */}
       <div className="max-w-4xl mx-auto p-4">
         {addresses.length === 0 ? (
-          <Card className="text-center py-12">
+          <Card className="text-center py-12 border-blue-200">
             <CardContent>
-              <MapPin className="h-16 w-16 text-gray-400 mx-auto mb-4" />
-              <h3 className="text-lg font-medium text-gray-900 mb-2">No addresses saved</h3>
-              <p className="text-gray-600 mb-4">
+              <MapPin className="h-16 w-16 text-blue-400 mx-auto mb-4" />
+              <h3 className="text-lg font-medium text-blue-800 mb-2">No addresses saved</h3>
+              <p className="text-blue-600 mb-4">
                 Add your delivery addresses to make ordering faster and easier.
               </p>
-              <Button onClick={openAddDialog} className="bg-orange-600 hover:bg-orange-700">
+              <Button onClick={openAddDialog} className="bg-green-600 hover:bg-green-700 text-white">
                 <Plus className="h-4 w-4 mr-2" />
                 Add Your First Address
               </Button>
@@ -383,17 +386,17 @@ export default function CustomerAddressesPage() {
         ) : (
           <div className="space-y-4">
             {addresses.map((address) => (
-              <Card key={address.id} className={`hover:shadow-md transition-shadow ${address.isDefault ? 'ring-2 ring-orange-200' : ''}`}>
+              <Card key={address.id} className={`hover:shadow-md transition-shadow border-blue-100 ${address.isDefault ? 'ring-2 ring-blue-200 bg-blue-50' : 'bg-white'}`}>
                 <CardContent className="p-6">
                   <div className="flex items-start justify-between">
                     <div className="flex-1">
                       <div className="flex items-center gap-3 mb-2">
-                        <div className={`flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium ${getAddressTypeColor(address.type)}`}>
+                        <div className={`flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium border ${getAddressTypeColor(address.type)}`}>
                           {getAddressTypeIcon(address.type)}
                           {address.type.charAt(0).toUpperCase() + address.type.slice(1)}
                         </div>
                         {address.isDefault && (
-                          <div className="flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-orange-100 text-orange-800">
+                          <div className="flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800 border border-blue-200">
                             <Star className="h-3 w-3" />
                             Default
                           </div>
@@ -424,6 +427,7 @@ export default function CustomerAddressesPage() {
                         variant="outline"
                         size="sm"
                         onClick={() => openEditDialog(address)}
+                        className="border-blue-200 text-blue-600 hover:bg-blue-50"
                       >
                         <Edit2 className="h-4 w-4 mr-1" />
                         Edit
@@ -434,6 +438,7 @@ export default function CustomerAddressesPage() {
                           variant="outline"
                           size="sm"
                           onClick={() => setDefaultAddress(address.id)}
+                          className="border-green-200 text-green-600 hover:bg-green-50"
                         >
                           <Star className="h-4 w-4 mr-1" />
                           Set Default
@@ -444,7 +449,7 @@ export default function CustomerAddressesPage() {
                         variant="outline"
                         size="sm"
                         onClick={() => deleteAddress(address.id)}
-                        className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                        className="text-red-600 hover:text-red-700 hover:bg-red-50 border-red-200"
                       >
                         <Trash2 className="h-4 w-4 mr-1" />
                         Delete

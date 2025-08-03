@@ -21,10 +21,10 @@ const createDatabaseConfig = () => {
     password: process.env.DB_PASSWORD || process.env.DATABASE_PASSWORD,
     database: process.env.DB_NAME || process.env.DATABASE_NAME,
     
-    // Production-optimized pool settings
+    // Production-optimized pool settings with better connection management
     waitForConnections: true,
-    connectionLimit: process.env.NODE_ENV === 'production' ? 25 : 10,
-    queueLimit: 50,
+    connectionLimit: process.env.NODE_ENV === 'production' ? 25 : 5, // Reduced for development
+    queueLimit: 20, // Reduced queue limit
     multipleStatements: true,
     
     // Character set and collation

@@ -172,7 +172,7 @@ export default function SettingsPage() {
         phone: '',
         email: '',
         currency: 'GBP',
-        taxRate: 0.1,
+        // No taxRate - application is tax-free
         website: '',
         logo: '',
         logoHint: '',
@@ -217,6 +217,14 @@ export default function SettingsPage() {
             deliveryTimeMinutes: 45,
             enabled: true,
             displayMessage: "Your order will be delivered in {time} minutes"
+        },
+        advanceOrderSettings: {
+            maxDaysInAdvance: 60,
+            minHoursNotice: 4,
+            enableTimeSlots: true,
+            timeSlotInterval: 30,
+            autoAccept: false,
+            sendReminders: true
         },
         theme: {
             primary: '224 82% 57%',
@@ -583,10 +591,7 @@ export default function SettingsPage() {
                                     <Label htmlFor="name">Restaurant Name</Label>
                                     <Input id="name" value={settings.name || ''} onChange={e => handleInputChange('name', e.target.value)} />
                                 </div>
-                                <div>
-                                    <Label htmlFor="taxRate">Tax Rate (%)</Label>
-                                    <Input id="taxRate" type="number" value={settings.taxRate ? settings.taxRate * 100 : 0} onChange={e => handleInputChange('taxRate', parseFloat(e.target.value) / 100 || 0)} />
-                                </div>
+                                {/* Tax Rate field removed - application is tax-free */}
                                 <div className="md:col-span-2">
                                      <Label htmlFor="description">Description</Label>
                                      <Textarea id="description" value={settings.description || ''} onChange={e => handleInputChange('description', e.target.value)} />

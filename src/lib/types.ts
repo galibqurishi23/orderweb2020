@@ -1,20 +1,5 @@
-export interface Addon {
-  id: string;
-  name: string;
-  price: number;
-  type: 'size' | 'extra' | 'sauce' | 'sides' | 'drink' | 'dessert';
-  required?: boolean; // Whether this addon is required
-  multiple?: boolean; // Whether multiple selections are allowed
-  maxSelections?: number; // Maximum number of selections (for multiple=true)
-  options?: AddonOption[]; // For grouped addon options
-}
-
-export interface AddonOption {
-  id: string;
-  name: string;
-  price: number;
-  available: boolean;
-}
+// Import addon types
+import { SelectedAddon, AddonGroup } from './addon-types';
 
 export interface SetMenuItem {
   id: string;
@@ -50,13 +35,15 @@ export interface MenuItem {
   imageHint?: string;
   available: boolean;
   categoryId: string;
-  addons?: Addon[];
   characteristics?: Characteristic[];
   nutrition?: NutritionInfo;
   isSetMenu?: boolean; // Whether this is a set menu
   setMenuItems?: SetMenuItem[]; // Items included in set menu
   preparationTime?: number; // Time in minutes to prepare this item
   tags?: string[]; // Tags for better organization and search
+  // Add addon support
+  addonGroups?: AddonGroup[]; // Available addon groups for this item
+  hasRequiredAddons?: boolean; // Whether this item has required addons
 }
 
 export interface Category {
@@ -73,8 +60,11 @@ export interface Category {
 export interface OrderItem extends MenuItem {
   orderItemId: string;
   quantity: number;
-  selectedAddons: Addon[];
+  selectedAddons: SelectedAddon[]; // Updated to use proper addon type
   specialInstructions?: string;
+  basePrice: number; // Item price without addons
+  addonPrice: number; // Total addon price
+  finalPrice: number; // basePrice + addonPrice
 }
 
 
@@ -83,8 +73,11 @@ export interface PlacedOrderItem {
     id: string;
     quantity: number;
     menuItem: MenuItem; // Contains all menu item details
-    selectedAddons: Addon[];
+    selectedAddons: SelectedAddon[]; // Updated to use proper addon type
     specialInstructions?: string;
+    basePrice: number;
+    addonPrice: number;
+    finalPrice: number;
 }
 
 export type OrderStatus = 'pending' | 'confirmed' | 'preparing' | 'ready' | 'delivered' | 'cancelled';
@@ -106,12 +99,13 @@ export interface Order {
     subtotal: number;
     deliveryFee: number;
     discount: number;
-    tax: number;
+    tax?: number; // Optional field for database compatibility (always 0 - application is tax-free)
     voucherCode?: string; // Used to store applied voucher from the admin panel
     printed: boolean;
     customerId?: string;
     paymentMethod: 'cash' | 'card' | 'voucher'; // Now supports voucher as a payment method
     paymentTransactionId?: string; // For storing payment gateway transaction reference
+    specialInstructions?: string; // Overall order special instructions
 }
 
 export interface Address {
@@ -250,7 +244,7 @@ export interface RestaurantSettings {
   coverImageHint?: string;
   favicon?: string;
   currency: string;
-  taxRate: number; // as a decimal, e.g., 0.2 for 20%
+  // No taxRate field - application is tax-free
   website?: string;
   openingHours: OpeningHours;
   orderThrottling: OrderThrottlingSettings;
@@ -272,6 +266,14 @@ export interface RestaurantSettings {
     deliveryTimeMinutes: number;
     enabled: boolean;
     displayMessage: string;
+  };
+  advanceOrderSettings: {
+    maxDaysInAdvance: number;
+    minHoursNotice: number;
+    enableTimeSlots: boolean;
+    timeSlotInterval: number;
+    autoAccept: boolean;
+    sendReminders: boolean;
   };
   theme: ThemeSettings;
 }

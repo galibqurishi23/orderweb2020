@@ -13,6 +13,9 @@ interface State {
 }
 
 export class ErrorBoundary extends React.Component<Props, State> {
+  private retryCount = 0;
+  private maxRetries = 3;
+
   constructor(props: Props) {
     super(props);
     this.state = { hasError: false };
@@ -24,10 +27,18 @@ export class ErrorBoundary extends React.Component<Props, State> {
 
   componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
     console.error('ErrorBoundary caught an error:', error, errorInfo);
+    
+    // Prevent infinite error loops
+    if (this.retryCount < this.maxRetries) {
+      this.retryCount++;
+      setTimeout(() => {
+        this.setState({ hasError: false });
+      }, 1000);
+    }
   }
 
   render() {
-    if (this.state.hasError) {
+    if (this.state.hasError && this.retryCount >= this.maxRetries) {
       if (this.props.fallback) {
         return this.props.fallback;
       }

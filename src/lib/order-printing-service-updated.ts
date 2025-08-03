@@ -149,16 +149,19 @@ export class OrderPrintingService {
     
     order.items.forEach(item => {
       lines.push(`${item.quantity}x ${item.menuItem.name}`);
-      if (item.selectedAddons && item.selectedAddons.length > 0) {
-        item.selectedAddons.forEach(addon => {
-          lines.push(`  + ${addon.name}`);
-        });
-      }
       if (item.specialInstructions) {
         lines.push(`  NOTE: ${item.specialInstructions}`);
       }
       lines.push('');
     });
+    
+    // Add overall order special instructions
+    if (order.specialInstructions) {
+      lines.push('-'.repeat(32));
+      lines.push('OVERALL ORDER NOTES:');
+      lines.push(order.specialInstructions);
+      lines.push('');
+    }
     
     lines.push('-'.repeat(32));
     lines.push(`Total: $${order.total.toFixed(2)}`);
@@ -191,19 +194,12 @@ export class OrderPrintingService {
       lines.push(`${item.quantity}x ${item.menuItem.name}`);
       lines.push(`    $${item.menuItem.price.toFixed(2)} each = $${itemTotal.toFixed(2)}`);
       
-      if (item.selectedAddons && item.selectedAddons.length > 0) {
-        item.selectedAddons.forEach(addon => {
-          const addonTotal = addon.price * item.quantity;
-          lines.push(`  + ${addon.name} ($${addon.price.toFixed(2)}) = $${addonTotal.toFixed(2)}`);
-          subtotal += addonTotal;
-        });
-      }
       lines.push('');
     });
     
     lines.push('-'.repeat(32));
     lines.push(`Subtotal: $${subtotal.toFixed(2)}`);
-    lines.push(`Tax: $${(order.total - subtotal).toFixed(2)}`);
+    // Tax line removed - application is tax-free
     lines.push(`TOTAL: $${order.total.toFixed(2)}`);
     lines.push('='.repeat(32));
     lines.push('');
@@ -239,16 +235,19 @@ export class OrderPrintingService {
     
     drinkItems.forEach(item => {
       lines.push(`${item.quantity}x ${item.menuItem.name}`);
-      if (item.selectedAddons && item.selectedAddons.length > 0) {
-        item.selectedAddons.forEach(addon => {
-          lines.push(`  + ${addon.name}`);
-        });
-      }
       if (item.specialInstructions) {
         lines.push(`  NOTE: ${item.specialInstructions}`);
       }
       lines.push('');
     });
+    
+    // Add overall order special instructions to bar receipt
+    if (order.specialInstructions) {
+      lines.push('-'.repeat(32));
+      lines.push('OVERALL ORDER NOTES:');
+      lines.push(order.specialInstructions);
+      lines.push('');
+    }
     
     lines.push('='.repeat(32));
     

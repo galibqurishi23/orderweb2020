@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useParams, useRouter } from 'next/navigation';
-import { Mail, Lock, Eye, EyeOff, LogIn, UserPlus } from 'lucide-react';
+import { Mail, Lock, Eye, EyeOff, LogIn, UserPlus, Phone } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
 export default function CustomerLoginPage() {
@@ -17,7 +17,8 @@ export default function CustomerLoginPage() {
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [formData, setFormData] = useState({
-    name: '',
+    firstName: '',
+    lastName: '',
     email: '',
     password: '',
     phone: ''
@@ -37,6 +38,7 @@ export default function CustomerLoginPage() {
         credentials: 'include',
         body: JSON.stringify({
           ...formData,
+          name: isLogin ? undefined : `${formData.firstName} ${formData.lastName}`.trim(),
           tenantId: params.tenant
         })
       });
@@ -70,7 +72,7 @@ export default function CustomerLoginPage() {
 
   const toggleMode = () => {
     setIsLogin(!isLogin);
-    setFormData({ name: '', email: '', password: '', phone: '' });
+    setFormData({ firstName: '', lastName: '', email: '', password: '', phone: '' });
   };
 
   return (
@@ -91,16 +93,29 @@ export default function CustomerLoginPage() {
           <CardContent>
             <form onSubmit={handleSubmit} className="space-y-4">
               {!isLogin && (
-                <div>
-                  <Label htmlFor="name">Full Name</Label>
-                  <Input
-                    id="name"
-                    type="text"
-                    value={formData.name}
-                    onChange={(e) => setFormData({...formData, name: e.target.value})}
-                    required={!isLogin}
-                    placeholder="John Doe"
-                  />
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <Label htmlFor="firstName">First Name</Label>
+                    <Input
+                      id="firstName"
+                      type="text"
+                      value={formData.firstName}
+                      onChange={(e) => setFormData({...formData, firstName: e.target.value})}
+                      required={!isLogin}
+                      placeholder="John"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="lastName">Surname</Label>
+                    <Input
+                      id="lastName"
+                      type="text"
+                      value={formData.lastName}
+                      onChange={(e) => setFormData({...formData, lastName: e.target.value})}
+                      required={!isLogin}
+                      placeholder="Doe"
+                    />
+                  </div>
                 </div>
               )}
 
@@ -200,12 +215,14 @@ export default function CustomerLoginPage() {
               </Button>
             </div>
 
-            {/* Test Customer Info */}
+            {/* Demo Customer Info */}
             <div className="mt-6 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-              <h4 className="font-medium text-blue-900 text-sm mb-2">Test Customer Login</h4>
+              <h4 className="font-medium text-blue-900 text-sm mb-2">Demo Customer Login</h4>
               <div className="text-xs text-blue-800 space-y-1">
-                <div><strong>Email:</strong> test.customer@example.com</div>
-                <div><strong>Password:</strong> testpass123</div>
+                <div><strong>Email:</strong> demo.customer@orderweb.com</div>
+                <div><strong>Password:</strong> demo123456</div>
+                <div><strong>Phone:</strong> +44 7890 123456</div>
+                <div className="text-orange-600 font-medium">Gold tier • 2,550+ points</div>
               </div>
             </div>
           </CardContent>
