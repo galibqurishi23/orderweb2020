@@ -7,7 +7,7 @@ export const defaultRestaurantSettings: RestaurantSettings = {
   phone: '+1234567890',
   email: 'contact@restaurant.com',
   currency: 'GBP',
-  taxRate: 0.10,
+  // No taxRate - application is tax-free
   openingHours: {
     monday: { closed: false, timeMode: 'single', openTime: '09:00', closeTime: '22:00' },
     tuesday: { closed: false, timeMode: 'single', openTime: '09:00', closeTime: '22:00' },
@@ -46,6 +46,14 @@ export const defaultRestaurantSettings: RestaurantSettings = {
     deliveryTimeMinutes: 45,
     enabled: true,
     displayMessage: "Your order will be delivered in {time} minutes"
+  },
+  advanceOrderSettings: {
+    maxDaysInAdvance: 60,
+    minHoursNotice: 4,
+    enableTimeSlots: true,
+    timeSlotInterval: 15,
+    autoAccept: true,
+    sendReminders: false
   },
   theme: {
     primary: '224 82% 57%',

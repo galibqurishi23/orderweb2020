@@ -17,12 +17,11 @@ export async function sendWelcomeEmail(
   try {
     // Use the universal email service to send welcome email
     const success = await emailService.sendWelcomeEmail({
-      restaurant_name: restaurantName,
-      admin_email: adminEmail,
-      admin_name: adminName,
-      plan_name: 'Online Order (Trial)',
-      trial_days: 3,
-      admin_panel_url: `${process.env.NEXT_PUBLIC_APP_URL || 'https://ordertest.co.uk'}/${tenantSlug}/admin`
+      restaurantName: restaurantName,
+      adminEmail: adminEmail,
+      adminName: adminName,
+      password: password,
+      tenantSlug: tenantSlug
     });
 
     if (success) {
@@ -147,7 +146,7 @@ export async function createTenant(data: {
         coverImageHint: '',
         favicon: '',
         currency: 'GBP',
-        taxRate: 0.1,
+        // No taxRate - application is tax-free
         website: '',
         phone: data.phone || '',
         email: data.email,

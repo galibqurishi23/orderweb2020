@@ -21,44 +21,16 @@ export interface MenuItem {
     name: string;
     description?: string;
     price: number;
-    imageUrl?: string;
+    image?: string; // Changed from imageUrl to image for base64 storage
     imageHint?: string;
     available: boolean;
     isFeatured: boolean;
     isSetMenu: boolean;
     preparationTime: number;
-    addons?: AddonGroup[];
     characteristics?: ItemCharacteristic[];
     nutrition?: NutritionInfo;
     setMenuItems?: SetMenuItem[];
     tags?: string[];
-    createdAt?: Date;
-    updatedAt?: Date;
-}
-
-export interface AddonGroup {
-    id: string;
-    tenantId: string;
-    name: string;
-    description?: string;
-    type: 'radio' | 'checkbox';
-    required: boolean;
-    multiple: boolean;
-    maxSelections: number;
-    active: boolean;
-    displayOrder: number;
-    options: AddonOption[];
-    createdAt?: Date;
-    updatedAt?: Date;
-}
-
-export interface AddonOption {
-    id: string;
-    addonGroupId: string;
-    name: string;
-    price: number;
-    available: boolean;
-    displayOrder: number;
     createdAt?: Date;
     updatedAt?: Date;
 }
@@ -122,13 +94,12 @@ export interface CreateMenuItemRequest {
     description?: string;
     price: number;
     categoryId?: string;
-    imageUrl?: string;
+    image?: string; // Changed from imageUrl to image for base64 storage
     imageHint?: string;
     available?: boolean;
     isFeatured?: boolean;
     isSetMenu?: boolean;
     preparationTime?: number;
-    addons?: AddonGroup[];
     characteristics?: ItemCharacteristic[];
     nutrition?: NutritionInfo;
     setMenuItems?: SetMenuItem[];
@@ -136,32 +107,6 @@ export interface CreateMenuItemRequest {
 }
 
 export interface UpdateMenuItemRequest extends Partial<CreateMenuItemRequest> {
-    id: string;
-}
-
-export interface CreateAddonGroupRequest {
-    name: string;
-    description?: string;
-    type?: 'radio' | 'checkbox';
-    required?: boolean;
-    multiple?: boolean;
-    maxSelections?: number;
-    active?: boolean;
-    displayOrder?: number;
-}
-
-export interface UpdateAddonGroupRequest extends Partial<CreateAddonGroupRequest> {
-    id: string;
-}
-
-export interface CreateAddonOptionRequest {
-    name: string;
-    price?: number;
-    available?: boolean;
-    displayOrder?: number;
-}
-
-export interface UpdateAddonOptionRequest extends Partial<CreateAddonOptionRequest> {
     id: string;
 }
 

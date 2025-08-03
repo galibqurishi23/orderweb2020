@@ -364,6 +364,17 @@ export default function TenantOrdersPage() {
                                             {selectedOrder.address && <div className="flex justify-between"><strong>Address:</strong> {selectedOrder.address}</div>}
                                         </CardContent>
                                     </Card>
+                                {/* Special Instructions Card */}
+                                {selectedOrder.specialInstructions && (
+                                    <Card>
+                                        <CardHeader><CardTitle className="text-lg">Special Instructions</CardTitle></CardHeader>
+                                        <CardContent className="text-sm">
+                                            <div className="bg-yellow-50 border border-yellow-200 rounded p-3">
+                                                <p className="text-yellow-800">{selectedOrder.specialInstructions}</p>
+                                            </div>
+                                        </CardContent>
+                                    </Card>
+                                )}
                             </div>
                             <Card>
                                 <CardHeader><CardTitle className="text-lg">Order Items</CardTitle></CardHeader>
@@ -392,7 +403,7 @@ export default function TenantOrdersPage() {
                                     <div className="flex justify-between"><span>Subtotal</span><span>{currencySymbol}{parseFloat(String(selectedOrder.subtotal || '0')).toFixed(2)}</span></div>
                                     <div className="flex justify-between"><span>Delivery Fee</span><span>{currencySymbol}{parseFloat(String(selectedOrder.deliveryFee || '0')).toFixed(2)}</span></div>
                                     {parseFloat(String(selectedOrder.discount || '0')) > 0 && <div className="flex justify-between text-green-600"><span>Discount ({selectedOrder.voucherCode})</span><span>-{currencySymbol}{parseFloat(String(selectedOrder.discount || '0')).toFixed(2)}</span></div>}
-                                    <div className="flex justify-between"><span>Tax</span><span>{currencySymbol}{parseFloat(String(selectedOrder.tax || '0')).toFixed(2)}</span></div>
+                                    {/* Tax removed - application is tax-free */}
                                     <Separator className="my-2" />
                                     <div className="flex justify-between font-bold text-base"><span>Total</span><span>{currencySymbol}{parseFloat(String(selectedOrder.total || '0')).toFixed(2)}</span></div>
                                 </CardContent>

@@ -6,6 +6,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { generateOrderNumber } from './order-utils';
 import { getTenantSettings } from './tenant-service';
 import { defaultRestaurantSettings } from './defaultRestaurantSettings';
+import PhoneLoyaltyService from './phone-loyalty-service';
 
 export async function getTenantOrders(tenantId: string): Promise<Order[]> {
     return await pool.withConnection(async (connection) => {
@@ -21,11 +22,12 @@ export async function getTenantOrders(tenantId: string): Promise<Order[]> {
                     o.subtotal,
                     o.deliveryFee as deliveryFee,
                     o.discount,
-                    o.tax,
+                    o.tax, -- included for database compatibility (always 0)
                     o.voucherCode as voucherCode,
                     o.printed,
                     o.customerId as customerId,
-                    o.paymentMethod as paymentMethod
+                    o.paymentMethod as paymentMethod,
+                    o.specialInstructions as specialInstructions
              FROM orders o 
              WHERE o.tenant_id = ? 
              ORDER BY o.createdAt DESC`,
@@ -109,20 +111,35 @@ export async function createTenantOrder(tenantId: string, orderData: Omit<Order,
         console.log('Scheduled time:', scheduledTime);
     }
     
-    await pool.execute(
-        `INSERT INTO orders (
-            id, tenant_id, orderNumber, createdAt, customerName, customerPhone, customerEmail, 
-            address, total, status, orderType, isAdvanceOrder, scheduledTime,
-            subtotal, deliveryFee, discount, tax, voucherCode, printed, customerId, paymentMethod
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        [
-            orderId, tenantId, orderNumber, createdAt, orderData.customerName, orderData.customerPhone,
-            orderData.customerEmail || null, orderData.address, orderData.total, 'confirmed',
-            orderData.orderType, orderData.isAdvanceOrder, scheduledTime,
-            orderData.subtotal, orderData.deliveryFee, orderData.discount, orderData.tax,
-            orderData.voucherCode || null, false, orderData.customerId || null, orderData.paymentMethod || 'cash'
-        ]
-    );
+    try {
+        await pool.execute(
+            `INSERT INTO orders (
+                id, tenant_id, orderNumber, createdAt, customerName, customerPhone, customerEmail, 
+                address, total, status, orderType, isAdvanceOrder, scheduledTime,
+                subtotal, deliveryFee, discount, tax, voucherCode, printed, customerId, paymentMethod, specialInstructions
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            [
+                orderId, tenantId, orderNumber, createdAt, orderData.customerName, orderData.customerPhone,
+                orderData.customerEmail || null, orderData.address, orderData.total, 'confirmed',
+                orderData.orderType, orderData.isAdvanceOrder, scheduledTime,
+                orderData.subtotal, orderData.deliveryFee, orderData.discount, 0, // tax = 0 (application is tax-free)
+                orderData.voucherCode || null, false, orderData.customerId || null, orderData.paymentMethod || 'cash',
+                orderData.specialInstructions || null
+            ]
+        );
+        console.log('✅ Order inserted successfully');
+    } catch (insertError) {
+        console.error('❌ Error inserting order:', insertError);
+        console.error('📋 Insert parameters:', {
+            orderId, tenantId, orderNumber, createdAt, 
+            customerName: orderData.customerName,
+            customerPhone: orderData.customerPhone,
+            orderType: orderData.orderType,
+            isAdvanceOrder: orderData.isAdvanceOrder,
+            scheduledTime
+        });
+        throw insertError;
+    }
     
     // Insert order items
     if (orderData.items && orderData.items.length > 0) {
@@ -139,6 +156,24 @@ export async function createTenantOrder(tenantId: string, orderData: Omit<Order,
              VALUES ${placeholders}`,
             flatValues
         );
+    }
+    
+    // Process loyalty points if customer has a phone number
+    if (orderData.customerPhone) {
+        try {
+            console.log('🎯 Processing loyalty points for phone:', orderData.customerPhone);
+            await PhoneLoyaltyService.processOrderPoints(
+                orderData.customerPhone,
+                tenantId,
+                orderData.total,
+                orderId,
+                orderData.customerName || 'Customer'
+            );
+            console.log('✅ Loyalty points processed successfully');
+        } catch (loyaltyError) {
+            // Don't fail the order if loyalty processing fails
+            console.error('⚠️ Error processing loyalty points:', loyaltyError);
+        }
     }
     
     // Return order details for confirmation page

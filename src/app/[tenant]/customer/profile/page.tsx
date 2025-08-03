@@ -7,8 +7,9 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { useParams, useRouter } from 'next/navigation';
-import { User, Mail, Phone, MapPin, Bell, Shield, Save, ArrowLeft } from 'lucide-react';
+import { User, Mail, Phone, MapPin, Bell, Shield, Save, ArrowLeft, Lock, Eye, EyeOff, AlertTriangle, Trash2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
 interface CustomerProfile {
@@ -40,6 +41,19 @@ export default function CustomerProfilePage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [activeTab, setActiveTab] = useState('personal');
+  
+  // Password change state
+  const [passwordForm, setPasswordForm] = useState({
+    currentPassword: '',
+    newPassword: '',
+    confirmPassword: ''
+  });
+  const [showCurrentPassword, setShowCurrentPassword] = useState(false);
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+
+  // Delete account state
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
 
   useEffect(() => {
     fetchProfile();
@@ -133,6 +147,157 @@ export default function CustomerProfilePage() {
     }
   };
 
+  const changePassword = async () => {
+    if (passwordForm.newPassword !== passwordForm.confirmPassword) {
+      toast({
+        title: "Error",
+        description: "New passwords don't match",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    if (passwordForm.newPassword.length < 8) {
+      toast({
+        title: "Error",
+        description: "New password must be at least 8 characters long",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    try {
+      setSaving(true);
+      const response = await fetch('/api/customer/change-password', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        credentials: 'include',
+        body: JSON.stringify({
+          currentPassword: passwordForm.currentPassword,
+          newPassword: passwordForm.newPassword
+        })
+      });
+
+      if (response.ok) {
+        toast({
+          title: "Success",
+          description: "Password changed successfully"
+        });
+        setPasswordForm({
+          currentPassword: '',
+          newPassword: '',
+          confirmPassword: ''
+        });
+      } else {
+        const error = await response.json();
+        toast({
+          title: "Error",
+          description: error.message || "Failed to change password",
+          variant: "destructive"
+        });
+      }
+    } catch (error) {
+      console.error('Error changing password:', error);
+      toast({
+        title: "Error",
+        description: "Failed to change password",
+        variant: "destructive"
+      });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const deleteAccount = async () => {
+    try {
+      setSaving(true);
+      
+      console.log('🗑️ Initiating account deletion...');
+
+      const response = await fetch('/api/customer/delete-account', {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        credentials: 'include'
+      });
+
+      console.log('🗑️ Delete account response:', {
+        status: response.status,
+        statusText: response.statusText,
+        ok: response.ok
+      });
+
+      const result = await response.json();
+      console.log('🗑️ Delete account result:', result);
+
+      if (response.ok) {
+        toast({
+          title: "✅ Account Deleted Successfully",
+          description: "Your account has been permanently deleted. You will be redirected to the main page.",
+          duration: 4000
+        });
+        
+        // Close dialog
+        setShowDeleteDialog(false);
+        
+        // Show a final confirmation message
+        setTimeout(() => {
+          toast({
+            title: "👋 Goodbye!",
+            description: "Thank you for using our service. Your account has been completely removed.",
+            duration: 3000
+          });
+        }, 1000);
+        
+        // Redirect to main page after a short delay
+        setTimeout(() => {
+          console.log('🗑️ Redirecting to main page...');
+          router.push(`/${params.tenant}`);
+        }, 3000);
+        
+      } else {
+        // Handle specific error cases
+        let errorTitle = "❌ Account Deletion Failed";
+        let errorDescription = result.error || "Failed to delete account";
+        
+        if (response.status === 401) {
+          errorTitle = "🔒 Authentication Required";
+          errorDescription = "Please log in again and try deleting your account.";
+        } else if (response.status === 400) {
+          errorTitle = "⚠️ Invalid Request";
+          errorDescription = result.error || "Something went wrong with the request.";
+        } else if (response.status === 404) {
+          errorTitle = "👤 Account Not Found";
+          errorDescription = "Your account could not be found. You may already be logged out.";
+        } else if (response.status === 500) {
+          errorTitle = "🚨 Server Error";
+          errorDescription = "A server error occurred. Please try again later or contact support.";
+        }
+        
+        toast({
+          title: errorTitle,
+          description: errorDescription,
+          variant: "destructive",
+          duration: 6000
+        });
+      }
+    } catch (error) {
+      console.error('🗑️ Error deleting account:', error);
+      
+      toast({
+        title: "🚨 Network Error",
+        description: "Failed to delete account due to a network error. Please check your connection and try again.",
+        variant: "destructive",
+        duration: 6000
+      });
+    } finally {
+      setSaving(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 p-4">
@@ -173,16 +338,17 @@ export default function CustomerProfilePage() {
                 variant="outline"
                 size="sm"
                 onClick={() => router.push(`/${params.tenant}/customer/dashboard`)}
+                className="border-blue-200 text-blue-600 hover:bg-blue-50"
               >
                 <ArrowLeft className="h-4 w-4 mr-2" />
                 Back
               </Button>
-              <h1 className="text-2xl font-bold text-gray-900">My Profile</h1>
+              <h1 className="text-2xl font-bold text-blue-800">My Profile</h1>
             </div>
             <Button
               onClick={saveProfile}
               disabled={saving}
-              className="bg-orange-600 hover:bg-orange-700"
+              className="bg-green-600 hover:bg-green-700 text-white"
             >
               <Save className="h-4 w-4 mr-2" />
               {saving ? 'Saving...' : 'Save Changes'}
@@ -193,32 +359,32 @@ export default function CustomerProfilePage() {
 
       <div className="max-w-4xl mx-auto p-4">
         {/* Profile Summary Card */}
-        <Card className="mb-6">
-          <CardContent className="p-6">
+        <Card className="mb-6 border-blue-200">
+          <CardContent className="p-6 bg-blue-50">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-4">
-                <div className="h-16 w-16 bg-orange-100 rounded-full flex items-center justify-center">
-                  <User className="h-8 w-8 text-orange-600" />
+                <div className="h-16 w-16 bg-blue-100 rounded-full flex items-center justify-center border-2 border-blue-200">
+                  <User className="h-8 w-8 text-blue-600" />
                 </div>
                 <div>
-                  <h2 className="text-xl font-bold text-gray-900">
+                  <h2 className="text-xl font-bold text-blue-800">
                     {profile.firstName} {profile.lastName}
                   </h2>
-                  <p className="text-gray-600">{profile.email}</p>
+                  <p className="text-blue-600">{profile.email}</p>
                   <div className="flex items-center gap-2 mt-1">
                     <span className={`px-2 py-1 rounded-full text-xs font-medium ${getTierColor(profile.loyaltyTier)}`}>
                       {profile.loyaltyTier.toUpperCase()} MEMBER
                     </span>
-                    <span className="text-sm text-gray-500">
+                    <span className="text-sm text-blue-600">
                       Member since {new Date(profile.memberSince).getFullYear()}
                     </span>
                   </div>
                 </div>
               </div>
               <div className="text-right">
-                <div className="text-2xl font-bold text-orange-600">{profile.totalPoints}</div>
-                <div className="text-sm text-gray-600">Loyalty Points</div>
-                <div className="text-sm text-gray-600 mt-1">{profile.totalOrders} orders placed</div>
+                <div className="text-2xl font-bold text-green-600">{profile.totalPoints}</div>
+                <div className="text-sm text-green-600">Loyalty Points</div>
+                <div className="text-sm text-blue-600 mt-1">{profile.totalOrders} orders placed</div>
               </div>
             </div>
           </CardContent>
@@ -232,31 +398,31 @@ export default function CustomerProfilePage() {
                 onClick={() => setActiveTab('personal')}
                 className={`py-2 px-1 border-b-2 font-medium text-sm ${
                   activeTab === 'personal'
-                    ? 'border-orange-500 text-orange-600'
+                    ? 'border-blue-500 text-blue-600'
                     : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
                 }`}
               >
                 Personal Information
               </button>
               <button
-                onClick={() => setActiveTab('preferences')}
-                className={`py-2 px-1 border-b-2 font-medium text-sm ${
-                  activeTab === 'preferences'
-                    ? 'border-orange-500 text-orange-600'
-                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                }`}
-              >
-                Preferences
-              </button>
-              <button
                 onClick={() => setActiveTab('security')}
                 className={`py-2 px-1 border-b-2 font-medium text-sm ${
                   activeTab === 'security'
-                    ? 'border-orange-500 text-orange-600'
+                    ? 'border-blue-500 text-blue-600'
                     : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
                 }`}
               >
-                Security
+                Security & Password
+              </button>
+              <button
+                onClick={() => setActiveTab('danger')}
+                className={`py-2 px-1 border-b-2 font-medium text-sm ${
+                  activeTab === 'danger'
+                    ? 'border-red-500 text-red-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                }`}
+              >
+                Delete Account
               </button>
             </nav>
           </div>
@@ -264,14 +430,14 @@ export default function CustomerProfilePage() {
 
         {/* Tab Content */}
         {activeTab === 'personal' && (
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <User className="h-5 w-5" />
+          <Card className="border-blue-200">
+            <CardHeader className="bg-blue-50">
+              <CardTitle className="flex items-center gap-2 text-blue-800">
+                <User className="h-5 w-5 text-blue-600" />
                 Personal Information
               </CardTitle>
             </CardHeader>
-            <CardContent className="space-y-4">
+            <CardContent className="space-y-4 bg-white">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <Label htmlFor="firstName">First Name</Label>
@@ -343,116 +509,300 @@ export default function CustomerProfilePage() {
           </Card>
         )}
 
-        {activeTab === 'preferences' && (
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Bell className="h-5 w-5" />
-                Communication Preferences
+        {activeTab === 'security' && (
+          <Card className="border-blue-200">
+            <CardHeader className="bg-blue-50">
+              <CardTitle className="flex items-center gap-2 text-blue-800">
+                <Lock className="h-5 w-5 text-blue-600" />
+                Security & Password
               </CardTitle>
             </CardHeader>
-            <CardContent className="space-y-6">
-              <div className="space-y-4">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <div className="font-medium">Email Notifications</div>
-                    <div className="text-sm text-gray-600">Receive general notifications via email</div>
-                  </div>
-                  <Switch
-                    checked={profile.preferences.emailNotifications}
-                    onCheckedChange={(checked) => updateProfile('preferences.emailNotifications', checked)}
+            <CardContent className="space-y-4 bg-white">
+              <div>
+                <Label htmlFor="currentPassword">Current Password</Label>
+                <div className="relative">
+                  <Input
+                    id="currentPassword"
+                    type={showCurrentPassword ? 'text' : 'password'}
+                    value={passwordForm.currentPassword}
+                    onChange={(e) => setPasswordForm({...passwordForm, currentPassword: e.target.value})}
+                    className="pr-10"
+                    placeholder="Enter your current password"
                   />
+                  <button
+                    type="button"
+                    onClick={() => setShowCurrentPassword(!showCurrentPassword)}
+                    className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                  >
+                    {showCurrentPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </button>
                 </div>
+              </div>
 
-                <div className="flex items-center justify-between">
-                  <div>
-                    <div className="font-medium">SMS Notifications</div>
-                    <div className="text-sm text-gray-600">Receive notifications via text message</div>
-                  </div>
-                  <Switch
-                    checked={profile.preferences.smsNotifications}
-                    onCheckedChange={(checked) => updateProfile('preferences.smsNotifications', checked)}
+              <div>
+                <Label htmlFor="newPassword">New Password</Label>
+                <div className="relative">
+                  <Input
+                    id="newPassword"
+                    type={showNewPassword ? 'text' : 'password'}
+                    value={passwordForm.newPassword}
+                    onChange={(e) => setPasswordForm({...passwordForm, newPassword: e.target.value})}
+                    className="pr-10"
+                    placeholder="Enter your new password"
                   />
+                  <button
+                    type="button"
+                    onClick={() => setShowNewPassword(!showNewPassword)}
+                    className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                  >
+                    {showNewPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </button>
                 </div>
+                <p className="text-sm text-blue-600 mt-1">
+                  Password must be at least 8 characters long
+                </p>
+              </div>
 
-                <div className="flex items-center justify-between">
-                  <div>
-                    <div className="font-medium">Promotional Emails</div>
-                    <div className="text-sm text-gray-600">Receive special offers and promotions</div>
-                  </div>
-                  <Switch
-                    checked={profile.preferences.promotionalEmails}
-                    onCheckedChange={(checked) => updateProfile('preferences.promotionalEmails', checked)}
+              <div>
+                <Label htmlFor="confirmPassword">Confirm New Password</Label>
+                <div className="relative">
+                  <Input
+                    id="confirmPassword"
+                    type={showConfirmPassword ? 'text' : 'password'}
+                    value={passwordForm.confirmPassword}
+                    onChange={(e) => setPasswordForm({...passwordForm, confirmPassword: e.target.value})}
+                    className="pr-10"
+                    placeholder="Confirm your new password"
                   />
+                  <button
+                    type="button"
+                    onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                    className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                  >
+                    {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </button>
                 </div>
+              </div>
 
-                <div className="flex items-center justify-between">
-                  <div>
-                    <div className="font-medium">Order Updates</div>
-                    <div className="text-sm text-gray-600">Receive notifications about order status</div>
+              <Button
+                onClick={changePassword}
+                disabled={saving || !passwordForm.currentPassword || !passwordForm.newPassword || !passwordForm.confirmPassword}
+                className="bg-blue-600 hover:bg-blue-700 text-white"
+              >
+                {saving ? 'Changing Password...' : 'Change Password'}
+              </Button>
+            </CardContent>
+          </Card>
+        )}
+
+        {activeTab === 'danger' && (
+          <Card className="border-2 border-red-300 shadow-xl">
+            <CardHeader className="bg-gradient-to-r from-red-100 to-red-200">
+              <CardTitle className="flex items-center gap-3 text-red-800">
+                <div className="p-2 bg-red-500 rounded-full">
+                  <AlertTriangle className="h-6 w-6 text-white animate-pulse" />
+                </div>
+                <div>
+                  <h3 className="text-xl font-bold">Danger Zone</h3>
+                  <p className="text-sm font-normal text-red-700 mt-1">
+                    Irreversible account deletion settings
+                  </p>
+                </div>
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-6 bg-white p-8">
+              <div className="p-8 bg-gradient-to-br from-red-50 via-red-100 to-red-200 border-2 border-red-300 rounded-2xl shadow-inner">
+                <div className="flex items-start gap-6">
+                  <div className="p-4 bg-gradient-to-br from-red-500 to-red-600 rounded-2xl shadow-lg">
+                    <AlertTriangle className="h-8 w-8 text-white animate-bounce" />
                   </div>
-                  <Switch
-                    checked={profile.preferences.orderUpdates}
-                    onCheckedChange={(checked) => updateProfile('preferences.orderUpdates', checked)}
-                  />
+                  <div className="flex-1 space-y-6">
+                    <div>
+                      <h4 className="font-black text-red-900 text-2xl mb-3">
+                        Permanently Delete Account
+                      </h4>
+                      <p className="text-red-800 mb-6 leading-relaxed text-lg">
+                        Once you delete your account, <strong>there is no going back</strong>. This action will permanently 
+                        remove all your data from our systems and cannot be undone under any circumstances.
+                      </p>
+                    </div>
+                    
+                    <div className="bg-white/80 backdrop-blur-sm rounded-xl p-6 border border-red-200 shadow-lg">
+                      <h5 className="font-bold text-red-900 mb-4 flex items-center gap-3 text-lg">
+                        <Trash2 className="h-5 w-5" />
+                        What will be permanently deleted:
+                      </h5>
+                      <div className="grid md:grid-cols-2 gap-4">
+                        <div className="space-y-3">
+                          <div className="flex items-center gap-3 text-red-700">
+                            <div className="w-3 h-3 bg-red-500 rounded-full animate-pulse"></div>
+                            <span className="font-medium">Personal profile information</span>
+                          </div>
+                          <div className="flex items-center gap-3 text-red-700">
+                            <div className="w-3 h-3 bg-red-500 rounded-full animate-pulse"></div>
+                            <span className="font-medium">Complete order history</span>
+                          </div>
+                          <div className="flex items-center gap-3 text-red-700">
+                            <div className="w-3 h-3 bg-red-500 rounded-full animate-pulse"></div>
+                            <span className="font-medium">All loyalty points & rewards</span>
+                          </div>
+                        </div>
+                        <div className="space-y-3">
+                          <div className="flex items-center gap-3 text-red-700">
+                            <div className="w-3 h-3 bg-red-500 rounded-full animate-pulse"></div>
+                            <span className="font-medium">Saved addresses & preferences</span>
+                          </div>
+                          <div className="flex items-center gap-3 text-red-700">
+                            <div className="w-3 h-3 bg-red-500 rounded-full animate-pulse"></div>
+                            <span className="font-medium">Payment methods & settings</span>
+                          </div>
+                          <div className="flex items-center gap-3 text-red-700">
+                            <div className="w-3 h-3 bg-red-500 rounded-full animate-pulse"></div>
+                            <span className="font-medium">Account recovery options</span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                    
+                    <div className="bg-gradient-to-r from-amber-100 to-orange-100 border-2 border-amber-300 rounded-xl p-5 shadow-lg">
+                      <div className="flex items-start gap-3">
+                        <AlertTriangle className="h-6 w-6 text-amber-600 flex-shrink-0 mt-1" />
+                        <div>
+                          <p className="text-amber-900 font-bold text-lg mb-2">Your Current Account Value:</p>
+                          <div className="flex flex-wrap gap-4 text-amber-800">
+                            <div className="bg-amber-200 px-4 py-2 rounded-lg font-bold">
+                              🏆 {profile.totalPoints} loyalty points
+                            </div>
+                            <div className="bg-amber-200 px-4 py-2 rounded-lg font-bold">
+                              📦 {profile.totalOrders} orders placed
+                            </div>
+                            <div className="bg-amber-200 px-4 py-2 rounded-lg font-bold">
+                              💎 {profile.loyaltyTier.toUpperCase()} member
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="pt-4 border-t-2 border-red-300">
+                      <p className="text-red-800 text-center text-lg font-semibold mb-6">
+                        ⚠️ This action is <span className="underline font-black">IRREVERSIBLE</span> ⚠️
+                      </p>
+                      
+                      <div className="flex justify-center">
+                        <Button
+                          variant="destructive"
+                          onClick={() => setShowDeleteDialog(true)}
+                          disabled={saving}
+                          className="bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-white font-bold px-8 py-4 rounded-xl shadow-2xl hover:shadow-3xl transition-all duration-300 transform hover:scale-105 hover:-translate-y-1 border-0 text-base relative overflow-hidden group"
+                        >
+                          <div className="absolute inset-0 bg-gradient-to-r from-red-500 to-red-600 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+                          <div className="relative flex items-center gap-3">
+                            <Trash2 className="h-6 w-6 animate-pulse" />
+                            <span>I Understand, Delete My Account</span>
+                            <div className="w-2 h-2 bg-red-300 rounded-full animate-ping"></div>
+                          </div>
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
                 </div>
               </div>
             </CardContent>
           </Card>
         )}
+      </div>
 
-        {activeTab === 'security' && (
+      {/* Delete Account Confirmation Dialog */}
+      <Dialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+        <DialogContent className="sm:max-w-lg border-2 border-red-200 shadow-2xl">
+          <DialogHeader className="space-y-4">
+            <DialogTitle className="flex items-center gap-3 text-red-600 text-xl font-bold">
+              <div className="p-3 bg-red-100 rounded-full">
+                <AlertTriangle className="h-6 w-6 text-red-600 animate-pulse" />
+              </div>
+              Delete Account Confirmation
+            </DialogTitle>
+            <div className="text-gray-700 leading-relaxed">
+              <div className="bg-red-50 border-l-4 border-red-400 p-4 rounded-r-lg">
+                <div className="font-medium text-red-800 mb-2">⚠️ This action cannot be undone!</div>
+                <div className="text-red-700">
+                  This will permanently delete your account and all associated data from our systems.
+                </div>
+              </div>
+            </div>
+          </DialogHeader>
+
           <div className="space-y-6">
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Shield className="h-5 w-5" />
-                  Account Security
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="p-4 bg-green-50 rounded-lg">
-                  <div className="flex items-center gap-3">
-                    <div className="h-8 w-8 bg-green-500 rounded-full flex items-center justify-center">
-                      <Shield className="h-4 w-4 text-white" />
+            {/* Enhanced Warning Box */}
+            <div className="p-5 bg-gradient-to-br from-red-50 to-red-100 border-2 border-red-200 rounded-xl">
+              <div className="flex items-start gap-3">
+                <div className="p-2 bg-red-500 rounded-full flex-shrink-0">
+                  <Trash2 className="h-4 w-4 text-white" />
+                </div>
+                <div>
+                  <h4 className="font-bold text-red-900 text-sm mb-3">What will be permanently deleted:</h4>
+                  <div className="grid grid-cols-1 gap-2">
+                    <div className="flex items-center gap-2 text-sm text-red-700">
+                      <div className="w-2 h-2 bg-red-500 rounded-full flex-shrink-0"></div>
+                      <span>Your personal profile information</span>
                     </div>
-                    <div>
-                      <div className="font-medium text-green-800">Account Secured</div>
-                      <div className="text-sm text-green-600">Your account is protected with secure authentication</div>
+                    <div className="flex items-center gap-2 text-sm text-red-700">
+                      <div className="w-2 h-2 bg-red-500 rounded-full flex-shrink-0"></div>
+                      <span>Complete order history and preferences</span>
+                    </div>
+                    <div className="flex items-center gap-2 text-sm text-red-700">
+                      <div className="w-2 h-2 bg-red-500 rounded-full flex-shrink-0"></div>
+                      <span>All loyalty points and rewards ({profile?.totalPoints || 0} points)</span>
+                    </div>
+                    <div className="flex items-center gap-2 text-sm text-red-700">
+                      <div className="w-2 h-2 bg-red-500 rounded-full flex-shrink-0"></div>
+                      <span>Saved addresses and payment methods</span>
+                    </div>
+                    <div className="flex items-center gap-2 text-sm text-red-700">
+                      <div className="w-2 h-2 bg-red-500 rounded-full flex-shrink-0"></div>
+                      <span>Account recovery options (cannot be restored)</span>
                     </div>
                   </div>
                 </div>
-
-                <div className="border rounded-lg p-4">
-                  <h4 className="font-medium mb-2">Password</h4>
-                  <p className="text-sm text-gray-600 mb-4">
-                    Last updated: {new Date().toLocaleDateString()}
-                  </p>
-                  <Button
-                    variant="outline"
-                    onClick={() => router.push(`/${params.tenant}/customer/settings/change-password`)}
-                  >
-                    Change Password
-                  </Button>
-                </div>
-
-                <div className="border rounded-lg p-4">
-                  <h4 className="font-medium mb-2">Login Sessions</h4>
-                  <p className="text-sm text-gray-600 mb-4">
-                    Manage your active login sessions across devices
-                  </p>
-                  <Button
-                    variant="outline"
-                    onClick={() => router.push(`/${params.tenant}/customer/settings/sessions`)}
-                  >
-                    Manage Sessions
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
+              </div>
+            </div>
           </div>
-        )}
-      </div>
+
+          <DialogFooter className="flex flex-col gap-3 pt-4">
+            <div className="flex flex-col-reverse sm:flex-row gap-3 w-full">
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setShowDeleteDialog(false);
+                }}
+                disabled={saving}
+                className="flex-1 border-gray-300 hover:bg-gray-50 py-3 font-medium"
+              >
+                Cancel & Keep Account
+              </Button>
+              <Button
+                variant="destructive"
+                onClick={deleteAccount}
+                disabled={saving}
+                className="flex-1 bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 py-3 font-bold shadow-lg hover:shadow-xl transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {saving ? (
+                  <div className="flex items-center gap-2">
+                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                    <span>Deleting Account...</span>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-2">
+                    <Trash2 className="h-5 w-5" />
+                    <span>Delete My Account Forever</span>
+                  </div>
+                )}
+              </Button>
+            </div>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

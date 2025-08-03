@@ -6,16 +6,10 @@ import { v4 as uuidv4 } from 'uuid';
 import {
     MenuCategory,
     MenuItem,
-    AddonGroup,
-    AddonOption,
     CreateCategoryRequest,
     UpdateCategoryRequest,
     CreateMenuItemRequest,
     UpdateMenuItemRequest,
-    CreateAddonGroupRequest,
-    UpdateAddonGroupRequest,
-    CreateAddonOptionRequest,
-    UpdateAddonOptionRequest,
     MenuWithCategories,
     MenuStats,
     DatabaseResult
@@ -293,34 +287,42 @@ export async function getMenuItems(tenantId: string): Promise<MenuItem[]> {
             `SELECT 
                 id, tenant_id, category_id, name, description, price, image_url, 
                 image_hint, available, is_featured, is_set_menu, preparation_time,
-                addons, characteristics, nutrition, set_menu_items, tags, created_at, updated_at
+                characteristics, nutrition, set_menu_items, tags, created_at, updated_at
             FROM menu_items 
             WHERE tenant_id = ? 
             ORDER BY name ASC`,
             [tenantId]
         );
 
-        return rows.map(row => ({
-            id: row.id,
-            tenantId: row.tenant_id,
-            categoryId: row.category_id,
-            name: row.name,
-            description: row.description,
-            price: parseFloat(row.price),
-            imageUrl: row.image_url,
-            imageHint: row.image_hint,
-            available: Boolean(row.available),
-            isFeatured: Boolean(row.is_featured),
-            isSetMenu: Boolean(row.is_set_menu),
-            preparationTime: row.preparation_time || 15,
-            addons: parseJsonField(row.addons) || [],
-            characteristics: parseJsonField(row.characteristics) || [],
-            nutrition: parseJsonField(row.nutrition) || undefined,
-            setMenuItems: parseJsonField(row.set_menu_items) || [],
-            tags: parseJsonField(row.tags) || [],
-            createdAt: row.created_at,
-            updatedAt: row.updated_at
-        }));
+        const menuItems = rows.map(row => {
+            const parsedCharacteristics = parseJsonField(row.characteristics) || [];
+            const parsedSetMenuItems = parseJsonField(row.set_menu_items) || [];
+            const parsedTags = parseJsonField(row.tags) || [];
+            
+            return {
+                id: row.id,
+                tenantId: row.tenant_id,
+                categoryId: row.category_id,
+                name: row.name,
+                description: row.description,
+                price: parseFloat(row.price),
+                image: row.image_url, // Map image_url to image
+                imageHint: row.image_hint,
+                available: Boolean(row.available),
+                isFeatured: Boolean(row.is_featured),
+                isSetMenu: Boolean(row.is_set_menu),
+                preparationTime: row.preparation_time || 15,
+                characteristics: Array.isArray(parsedCharacteristics) ? parsedCharacteristics : [],
+                nutrition: parseJsonField(row.nutrition) || undefined,
+                setMenuItems: Array.isArray(parsedSetMenuItems) ? parsedSetMenuItems : [],
+                tags: Array.isArray(parsedTags) ? parsedTags : [],
+                createdAt: row.created_at,
+                updatedAt: row.updated_at
+            };
+        });
+        
+        console.log(`[API] getMenuItems returning ${menuItems.length} items for tenant ${tenantId}`);
+        return menuItems;
     } catch (error) {
         console.error('Error fetching menu items:', error);
         throw new Error('Failed to fetch menu items');
@@ -339,7 +341,7 @@ export async function getMenuItemById(tenantId: string, itemId: string): Promise
             `SELECT 
                 id, tenant_id, category_id, name, description, price, image_url, 
                 image_hint, available, is_featured, is_set_menu, preparation_time,
-                addons, characteristics, nutrition, set_menu_items, tags, created_at, updated_at
+                characteristics, nutrition, set_menu_items, tags, created_at, updated_at
             FROM menu_items 
             WHERE tenant_id = ? AND id = ?`,
             [tenantId, itemId]
@@ -357,13 +359,12 @@ export async function getMenuItemById(tenantId: string, itemId: string): Promise
             name: row.name,
             description: row.description,
             price: parseFloat(row.price),
-            imageUrl: row.image_url,
+            image: row.image_url, // Map image_url to image
             imageHint: row.image_hint,
             available: Boolean(row.available),
             isFeatured: Boolean(row.is_featured),
             isSetMenu: Boolean(row.is_set_menu),
             preparationTime: row.preparation_time || 15,
-            addons: parseJsonField(row.addons) || [],
             characteristics: parseJsonField(row.characteristics) || [],
             nutrition: parseJsonField(row.nutrition) || undefined,
             setMenuItems: parseJsonField(row.set_menu_items) || [],
@@ -378,26 +379,43 @@ export async function getMenuItemById(tenantId: string, itemId: string): Promise
 }
 
 export async function createMenuItem(tenantId: string, itemData: CreateMenuItemRequest): Promise<MenuItem> {
+    console.log('🔍 createMenuItem called with:', {
+        tenantId,
+        itemName: itemData.name,
+        itemPrice: itemData.price,
+        hasAddons: !!(itemData as any).addons,
+        addonsCount: (itemData as any).addons?.length || 0
+    });
+    
     validateTenantId(tenantId);
     
     if (!itemData.name?.trim()) {
+        console.error('❌ Validation failed: Missing name');
         throw new Error('Menu item name is required');
     }
 
     if (itemData.price === undefined || itemData.price < 0) {
+        console.error('❌ Validation failed: Invalid price', itemData.price);
         throw new Error('Valid price is required');
     }
 
     const itemId = generateId();
     const now = new Date();
+    
+    console.log('📝 Inserting menu item:', {
+        itemId,
+        tenantId,
+        name: itemData.name,
+        price: itemData.price
+    });
 
     try {
         await db.execute(
             `INSERT INTO menu_items (
                 id, tenant_id, category_id, name, description, price, image_url, 
                 image_hint, available, is_featured, is_set_menu, preparation_time,
-                addons, characteristics, nutrition, set_menu_items, tags, created_at, updated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                characteristics, nutrition, set_menu_items, tags, created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
             [
                 itemId,
                 tenantId,
@@ -405,13 +423,12 @@ export async function createMenuItem(tenantId: string, itemData: CreateMenuItemR
                 itemData.name.trim(),
                 itemData.description?.trim() || null,
                 itemData.price,
-                itemData.imageUrl?.trim() || null,
+                itemData.image?.trim() || null, // Changed from imageUrl to image
                 itemData.imageHint?.trim() || null,
                 itemData.available !== false,
                 itemData.isFeatured || false,
                 itemData.isSetMenu || false,
                 itemData.preparationTime || 15,
-                JSON.stringify(itemData.addons || []),
                 JSON.stringify(itemData.characteristics || []),
                 JSON.stringify(itemData.nutrition || null),
                 JSON.stringify(itemData.setMenuItems || []),
@@ -420,12 +437,27 @@ export async function createMenuItem(tenantId: string, itemData: CreateMenuItemR
                 now
             ]
         );
+        
+        console.log('✅ Menu item inserted into database successfully');
 
+        // Handle addons if present (legacy format conversion)
+        if ((itemData as any).addons && Array.isArray((itemData as any).addons) && (itemData as any).addons.length > 0) {
+            console.log('🔧 Processing addons:', (itemData as any).addons.length);
+            const addonGroups = convertLegacyAddonsToGroups((itemData as any).addons);
+            await saveAddonGroupsForMenuItem(tenantId, itemId, addonGroups);
+            console.log('✅ Addons processed and saved');
+        } else {
+            console.log('⚠️  No addons to process');
+        }
+
+        console.log('📖 Retrieving created menu item...');
         const createdItem = await getMenuItemById(tenantId, itemId);
         if (!createdItem) {
+            console.error('❌ Failed to retrieve created item');
             throw new Error('Failed to retrieve created menu item');
         }
 
+        console.log('✅ Menu item creation completed:', createdItem.id);
         return createdItem;
     } catch (error) {
         console.error('Error creating menu item:', error);
@@ -476,9 +508,9 @@ export async function updateMenuItem(tenantId: string, itemData: UpdateMenuItemR
             values.push(itemData.categoryId || null);
         }
 
-        if (itemData.imageUrl !== undefined) {
+        if (itemData.image !== undefined) {
             updates.push('image_url = ?');
-            values.push(itemData.imageUrl?.trim() || null);
+            values.push(itemData.image?.trim() || null);
         }
 
         if (itemData.imageHint !== undefined) {
@@ -504,11 +536,6 @@ export async function updateMenuItem(tenantId: string, itemData: UpdateMenuItemR
         if (itemData.preparationTime !== undefined) {
             updates.push('preparation_time = ?');
             values.push(itemData.preparationTime);
-        }
-
-        if (itemData.addons !== undefined) {
-            updates.push('addons = ?');
-            values.push(JSON.stringify(itemData.addons || []));
         }
 
         if (itemData.characteristics !== undefined) {
@@ -545,6 +572,12 @@ export async function updateMenuItem(tenantId: string, itemData: UpdateMenuItemR
             `UPDATE menu_items SET ${updates.join(', ')} WHERE id = ? AND tenant_id = ?`,
             values
         );
+
+        // Handle addons if present (legacy format conversion)
+        if ((itemData as any).addons && Array.isArray((itemData as any).addons) && (itemData as any).addons.length > 0) {
+            const addonGroups = convertLegacyAddonsToGroups((itemData as any).addons);
+            await saveAddonGroupsForMenuItem(tenantId, itemData.id, addonGroups);
+        }
 
         const updatedItem = await getMenuItemById(tenantId, itemData.id);
         if (!updatedItem) {
@@ -609,21 +642,19 @@ export async function getMenuStats(tenantId: string): Promise<MenuStats> {
             `SELECT 
                 (SELECT COUNT(*) FROM categories WHERE tenant_id = ?) as total_categories,
                 (SELECT COUNT(*) FROM menu_items WHERE tenant_id = ?) as total_menu_items,
-                (SELECT COUNT(*) FROM addon_groups WHERE tenant_id = ?) as total_addon_groups,
-                (SELECT COUNT(*) FROM addon_options ao JOIN addon_groups ag ON ao.addon_group_id = ag.id WHERE ag.tenant_id = ?) as total_addon_options,
                 (SELECT COUNT(*) FROM categories WHERE tenant_id = ? AND active = true) as active_categories,
                 (SELECT COUNT(*) FROM menu_items WHERE tenant_id = ? AND available = true) as active_menu_items,
                 (SELECT COUNT(*) FROM menu_items WHERE tenant_id = ? AND is_featured = true) as featured_items,
                 (SELECT COUNT(*) FROM menu_items WHERE tenant_id = ? AND is_set_menu = true) as set_menu_items`,
-            [tenantId, tenantId, tenantId, tenantId, tenantId, tenantId, tenantId, tenantId]
+            [tenantId, tenantId, tenantId, tenantId, tenantId, tenantId]
         );
 
         const row = stats[0];
         return {
             totalCategories: row.total_categories || 0,
             totalMenuItems: row.total_menu_items || 0,
-            totalAddonGroups: row.total_addon_groups || 0,
-            totalAddonOptions: row.total_addon_options || 0,
+            totalAddonGroups: 0,
+            totalAddonOptions: 0,
             activeCategories: row.active_categories || 0,
             activeMenuItems: row.active_menu_items || 0,
             featuredItems: row.featured_items || 0,
@@ -632,5 +663,140 @@ export async function getMenuStats(tenantId: string): Promise<MenuStats> {
     } catch (error) {
         console.error('Error fetching menu stats:', error);
         throw new Error('Failed to fetch menu stats');
+    }
+}
+
+// ==================== ADDON CONVERSION UTILITIES ====================
+
+interface LegacyAddon {
+    id: string;
+    name: string;
+    price: number;
+    type?: string;
+    required?: boolean;
+    multiple?: boolean;
+    maxSelections?: number;
+}
+
+interface ModernAddonGroup {
+    id: string;
+    name: string;
+    type: 'single' | 'multiple';
+    category: 'size' | 'extra' | 'sauce' | 'sides' | 'drink' | 'dessert';
+    required: boolean;
+    minSelections: number;
+    maxSelections: number;
+    options: {
+        id: string;
+        name: string;
+        price: number;
+        available: boolean;
+    }[];
+}
+
+/**
+ * Convert legacy addon format to modern addon groups
+ */
+function convertLegacyAddonsToGroups(legacyAddons: LegacyAddon[]): ModernAddonGroup[] {
+    if (!legacyAddons || legacyAddons.length === 0) {
+        return [];
+    }
+
+    // Group addons by type
+    const groupedByType = legacyAddons.reduce((acc, addon) => {
+        const type = addon.type || 'extra';
+        if (!acc[type]) {
+            acc[type] = [];
+        }
+        acc[type].push(addon);
+        return acc;
+    }, {} as Record<string, LegacyAddon[]>);
+
+    return Object.entries(groupedByType).map(([type, addons], index) => {
+        const firstAddon = addons[0];
+        const isMultiple = firstAddon.multiple !== false;
+        
+        return {
+            id: `converted_group_${Date.now()}_${index}`,
+            name: `${type.charAt(0).toUpperCase() + type.slice(1)} Options`,
+            type: isMultiple ? 'multiple' : 'single',
+            category: (type as any) || 'extra',
+            required: firstAddon.required || false,
+            minSelections: firstAddon.required ? 1 : 0,
+            maxSelections: isMultiple ? (firstAddon.maxSelections || 5) : 1,
+            options: addons.map(addon => ({
+                id: addon.id,
+                name: addon.name,
+                price: addon.price,
+                available: true
+            }))
+        };
+    });
+}
+
+/**
+ * Save addon groups for a menu item
+ */
+async function saveAddonGroupsForMenuItem(tenantId: string, menuItemId: string, addonGroups: ModernAddonGroup[]): Promise<void> {
+    try {
+        // Clear existing addon groups for this menu item
+        await db.execute(
+            'DELETE FROM menu_item_addon_groups WHERE menu_item_id = ?',
+            [menuItemId]
+        );
+
+        // Save each addon group
+        for (const group of addonGroups) {
+            // Insert the group
+            await db.execute(
+                `INSERT INTO addon_groups (
+                    id, tenant_id, name, type, required, multiple, max_selections, display_order, created_at, updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())`,
+                [
+                    group.id,
+                    tenantId,
+                    group.name,
+                    group.type === 'multiple' ? 'checkbox' : 'radio',
+                    group.required,
+                    group.type === 'multiple',
+                    group.maxSelections,
+                    0
+                ]
+            );
+
+            // Create the relationship in junction table
+            await db.execute(
+                `INSERT INTO menu_item_addon_groups (
+                    id, menu_item_id, addon_group_id, display_order, created_at
+                ) VALUES (?, ?, ?, ?, NOW())`,
+                [
+                    generateId(),
+                    menuItemId,
+                    group.id,
+                    0
+                ]
+            );
+
+            // Insert the options for this group
+            for (let i = 0; i < group.options.length; i++) {
+                const option = group.options[i];
+                await db.execute(
+                    `INSERT INTO addon_options (
+                        id, addon_group_id, name, price, available, display_order, created_at, updated_at
+                    ) VALUES (?, ?, ?, ?, ?, ?, NOW(), NOW())`,
+                    [
+                        option.id,
+                        group.id,
+                        option.name,
+                        option.price,
+                        option.available,
+                        i
+                    ]
+                );
+            }
+        }
+    } catch (error) {
+        console.error('Error saving addon groups:', error);
+        throw new Error('Failed to save addon groups');
     }
 }

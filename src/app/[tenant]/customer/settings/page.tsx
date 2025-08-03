@@ -187,16 +187,17 @@ export default function CustomerSettingsPage() {
                 variant="outline"
                 size="sm"
                 onClick={() => router.push(`/${params.tenant}/customer/dashboard`)}
+                className="border-blue-200 text-blue-600 hover:bg-blue-50"
               >
                 <ArrowLeft className="h-4 w-4 mr-2" />
                 Back
               </Button>
-              <h1 className="text-2xl font-bold text-gray-900">Account Settings</h1>
+              <h1 className="text-2xl font-bold text-blue-800">Account Settings</h1>
             </div>
             <Button
               variant="outline"
               onClick={logout}
-              className="text-red-600 hover:text-red-700"
+              className="text-red-600 hover:text-red-700 border-red-200 hover:bg-red-50"
             >
               <LogOut className="h-4 w-4 mr-2" />
               Logout
@@ -214,7 +215,7 @@ export default function CustomerSettingsPage() {
                 onClick={() => setActiveTab('password')}
                 className={`py-2 px-1 border-b-2 font-medium text-sm ${
                   activeTab === 'password'
-                    ? 'border-orange-500 text-orange-600'
+                    ? 'border-blue-500 text-blue-600'
                     : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
                 }`}
               >
@@ -224,7 +225,7 @@ export default function CustomerSettingsPage() {
                 onClick={() => setActiveTab('sessions')}
                 className={`py-2 px-1 border-b-2 font-medium text-sm ${
                   activeTab === 'sessions'
-                    ? 'border-orange-500 text-orange-600'
+                    ? 'border-green-500 text-green-600'
                     : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
                 }`}
               >
@@ -246,14 +247,14 @@ export default function CustomerSettingsPage() {
 
         {/* Tab Content */}
         {activeTab === 'password' && (
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Lock className="h-5 w-5" />
+          <Card className="border-blue-200">
+            <CardHeader className="bg-blue-50">
+              <CardTitle className="flex items-center gap-2 text-blue-800">
+                <Lock className="h-5 w-5 text-blue-600" />
                 Change Password
               </CardTitle>
             </CardHeader>
-            <CardContent className="space-y-4">
+            <CardContent className="space-y-4 bg-white">
               <div>
                 <Label htmlFor="currentPassword">Current Password</Label>
                 <div className="relative">
@@ -320,7 +321,7 @@ export default function CustomerSettingsPage() {
               <Button
                 onClick={changePassword}
                 disabled={loading || !passwordForm.currentPassword || !passwordForm.newPassword || !passwordForm.confirmPassword}
-                className="bg-orange-600 hover:bg-orange-700"
+                className="bg-blue-600 hover:bg-blue-700 text-white"
               >
                 {loading ? 'Changing Password...' : 'Change Password'}
               </Button>
@@ -329,21 +330,21 @@ export default function CustomerSettingsPage() {
         )}
 
         {activeTab === 'sessions' && (
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Shield className="h-5 w-5" />
+          <Card className="border-green-200">
+            <CardHeader className="bg-green-50">
+              <CardTitle className="flex items-center gap-2 text-green-800">
+                <Shield className="h-5 w-5 text-green-600" />
                 Active Sessions
               </CardTitle>
             </CardHeader>
-            <CardContent>
+            <CardContent className="bg-white">
               <div className="space-y-4">
-                <div className="p-4 bg-blue-50 rounded-lg">
+                <div className="p-4 bg-green-50 rounded-lg border border-green-200">
                   <div className="flex items-center gap-3">
-                    <Shield className="h-5 w-5 text-blue-600" />
+                    <Shield className="h-5 w-5 text-green-600" />
                     <div>
-                      <div className="font-medium text-blue-900">Current Session</div>
-                      <div className="text-sm text-blue-700">This device (active now)</div>
+                      <div className="font-medium text-green-900">Current Session</div>
+                      <div className="text-sm text-green-700">This device (active now)</div>
                     </div>
                   </div>
                 </div>
@@ -372,11 +373,11 @@ export default function CustomerSettingsPage() {
                   </div>
                 )}
 
-                <div className="pt-4 border-t">
+                <div className="pt-4 border-t border-green-200">
                   <Button
                     variant="outline"
                     onClick={logoutAllDevices}
-                    className="text-red-600 hover:text-red-700"
+                    className="text-red-600 hover:text-red-700 border-red-200 hover:bg-red-50"
                   >
                     <LogOut className="h-4 w-4 mr-2" />
                     Logout from All Devices

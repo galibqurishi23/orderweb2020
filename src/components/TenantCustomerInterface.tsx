@@ -20,6 +20,7 @@ import {
 } from '@/components/ui/card';
 import {
   Dialog,
+  DialogClose,
   DialogContent,
   DialogDescription,
   DialogFooter,
@@ -34,7 +35,11 @@ import { Separator } from '@/components/ui/separator';
 import { useToast } from '@/hooks/use-toast';
 import { useTenantData } from '@/context/TenantDataContext';
 import { useTenant } from '@/context/TenantContext';
-import type { OrderItem, MenuItem as MenuItemType, Addon, Category, OpeningHoursPerDay, Order, Voucher } from '@/lib/types';
+import type { OrderItem, MenuItem as MenuItemType, Category, OpeningHoursPerDay, Order, Voucher } from '@/lib/types';
+import { SelectedAddon, AddonGroup } from '@/lib/addon-types';
+import { calculateSelectedAddonPrice } from '@/lib/addon-utils';
+import AddonSelection from '@/components/SimpleAddonSelection';
+import * as AddonService from '@/lib/addon-service';
 import {
   MinusCircle,
   PlusCircle,
@@ -47,12 +52,17 @@ import {
   Search,
   User,
   LogIn,
+  CheckCircle,
   LogOut,
   Home,
   Menu as MenuIcon,
   Heart,
   ChevronUp,
+  ChevronDown,
   Clock,
+  Truck,
+  Store,
+  Package,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { getCurrencySymbol } from '@/lib/currency-utils';
@@ -136,51 +146,69 @@ function MenuItemDialog({
   item: MenuItemType;
   isOpen: boolean;
   onClose: () => void;
-  onAddToCart: (item: MenuItemType, addons: Addon[], quantity: number, instructions: string) => void;
+  onAddToCart: (item: MenuItemType, quantity: number, instructions: string, selectedAddons?: SelectedAddon[]) => void;
   currencySymbol: string;
 }) {
   const [quantity, setQuantity] = React.useState(1);
-  const [selectedAddons, setSelectedAddons] = React.useState<Addon[]>([]);
   const [instructions, setInstructions] = React.useState('');
+  const [selectedAddons, setSelectedAddons] = React.useState<SelectedAddon[]>([]);
+  const [addonPrice, setAddonPrice] = React.useState(0);
+  const [itemAddonGroups, setItemAddonGroups] = React.useState<AddonGroup[]>([]);
+  const [loadingAddons, setLoadingAddons] = React.useState(false);
+  const { tenantData } = useTenant();
+
+  const loadItemAddons = React.useCallback(async () => {
+    if (!tenantData?.id || !item.id) return;
+    
+    try {
+      setLoadingAddons(true);
+      const addonGroups = await AddonService.getMenuItemAddonGroups(tenantData.id, item.id);
+      setItemAddonGroups(addonGroups);
+    } catch (error) {
+      console.error('Error loading item addons:', error);
+      setItemAddonGroups([]);
+    } finally {
+      setLoadingAddons(false);
+    }
+  }, [tenantData?.id, item.id]);
 
   React.useEffect(() => {
     if (isOpen) {
       setQuantity(1);
-      setSelectedAddons([]);
       setInstructions('');
+      setSelectedAddons([]);
+      setAddonPrice(0);
+      loadItemAddons();
     }
-  }, [isOpen]);
+  }, [isOpen, loadItemAddons]);
 
-  const handleToggleAddon = (addon: Addon) => {
-    setSelectedAddons((prev) =>
-      prev.find((a) => a.id === addon.id)
-        ? prev.filter((a) => a.id !== addon.id)
-        : [...prev, addon]
-    );
-  };
+  const handleAddonSelectionChange = React.useCallback((addons: SelectedAddon[], totalAddonPrice: number) => {
+    setSelectedAddons(addons);
+    setAddonPrice(totalAddonPrice);
+  }, []);
   
-  const totalPrice = (item.price + selectedAddons.reduce((sum, addon) => sum + addon.price, 0)) * quantity;
+  const totalPrice = (item.price + addonPrice) * quantity;
 
   const handleConfirm = () => {
-    onAddToCart(item, selectedAddons, quantity, instructions);
+    onAddToCart(item, quantity, instructions, selectedAddons);
     onClose();
   };
 
   if (!isOpen) return null;
 
   return (
-    <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-md">
+    <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
+      <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader className="space-y-0">
           {item.image && !item.image.includes('placehold.co') && (
             <div className="relative h-48 -mx-6 -mt-6 mb-4">
-              <Image src={item.image!} alt={item.name} data-ai-hint={item.imageHint} fill className="rounded-t-lg object-cover" />
+              <img src={item.image!} alt={item.name} className="w-full h-full rounded-t-lg object-cover" />
             </div>
           )}
           <DialogTitle className="font-headline text-2xl">{item.name}</DialogTitle>
           <DialogDescription>{item.description}</DialogDescription>
         </DialogHeader>
-        <div className="py-4 space-y-6 max-h-[40vh] overflow-y-auto pr-2">
+        <div className="py-4 space-y-6 max-h-[50vh] overflow-y-auto pr-2">
             {item.characteristics && item.characteristics.length > 0 && (
                 <div className="space-y-3">
                     <h4 className="font-semibold text-gray-900 flex items-center gap-2">
@@ -215,27 +243,28 @@ function MenuItemDialog({
                 </div>
               ) : null
             }
-          {item.addons && item.addons.length > 0 && (
-            <div className="space-y-2">
-              <h4 className="font-semibold text-muted-foreground">Add-ons</h4>
-              <div className="space-y-2">
-                {item.addons.map((addon) => (
-                  <div key={addon.id} className="flex items-center justify-between rounded-md border p-3">
-                    <div>
-                      <Label htmlFor={addon.name} className="font-medium">{addon.name}</Label>
-                      <p className="text-sm text-muted-foreground">+{currencySymbol}{parseFloat(String(addon.price || '0')).toFixed(2)}</p>
-                    </div>
-                    <Button
-                      variant={selectedAddons.find((a) => a.id === addon.id) ? 'default' : 'outline'}
-                      size="icon" onClick={() => handleToggleAddon(addon)}
-                    >
-                      <Plus className="h-4 w-4" />
-                    </Button>
-                  </div>
-                ))}
+
+            {/* Addon Selection */}
+            {loadingAddons ? (
+              <div className="text-center py-4">
+                <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary mx-auto"></div>
+                <p className="text-sm text-muted-foreground mt-2">Loading options...</p>
               </div>
-            </div>
-          )}
+            ) : itemAddonGroups.length > 0 ? (
+              <div className="space-y-4">
+                <h4 className="font-semibold text-gray-900 flex items-center gap-2">
+                  <span className="w-1 h-4 bg-gradient-to-b from-orange-500 to-red-500 rounded-full"></span>
+                  Customize Your Order
+                </h4>
+                <AddonSelection
+                  menuItem={item}
+                  addonGroups={itemAddonGroups}
+                  onSelectionChange={handleAddonSelectionChange}
+                  currencySymbol={currencySymbol}
+                />
+              </div>
+            ) : null}
+
           <div className="space-y-2">
             <Label htmlFor="special-instructions" className="font-semibold text-muted-foreground">Special Instructions</Label>
             <Textarea 
@@ -243,10 +272,11 @@ function MenuItemDialog({
               placeholder="e.g. no onions, extra spicy" 
               value={instructions}
               onChange={(e) => setInstructions(e.target.value)}
+              className="p-3"
             />
           </div>
         </div>
-        <DialogFooter className="flex-col gap-2 pt-4 border-t">
+        <DialogFooter className="flex-col gap-4 pt-4 border-t">
             <div className="flex items-center justify-between w-full">
                 <Label className="font-semibold text-muted-foreground">Quantity</Label>
                 <div className="flex items-center gap-2">
@@ -255,7 +285,27 @@ function MenuItemDialog({
                   <Button variant="outline" size="icon" onClick={() => setQuantity(q => q+1)}><PlusCircle className="h-5 w-5"/></Button>
                 </div>
             </div>
-            <Button onClick={handleConfirm} className="w-full font-headline text-lg h-12">
+            
+            {/* Price Breakdown */}
+            {addonPrice > 0 && (
+              <div className="w-full space-y-1 text-sm text-muted-foreground">
+                <div className="flex justify-between">
+                  <span>Base price:</span>
+                  <span>{currencySymbol}{item.price.toFixed(2)}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span>Add-ons:</span>
+                  <span>{currencySymbol}{addonPrice.toFixed(2)}</span>
+                </div>
+                <Separator className="my-1" />
+                <div className="flex justify-between font-medium text-foreground">
+                  <span>Subtotal:</span>
+                  <span>{currencySymbol}{(item.price + addonPrice).toFixed(2)}</span>
+                </div>
+              </div>
+            )}
+
+            <Button onClick={handleConfirm} className="w-full font-headline text-lg h-12 bg-green-600 hover:bg-green-700">
               Add to Order - {currencySymbol}{totalPrice.toFixed(2)}
             </Button>
         </DialogFooter>
@@ -270,110 +320,116 @@ function MenuItem({
   currencySymbol
 }: {
   item: MenuItemType;
-  onAddToCart: (item: MenuItemType, addons: Addon[], quantity: number, instructions: string) => void;
+  onAddToCart: (item: MenuItemType, quantity: number, instructions: string, selectedAddons?: SelectedAddon[]) => void;
   currencySymbol: string;
 }) {
   const [isDialogOpen, setIsDialogOpen] = React.useState(false);
-  const hasImage = item.image && !item.image.includes('placehold.co');
+  const hasImage = item.image && item.image.length > 0 && !item.image.includes('placehold.co');
 
-  const hasAddons = item.addons && item.addons.length > 0;
   const isBasePriceZero = item.price === 0;
   
   let displayPrice = item.price;
   let pricePrefix = '';
 
-  if (isBasePriceZero && hasAddons) {
-    const addonPrices = item.addons!.map(a => a.price);
-    if (addonPrices.length > 0) {
-        displayPrice = Math.min(...addonPrices);
-        pricePrefix = 'From ';
-    }
-  }
-
   const handleQuickAdd = (e: React.MouseEvent) => {
     e.stopPropagation(); // Prevent opening the dialog
-    onAddToCart(item, [], 1, '');
+    onAddToCart(item, 1, '', []);
   };
 
   return (
     <>
       <div 
-        className="flex items-start justify-between p-2.5 sm:p-3 rounded-lg border transition-all hover:shadow-md hover:border-primary/30 cursor-pointer group bg-background"
+        className="flex items-start justify-between p-4 rounded-xl border transition-all hover:shadow-md hover:border-primary/30 cursor-pointer group bg-background"
         onClick={() => setIsDialogOpen(true)}
       >
-        <div className="flex items-start gap-2.5 sm:gap-3 flex-grow min-w-0">
-          {hasImage && (
-            <div className="relative h-10 w-10 sm:h-12 sm:w-12 flex-shrink-0">
-                <Image
-                    src={item.image!}
-                    alt={item.name}
-                    data-ai-hint={item.imageHint}
-                    fill
-                    className="rounded-md object-cover"
-                />
+        {/* Content Area - Left Side */}
+        <div className="flex-1 pr-4">
+          <h4 className="font-bold text-base sm:text-lg leading-tight text-gray-900 mb-2">{item.name}</h4>
+          {item.description && (
+            <p className="text-sm text-gray-600 mb-3 line-clamp-2 leading-relaxed">{item.description}</p>
+          )}
+          
+          {/* Set Menu Items Display */}
+          {item.isSetMenu && item.setMenuItems && item.setMenuItems.length > 0 && (
+            <div className="mb-3 p-2 bg-primary/8 rounded-lg border border-primary/15">
+              <p className="text-xs font-bold text-primary mb-1">Set includes:</p>
+              <div className="text-xs text-gray-700">
+                {item.setMenuItems.map((setItem, index) => (
+                  <span key={setItem.id}>
+                    {setItem.quantity > 1 ? `${setItem.quantity}x ` : ''}{setItem.name}
+                    {index < item.setMenuItems!.length - 1 ? ', ' : ''}
+                  </span>
+                ))}
+              </div>
             </div>
           )}
-          <div className="flex-grow min-w-0">
-              <h4 className="font-semibold text-sm sm:text-base leading-tight">{item.name}</h4>
-              <p className="text-xs sm:text-sm text-muted-foreground mt-0.5 text-balance line-clamp-2">{item.description}</p>
-              
-              {/* Set Menu Items Display */}
-              {item.isSetMenu && item.setMenuItems && item.setMenuItems.length > 0 && (
-                <div className="mt-1.5 p-1.5 bg-primary/5 rounded-md border border-primary/20">
-                  <p className="text-xs font-medium text-primary mb-0.5">Set includes:</p>
-                  <div className="text-xs text-muted-foreground">
-                    {item.setMenuItems.map((setItem, index) => (
-                      <span key={setItem.id}>
-                        {setItem.quantity > 1 ? `${setItem.quantity}x ` : ''}{setItem.name}
-                        {index < item.setMenuItems!.length - 1 ? ', ' : ''}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              )}
-              
-              <div className="flex justify-between items-end mt-1.5 gap-2">
-                <p className="text-sm sm:text-base font-bold text-primary flex-shrink-0">
-                  {pricePrefix}{currencySymbol}{typeof displayPrice === 'number' ? displayPrice.toFixed(2) : displayPrice}
-                </p>
-                {item.characteristics && item.characteristics.length > 0 && (
-                    <div className="flex flex-wrap gap-1 justify-end">
-                        <TooltipProvider>
-                            {item.characteristics.slice(0, 3).map(charId => {
-                                const IconComponent = getIconComponent(charId, Utensils);
-                                
-                                return (
-                                    <Tooltip key={charId}>
-                                        <TooltipTrigger>
-                                            <div className="transition-transform hover:scale-110">
-                                                <IconComponent className="h-3 w-3" />
-                                            </div>
-                                        </TooltipTrigger>
-                                        <TooltipContent>
-                                            <p>{charId}</p>
-                                        </TooltipContent>
-                                    </Tooltip>
-                                );
-                            })}
-                            {item.characteristics.length > 3 && (
-                                <div className="text-xs text-muted-foreground">+{item.characteristics.length - 3}</div>
-                            )}
-                        </TooltipProvider>
-                    </div>
-                )}
+          
+          {/* Price and Characteristics Row */}
+          <div className="flex items-center justify-between">
+            <p className="text-lg font-bold text-primary">
+              {pricePrefix}{currencySymbol}{typeof displayPrice === 'number' ? displayPrice.toFixed(2) : displayPrice}
+            </p>
+            
+            {/* Characteristics Icons */}
+            {item.characteristics && item.characteristics.length > 0 && (
+              <div className="flex gap-1">
+                <TooltipProvider>
+                  {item.characteristics.slice(0, 3).map(charId => {
+                    const IconComponent = getIconComponent(charId, Utensils);
+                    return (
+                      <Tooltip key={charId}>
+                        <TooltipTrigger>
+                          <div className="transition-transform hover:scale-110">
+                            <IconComponent className="h-3 w-3 text-gray-500" />
+                          </div>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          <p>{charId}</p>
+                        </TooltipContent>
+                      </Tooltip>
+                    );
+                  })}
+                  {item.characteristics.length > 3 && (
+                    <div className="text-xs text-muted-foreground">+{item.characteristics.length - 3}</div>
+                  )}
+                </TooltipProvider>
               </div>
+            )}
           </div>
         </div>
-        
-        <div className="ml-2 flex-shrink-0 self-center">
-            <Button 
-                size="icon" 
-                className="h-7 w-7 sm:h-8 sm:w-8 rounded-full group-hover:bg-primary group-hover:text-primary-foreground transition-colors" 
-                aria-label={`Add ${item.name} to cart`}
-                onClick={handleQuickAdd}
+
+        {/* Image and Smart Add Button - Right Side */}
+        <div className="relative flex-shrink-0">
+          {hasImage ? (
+            <div className="relative w-20 h-20 sm:w-24 sm:h-24 rounded-xl overflow-hidden shadow-md group-hover:shadow-lg transition-shadow border border-gray-200">
+              <img
+                src={item.image!}
+                alt={item.name}
+                className="w-full h-full object-cover border border-gray-200"
+              />
+              {/* Smart Plus Button */}
+              <div className="absolute bottom-0 right-0 transform translate-x-1 translate-y-1">
+                <Button
+                  size="icon"
+                  onClick={handleQuickAdd}
+                  className="h-10 w-10 rounded-full bg-green-500 hover:bg-green-600 shadow-lg hover:shadow-xl transition-all duration-200 hover:scale-110 border-2 border-white"
+                  aria-label={`Add ${item.name} to cart`}
+                >
+                  <Plus className="h-6 w-6 text-white" />
+                </Button>
+              </div>
+            </div>
+          ) : (
+            /* Only show the plus button when no image */
+            <Button
+              size="icon"
+              onClick={handleQuickAdd}
+              className="h-10 w-10 rounded-full bg-green-500 hover:bg-green-600 shadow-lg hover:shadow-xl transition-all duration-200 hover:scale-110 border-2 border-white"
+              aria-label={`Add ${item.name} to cart`}
             >
-                <Plus className="h-4 w-4 sm:h-5 sm:w-5" />
+              <Plus className="h-6 w-6 text-white" />
             </Button>
+          )}
         </div>
       </div>
       
@@ -400,7 +456,7 @@ function MenuSection({
       items: MenuItemType[];
       subCategories: { category: Category; items: MenuItemType[] }[]
   }[];
-  onAddToCart: (item: MenuItemType, addons: Addon[], quantity: number, instructions: string) => void;
+  onAddToCart: (item: MenuItemType, quantity: number, instructions: string, selectedAddons?: SelectedAddon[]) => void;
   searchQuery: string;
   setSearchQuery: (query: string) => void;
   currencySymbol: string;
@@ -499,12 +555,14 @@ function OrderSummary({
   const totalItems = order.reduce((sum, item) => sum + item.quantity, 0);
 
   const subtotal = order.reduce(
-    (acc, item) =>
-      acc +
-      (item.price + item.selectedAddons.reduce((a, ad) => a + ad.price, 0)) * item.quantity,
+    (acc, item) => {
+      const itemPrice = item.price;
+      const addonPrice = calculateSelectedAddonPrice(item.selectedAddons);
+      return acc + (itemPrice + addonPrice) * item.quantity;
+    },
     0
   );
-  const taxes = subtotal * (restaurantSettings?.taxRate || 0);
+  // No tax calculation - application is tax-free
   
   const availableOrderTypes = React.useMemo(() => [
         restaurantSettings?.orderTypeSettings?.deliveryEnabled && 'delivery',
@@ -556,6 +614,7 @@ function OrderSummary({
   const [voucherInput, setVoucherInput] = React.useState('');
   const [voucherError, setVoucherError] = React.useState('');
   const [appliedVoucher, setAppliedVoucher] = React.useState<Voucher | null>(null);
+  const [orderNote, setOrderNote] = React.useState(''); // Overall order note/special instructions
   
   // Update selected payment method when available methods change
   React.useEffect(() => {
@@ -597,22 +656,79 @@ function OrderSummary({
     calculateDeliveryFee();
   }, [selectedOrderType, advanceFulfillmentType, postcode, subtotal, tenantData?.id]);
 
-  // Generate time slots for advance orders
+  // Generate time slots for advance orders with smart same-day logic
   React.useEffect(() => {
     if (selectedOrderType === 'advance' && advanceDate) {
       const slots: string[] = [];
+      const now = new Date();
+      const selectedDate = new Date(advanceDate);
       
-      // Generate basic time slots from 9 AM to 9 PM
-      for (let hour = 9; hour <= 21; hour++) {
-        for (let minute = 0; minute < 60; minute += 30) {
+      // Normalize dates for comparison (remove time component)
+      const todayNormalized = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      const selectedDateNormalized = new Date(selectedDate.getFullYear(), selectedDate.getMonth(), selectedDate.getDate());
+      const isToday = todayNormalized.getTime() === selectedDateNormalized.getTime();
+      
+      // Get settings with proper defaults
+      const minHoursNotice = restaurantSettings?.advanceOrderSettings?.minHoursNotice || 4;
+      const timeSlotInterval = restaurantSettings?.advanceOrderSettings?.timeSlotInterval || 15;
+      
+      let startHour = 0;
+      let startMinute = 0;
+      
+      if (isToday) {
+        // For same day, start from current time + minimum notice
+        const earliestTime = new Date(now.getTime() + (minHoursNotice * 60 * 60 * 1000));
+        startHour = earliestTime.getHours();
+        startMinute = Math.ceil(earliestTime.getMinutes() / timeSlotInterval) * timeSlotInterval;
+        
+        // If minutes overflow to next hour
+        if (startMinute >= 60) {
+          startHour += 1;
+          startMinute = 0;
+        }
+        
+        // If we've passed business hours for today, no slots available
+        if (startHour >= 24) {
+          setTimeSlots([]);
+          return;
+        }
+      }
+      
+      // Generate slots for the day (business hours can be customized here)
+      const businessStartHour = 9; // 9 AM
+      const businessEndHour = 22; // 10 PM
+      
+      const actualStartHour = isToday ? Math.max(startHour, businessStartHour) : businessStartHour;
+      const actualStartMinute = isToday && startHour === actualStartHour ? startMinute : 0;
+      
+      for (let hour = actualStartHour; hour < businessEndHour; hour++) {
+        const minuteStart = (hour === actualStartHour) ? actualStartMinute : 0;
+        
+        for (let minute = minuteStart; minute < 60; minute += timeSlotInterval) {
           const timeString = `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`;
           slots.push(timeString);
         }
       }
       
+      // If it's today and no slots available, clear selections
+      if (isToday && slots.length === 0) {
+        setAdvanceDate(undefined);
+        setAdvanceTime('');
+        // Could show a toast message here about selecting a future date
+        return;
+      }
+      
       setTimeSlots(slots);
+      
+      // Auto-select first available slot if none selected
+      if (slots.length > 0 && !advanceTime) {
+        // Don't auto-select, let user choose
+        // setAdvanceTime(slots[0]);
+      }
+    } else {
+      setTimeSlots([]);
     }
-  }, [selectedOrderType, advanceDate]);
+  }, [selectedOrderType, advanceDate, restaurantSettings?.advanceOrderSettings]);
 
   const [voucherDiscount, setVoucherDiscount] = React.useState(0);
 
@@ -629,7 +745,8 @@ function OrderSummary({
     calculateDiscount();
   }, [appliedVoucher, subtotal]);
 
-  const finalTotal = subtotal + taxes + deliveryFee - voucherDiscount;
+  // Calculate final total without tax (application is tax-free)
+  const finalTotal = subtotal + deliveryFee - voucherDiscount;
 
   const handleApplyVoucher = async () => {
     if (!voucherInput.trim()) {
@@ -918,6 +1035,21 @@ function OrderSummary({
           });
           return;
         }
+        
+        // Validate minimum notice for same-day orders
+        const selectedDateTime = new Date(`${advanceDate.toISOString().split('T')[0]}T${advanceTime}:00`);
+        const now = new Date();
+        const minHoursNotice = restaurantSettings?.advanceOrderSettings?.minHoursNotice || 4;
+        const minDateTime = new Date(now.getTime() + (minHoursNotice * 60 * 60 * 1000));
+        
+        if (selectedDateTime < minDateTime) {
+          toast({
+            title: 'Invalid Advance Order Time',
+            description: `Same-day orders require at least ${minHoursNotice} hours notice. Please select a later time or a future date.`,
+            variant: 'destructive',
+          });
+          return;
+        }
       }
 
       // Process card payment if payment method is 'card'
@@ -954,26 +1086,31 @@ function OrderSummary({
         total: finalTotal,
         orderType: selectedOrderType,
         paymentMethod: selectedPaymentMethod,
-        items: order.map(item => ({
-          id: item.orderItemId,
-          menuItem: {
-            id: item.id,
-            name: item.name,
-            description: item.description || '',
-            price: item.price,
-            image: item.image || '',
-            imageHint: item.imageHint || '',
-            categoryId: item.categoryId,
-            available: item.available || true,
-            addons: item.addons || [],
-            characteristics: item.characteristics || [],
-            nutrition: item.nutrition || undefined,
-          },
-          orderItemId: item.orderItemId,
-          quantity: item.quantity,
-          selectedAddons: item.selectedAddons || [],
-          specialInstructions: item.specialInstructions || '',
-        })),
+        items: order.map(item => {
+          const addonPrice = calculateSelectedAddonPrice(item.selectedAddons);
+          return {
+            id: item.orderItemId,
+            menuItem: {
+              id: item.id,
+              name: item.name,
+              description: item.description || '',
+              price: item.price,
+              image: item.image || '',
+              imageHint: item.imageHint || '',
+              categoryId: item.categoryId,
+              available: item.available || true,
+              characteristics: item.characteristics || [],
+              nutrition: item.nutrition || undefined,
+            },
+            orderItemId: item.orderItemId,
+            quantity: item.quantity,
+            selectedAddons: item.selectedAddons || [],
+            specialInstructions: item.specialInstructions || '',
+            basePrice: item.price,
+            addonPrice: addonPrice,
+            finalPrice: item.price + addonPrice,
+          };
+        }),
         scheduledTime: selectedOrderType === 'advance' && advanceDate && advanceTime 
           ? new Date(`${advanceDate.toISOString().split('T')[0]}T${advanceTime}:00`) 
           : undefined,
@@ -987,6 +1124,8 @@ function OrderSummary({
         customerId: undefined,
         // Add payment transaction reference if card payment was processed
         paymentTransactionId: paymentResult?.transactionId || undefined,
+        // Add overall order note/special instructions
+        specialInstructions: orderNote.trim() || undefined,
       };
 
       const orderResult = await createOrder(orderData);
@@ -1101,54 +1240,69 @@ function OrderSummary({
         {/* Order Items - Collapsible on mobile */}
         <div className="lg:block">
           <div className="space-y-2 sm:space-y-3 max-h-48 sm:max-h-64 lg:max-h-none overflow-y-auto">
-            {order.map((item) => (
-              <div key={item.orderItemId} className="flex items-start justify-between py-2 border-b last:border-b-0">
-                <div className="flex-1 min-w-0">
-                  <h4 className="font-medium text-sm sm:text-base truncate">{item.name}</h4>
-                  {item.selectedAddons.length > 0 && (
-                    <div className="text-xs sm:text-sm text-muted-foreground truncate">
-                      {item.selectedAddons.map(addon => addon.name).join(', ')}
+            {order.map((item) => {
+              const addonPrice = calculateSelectedAddonPrice(item.selectedAddons);
+              const itemTotalPrice = (item.price + addonPrice) * item.quantity;
+              
+              return (
+                <div key={item.orderItemId} className="flex items-start justify-between py-2 border-b last:border-b-0">
+                  <div className="flex-1 min-w-0">
+                    <h4 className="font-medium text-sm sm:text-base truncate">{item.name}</h4>
+                    {item.selectedAddons && item.selectedAddons.length > 0 && (
+                      <div className="text-xs text-muted-foreground mt-1">
+                        {item.selectedAddons.map((addonGroup, groupIndex) => (
+                          <div key={groupIndex} className="mb-1">
+                            <span className="font-medium">{addonGroup.groupName}:</span>
+                            {addonGroup.options.map((option, optionIndex) => (
+                              <div key={optionIndex} className="ml-2">
+                                {option.quantity > 1 ? `${option.quantity}x ` : ''}{option.optionId}
+                                {option.totalPrice > 0 && ` (+${currencySymbol}${option.totalPrice.toFixed(2)})`}
+                              </div>
+                            ))}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    {item.specialInstructions && (
+                      <div className="text-xs sm:text-sm text-muted-foreground italic truncate mt-1">
+                        Note: {item.specialInstructions}
+                      </div>
+                    )}
+                    <div className="text-sm sm:text-base font-medium">
+                      {currencySymbol}{itemTotalPrice.toFixed(2)}
                     </div>
-                  )}
-                  {item.specialInstructions && (
-                    <div className="text-xs sm:text-sm text-muted-foreground italic truncate">
-                      Note: {item.specialInstructions}
-                    </div>
-                  )}
-                  <div className="text-sm sm:text-base font-medium">
-                    {currencySymbol}{((item.price + item.selectedAddons.reduce((sum, addon) => sum + addon.price, 0)) * item.quantity).toFixed(2)}
+                  </div>
+                  <div className="flex items-center gap-1 sm:gap-2 ml-2 sm:ml-4 flex-shrink-0">
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      className="h-6 w-6 sm:h-8 sm:w-8"
+                      onClick={() => updateQuantity(item.orderItemId, item.quantity - 1)}
+                    >
+                      <MinusCircle className="h-3 w-3 sm:h-4 sm:w-4" />
+                    </Button>
+                    <span className="w-6 sm:w-8 text-center text-sm sm:text-base">{item.quantity}</span>
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      className="h-6 w-6 sm:h-8 sm:w-8"
+                      onClick={() => updateQuantity(item.orderItemId, item.quantity + 1)}
+                    >
+                      <PlusCircle className="h-3 w-3 sm:h-4 sm:w-4" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-6 w-6 sm:h-8 sm:w-8 text-muted-foreground hover:text-red-500 hover:bg-red-50 transition-colors"
+                      onClick={() => removeFromOrder(item.orderItemId)}
+                      title="Remove item"
+                    >
+                      <Trash2 className="h-3 w-3 sm:h-4 sm:w-4" />
+                    </Button>
                   </div>
                 </div>
-                <div className="flex items-center gap-1 sm:gap-2 ml-2 sm:ml-4 flex-shrink-0">
-                  <Button
-                    variant="outline"
-                    size="icon"
-                    className="h-6 w-6 sm:h-8 sm:w-8"
-                    onClick={() => updateQuantity(item.orderItemId, item.quantity - 1)}
-                  >
-                    <MinusCircle className="h-3 w-3 sm:h-4 sm:w-4" />
-                  </Button>
-                  <span className="w-6 sm:w-8 text-center text-sm sm:text-base">{item.quantity}</span>
-                  <Button
-                    variant="outline"
-                    size="icon"
-                    className="h-6 w-6 sm:h-8 sm:w-8"
-                    onClick={() => updateQuantity(item.orderItemId, item.quantity + 1)}
-                  >
-                    <PlusCircle className="h-3 w-3 sm:h-4 sm:w-4" />
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-6 w-6 sm:h-8 sm:w-8 text-muted-foreground hover:text-red-500 hover:bg-red-50 transition-colors"
-                    onClick={() => removeFromOrder(item.orderItemId)}
-                    title="Remove item"
-                  >
-                    <Trash2 className="h-3 w-3 sm:h-4 sm:w-4" />
-                  </Button>
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
 
@@ -1177,63 +1331,158 @@ function OrderSummary({
           </RadioGroup>
         </div>
 
-        {/* Advance Order Options */}
+        {/* Advance Order Configuration */}
         {selectedOrderType === 'advance' && (
-          <div className="space-y-3 p-3 bg-muted rounded-lg">
-            <Label className="text-sm font-semibold">Fulfillment Type</Label>
-            <RadioGroup value={advanceFulfillmentType} onValueChange={(value: any) => setAdvanceFulfillmentType(value)}>
-              <div className="flex items-center space-x-2">
-                <RadioGroupItem value="delivery" id="advance-delivery" />
-                <Label htmlFor="advance-delivery">Delivery</Label>
-              </div>
-              <div className="flex items-center space-x-2">
-                <RadioGroupItem value="collection" id="advance-collection" />
-                <Label htmlFor="advance-collection">Collection</Label>
-              </div>
-            </RadioGroup>
+          <div className="space-y-4 p-4 border border-gray-300 bg-gray-50 rounded-lg">
+            <div className="border-b border-gray-200 pb-3">
+              <h3 className="font-semibold text-gray-900 text-lg">Schedule Your Order</h3>
+              <p className="text-gray-600 text-sm">Choose when you want your order ready</p>
+            </div>
             
-            <div className="grid grid-cols-2 gap-2">
-              <div>
-                <Label htmlFor="advance-date">Date</Label>
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <Button
-                      variant="outline"
-                      className={cn(
-                        "w-full justify-start text-left font-normal",
-                        !advanceDate && "text-muted-foreground"
-                      )}
-                    >
-                      <CalendarIcon className="mr-2 h-4 w-4" />
-                      {advanceDate ? format(advanceDate, "PPP") : "Pick a date"}
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0">
-                    <Calendar
-                      mode="single"
-                      selected={advanceDate}
-                      onSelect={setAdvanceDate}
-                      disabled={(date) => date < new Date()}
-                      initialFocus
-                    />
-                  </PopoverContent>
-                </Popover>
-              </div>
-              
-              <div>
-                <Label htmlFor="advance-time">Time</Label>
-                <Select value={advanceTime} onValueChange={setAdvanceTime}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select time" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {timeSlots.map(slot => (
-                      <SelectItem key={slot} value={slot}>{slot}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+            {/* Step 1: Fulfillment Method */}
+            <div className="space-y-3">
+              <Label className="font-medium text-gray-900">How would you like to receive your order?</Label>
+              <div className="grid grid-cols-2 gap-3">
+                {restaurantSettings?.orderTypeSettings?.deliveryEnabled && (
+                  <Button
+                    type="button"
+                    variant={advanceFulfillmentType === 'delivery' ? 'default' : 'outline'}
+                    className={`h-12 font-medium ${
+                      advanceFulfillmentType === 'delivery' 
+                        ? 'bg-blue-600 hover:bg-blue-700 text-white' 
+                        : 'border border-gray-300 hover:bg-gray-100'
+                    }`}
+                    onClick={() => {
+                      setAdvanceFulfillmentType('delivery');
+                      // Reset date and time when method changes
+                      setAdvanceDate(undefined);
+                      setAdvanceTime('');
+                    }}
+                  >
+                    Delivery
+                  </Button>
+                )}
+                {restaurantSettings?.orderTypeSettings?.collectionEnabled && (
+                  <Button
+                    type="button"
+                    variant={advanceFulfillmentType === 'collection' ? 'default' : 'outline'}
+                    className={`h-12 font-medium ${
+                      advanceFulfillmentType === 'collection' 
+                        ? 'bg-blue-600 hover:bg-blue-700 text-white' 
+                        : 'border border-gray-300 hover:bg-gray-100'
+                    }`}
+                    onClick={() => {
+                      setAdvanceFulfillmentType('collection');
+                      // Reset date and time when method changes
+                      setAdvanceDate(undefined);
+                      setAdvanceTime('');
+                    }}
+                  >
+                    Collection
+                  </Button>
+                )}
               </div>
             </div>
+
+            {/* Step 2: Date and Time Selection */}
+            {advanceFulfillmentType && (
+              <div className="space-y-3">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  {/* Date Selection */}
+                  <div className="space-y-2">
+                    <Label className="text-sm font-medium text-gray-700">Choose Date</Label>
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <Button 
+                          variant="outline" 
+                          className="w-full justify-start text-left h-11 bg-white border border-gray-300"
+                        >
+                          {advanceDate ? (
+                            <span>{format(advanceDate, "PPP")}</span>
+                          ) : (
+                            <span className="text-gray-500">Select date</span>
+                          )}
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-auto p-0" align="start">
+                        <Calendar
+                          mode="single"
+                          selected={advanceDate}
+                          onSelect={(date) => {
+                            setAdvanceDate(date);
+                            setAdvanceTime(''); // Reset time when date changes
+                          }}
+                          disabled={(date) => {
+                            const today = new Date();
+                            today.setHours(0, 0, 0, 0);
+                            const maxDays = restaurantSettings?.advanceOrderSettings?.maxDaysInAdvance || 60;
+                            const maxDate = new Date();
+                            maxDate.setDate(today.getDate() + maxDays);
+                            return date < today || date > maxDate;
+                          }}
+                          initialFocus
+                        />
+                      </PopoverContent>
+                    </Popover>
+                  </div>
+
+                  {/* Time Selection */}
+                  <div className="space-y-2">
+                    <Label className="text-sm font-medium text-gray-700">Choose Time</Label>
+                    {advanceDate && timeSlots.length > 0 ? (
+                      <Select value={advanceTime} onValueChange={setAdvanceTime}>
+                        <SelectTrigger className="h-11 bg-white border border-gray-300">
+                          {advanceTime ? (
+                            <span>{advanceTime}</span>
+                          ) : (
+                            <span className="text-gray-500">Select time</span>
+                          )}
+                        </SelectTrigger>
+                        <SelectContent>
+                          {timeSlots.map((slot) => (
+                            <SelectItem key={slot} value={slot}>
+                              {slot}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    ) : (
+                      <Button 
+                        variant="outline" 
+                        disabled 
+                        className="h-11 w-full bg-gray-100 border border-gray-200 text-gray-400"
+                      >
+                        {advanceDate ? (
+                          timeSlots.length === 0 ? "No slots available" : "Loading slots..."
+                        ) : (
+                          "Select date first"
+                        )}
+                      </Button>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Same-day Notice */}
+            {advanceDate && advanceDate.toDateString() === new Date().toDateString() && (
+              <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
+                <div className="text-amber-800 font-medium">Same-Day Order</div>
+                <div className="text-amber-700 text-sm">
+                  Orders for today require at least {restaurantSettings?.advanceOrderSettings?.minHoursNotice || 4} hours notice
+                </div>
+              </div>
+            )}
+
+            {/* Order Summary */}
+            {advanceDate && advanceTime && (
+              <div className="bg-green-50 border border-green-200 rounded-lg p-3">
+                <div className="text-green-800 font-medium">Order Scheduled</div>
+                <div className="text-green-700 text-sm">
+                  {advanceFulfillmentType === 'delivery' ? 'Delivery' : 'Collection'} on {format(advanceDate, "EEEE, MMMM do")} at {advanceTime}
+                </div>
+              </div>
+            )}
           </div>
         )}
 
@@ -1431,6 +1680,8 @@ function OrderSummary({
                   <Textarea
                     id="notes"
                     name="notes"
+                    value={orderNote}
+                    onChange={(e) => setOrderNote(e.target.value)}
                     placeholder="Any special instructions? e.g., no onions"
                     rows={3}
                   />
@@ -1557,12 +1808,27 @@ function OrderSummary({
 function LoginDialog({ children }: { children: React.ReactNode }) {
     const [isOpen, setIsOpen] = React.useState(false);
     const { login } = useTenantData();
+    const { tenantData } = useTenant();
     const { toast } = useToast();
     const [email, setEmail] = React.useState('');
     const [password, setPassword] = React.useState('');
+    const [isLoading, setIsLoading] = React.useState(false);
+    
+    // Sign up form state
+    const [signupFirstName, setSignupFirstName] = React.useState('');
+    const [signupLastName, setSignupLastName] = React.useState('');
+    const [signupEmail, setSignupEmail] = React.useState('');
+    const [signupPhone, setSignupPhone] = React.useState('');
+    const [signupPassword, setSignupPassword] = React.useState('');
+    
+    // Forgot password state
+    const [showForgotPassword, setShowForgotPassword] = React.useState(false);
+    const [forgotPasswordEmail, setForgotPasswordEmail] = React.useState('');
+    const [isForgotPasswordLoading, setIsForgotPasswordLoading] = React.useState(false);
 
     const handleLogin = async (e: React.FormEvent) => {
         e.preventDefault();
+        setIsLoading(true);
         try {
             const success = await login(email, password);
             if (success) {
@@ -1585,6 +1851,119 @@ function LoginDialog({ children }: { children: React.ReactNode }) {
                 description: '⚠️ An unexpected error occurred. Please try again later.',
                 duration: 5000
             });
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    const handleSignUp = async (e: React.FormEvent) => {
+        e.preventDefault();
+        setIsLoading(true);
+        
+        try {
+            const response = await fetch('/api/customer/auth/register', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    name: `${signupFirstName} ${signupLastName}`.trim(),
+                    email: signupEmail,
+                    phone: signupPhone,
+                    password: signupPassword,
+                    tenantId: tenantData?.id
+                }),
+            });
+
+            const result = await response.json();
+
+            if (result.success) {
+                toast({ 
+                    title: '🎉 Account Created Successfully!', 
+                    description: `Welcome ${signupFirstName} ${signupLastName}! ${result.message}`,
+                    duration: 6000
+                });
+                
+                // Clear form and close dialog
+                setSignupFirstName('');
+                setSignupLastName('');
+                setSignupEmail('');
+                setSignupPhone('');
+                setSignupPassword('');
+                setIsOpen(false);
+                
+                // Auto-login after successful registration
+                if (result.customer) {
+                    // Refresh the page or trigger a re-fetch of customer data
+                    window.location.reload();
+                }
+            } else {
+                toast({ 
+                    variant: 'destructive', 
+                    title: '❌ Registration Failed', 
+                    description: result.error || 'Failed to create account. Please try again.',
+                    duration: 5000
+                });
+            }
+        } catch (error) {
+            console.error('Sign up error:', error);
+            toast({ 
+                variant: 'destructive', 
+                title: '❌ Registration Error', 
+                description: '⚠️ An unexpected error occurred. Please try again later.',
+                duration: 5000
+            });
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    const handleForgotPassword = async (e: React.FormEvent) => {
+        e.preventDefault();
+        setIsForgotPasswordLoading(true);
+        
+        try {
+            const response = await fetch('/api/customer/auth/forgot-password', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    email: forgotPasswordEmail,
+                    tenantId: tenantData?.id
+                }),
+            });
+
+            const result = await response.json();
+
+            if (result.success) {
+                toast({ 
+                    title: '📧 Password Reset Email Sent', 
+                    description: 'Please check your email for password reset instructions.',
+                    duration: 6000
+                });
+                
+                // Clear form and return to login
+                setForgotPasswordEmail('');
+                setShowForgotPassword(false);
+            } else {
+                toast({ 
+                    variant: 'destructive', 
+                    title: '❌ Reset Failed', 
+                    description: result.error || 'Failed to send reset email. Please try again.',
+                    duration: 5000
+                });
+            }
+        } catch (error) {
+            console.error('Forgot password error:', error);
+            toast({ 
+                variant: 'destructive', 
+                title: '❌ Reset Error', 
+                description: '⚠️ An unexpected error occurred. Please try again later.',
+                duration: 5000
+            });
+        } finally {
+            setIsForgotPasswordLoading(false);
         }
     };
 
@@ -1595,68 +1974,176 @@ function LoginDialog({ children }: { children: React.ReactNode }) {
             </DialogTrigger>
             <DialogContent className="sm:max-w-md">
                 <DialogHeader>
-                    <DialogTitle>Welcome Back</DialogTitle>
+                    <DialogTitle>
+                        {showForgotPassword ? 'Reset Password' : 'Welcome Back'}
+                    </DialogTitle>
                     <DialogDescription>
-                        Sign in to your account to access exclusive features and faster checkout.
+                        {showForgotPassword 
+                            ? 'Enter your email address and we\'ll send you a link to reset your password.'
+                            : 'Sign in to your account to access exclusive features and faster checkout.'
+                        }
                     </DialogDescription>
                 </DialogHeader>
-                <Tabs defaultValue="login">
-                    <div className="space-y-4">
-                        <div className="space-y-1">
-                            <TabsList className="grid w-full grid-cols-2">
-                                <TabsTrigger value="login">Login</TabsTrigger>
-                                <TabsTrigger value="signup">Sign Up</TabsTrigger>
-                            </TabsList>
+                
+                {showForgotPassword ? (
+                    // Forgot Password Form
+                    <form onSubmit={handleForgotPassword} className="space-y-4">
+                        <div className="space-y-2">
+                            <Label htmlFor="forgot-email">Email</Label>
+                            <Input
+                                id="forgot-email"
+                                type="email"
+                                value={forgotPasswordEmail}
+                                onChange={(e) => setForgotPasswordEmail(e.target.value)}
+                                placeholder="Enter your email address"
+                                required
+                            />
                         </div>
-                        
+                        <Button type="submit" className="w-full" disabled={isForgotPasswordLoading}>
+                            {isForgotPasswordLoading ? 'Sending Reset Link...' : 'Send Reset Link'}
+                        </Button>
+                        <Button 
+                            type="button" 
+                            variant="ghost" 
+                            className="w-full"
+                            onClick={() => {
+                                setShowForgotPassword(false);
+                                setForgotPasswordEmail('');
+                            }}
+                        >
+                            Back to Login
+                        </Button>
+                    </form>
+                ) : (
+                    // Login and Signup Tabs
+                    <Tabs defaultValue="login">
                         <div className="space-y-4">
-                    
-                    <TabsContent value="login">
-                        <form onSubmit={handleLogin} className="space-y-4">
+                            <div className="space-y-1">
+                                <TabsList className="grid w-full grid-cols-2">
+                                    <TabsTrigger value="login">Login</TabsTrigger>
+                                    <TabsTrigger value="signup">Sign Up</TabsTrigger>
+                                </TabsList>
+                            </div>
+                            
+                            <div className="space-y-4">
+                        
+                        <TabsContent value="login">
+                            <form onSubmit={handleLogin} className="space-y-4">
+                                <div className="space-y-2">
+                                    <Label htmlFor="email">Email</Label>
+                                    <Input
+                                        id="email"
+                                        type="email"
+                                        value={email}
+                                        onChange={(e) => setEmail(e.target.value)}
+                                        placeholder="Enter your email"
+                                        required
+                                    />
+                                </div>
+                                <div className="space-y-2">
+                                    <Label htmlFor="password">Password</Label>
+                                    <Input
+                                        id="password"
+                                        type="password"
+                                        value={password}
+                                        onChange={(e) => setPassword(e.target.value)}
+                                        placeholder="Enter your password"
+                                        required
+                                    />
+                                </div>
+                                <Button type="submit" className="w-full" disabled={isLoading}>
+                                    {isLoading ? 'Signing In...' : 'Sign In'}
+                                </Button>
+                                <Button 
+                                    type="button" 
+                                    variant="link" 
+                                    className="w-full text-sm text-muted-foreground"
+                                    onClick={() => setShowForgotPassword(true)}
+                                >
+                                    Forgot your password?
+                                </Button>
+                            </form>
+                        </TabsContent>
+                    <TabsContent value="signup">
+                        <form onSubmit={handleSignUp} className="space-y-4">
+                            <div className="grid grid-cols-2 gap-4">
+                                <div className="space-y-2">
+                                    <Label htmlFor="signup-firstname">First Name</Label>
+                                    <Input
+                                        id="signup-firstname"
+                                        type="text"
+                                        value={signupFirstName}
+                                        onChange={(e) => setSignupFirstName(e.target.value)}
+                                        placeholder="Enter your first name"
+                                        required
+                                    />
+                                </div>
+                                <div className="space-y-2">
+                                    <Label htmlFor="signup-lastname">Surname</Label>
+                                    <Input
+                                        id="signup-lastname"
+                                        type="text"
+                                        value={signupLastName}
+                                        onChange={(e) => setSignupLastName(e.target.value)}
+                                        placeholder="Enter your surname"
+                                        required
+                                    />
+                                </div>
+                            </div>
                             <div className="space-y-2">
-                                <Label htmlFor="email">Email</Label>
+                                <Label htmlFor="signup-email">Email</Label>
                                 <Input
-                                    id="email"
+                                    id="signup-email"
                                     type="email"
-                                    value={email}
-                                    onChange={(e) => setEmail(e.target.value)}
+                                    value={signupEmail}
+                                    onChange={(e) => setSignupEmail(e.target.value)}
                                     placeholder="Enter your email"
                                     required
                                 />
                             </div>
                             <div className="space-y-2">
-                                <Label htmlFor="password">Password</Label>
+                                <Label htmlFor="signup-phone">Phone Number</Label>
                                 <Input
-                                    id="password"
-                                    type="password"
-                                    value={password}
-                                    onChange={(e) => setPassword(e.target.value)}
-                                    placeholder="Enter your password"
+                                    id="signup-phone"
+                                    type="tel"
+                                    value={signupPhone}
+                                    onChange={(e) => setSignupPhone(e.target.value)}
+                                    placeholder="Enter your phone number"
                                     required
                                 />
                             </div>
-                            <Button type="submit" className="w-full">
-                                Sign In
+                            <div className="space-y-2">
+                                <Label htmlFor="signup-password">Password</Label>
+                                <Input
+                                    id="signup-password"
+                                    type="password"
+                                    value={signupPassword}
+                                    onChange={(e) => setSignupPassword(e.target.value)}
+                                    placeholder="Create a password (min 6 characters)"
+                                    required
+                                    minLength={6}
+                                />
+                            </div>
+                            <Button type="submit" className="w-full" disabled={isLoading}>
+                                {isLoading ? 'Creating Account...' : 'Create Account'}
                             </Button>
+                            <p className="text-xs text-muted-foreground text-center">
+                                By signing up, you'll receive 100 loyalty points as a welcome bonus!
+                            </p>
                         </form>
                     </TabsContent>
-                    <TabsContent value="signup">
-                        <div className="text-center text-muted-foreground">
-                            <p>Sign up functionality coming soon!</p>
-                        </div>
-                    </TabsContent>
                 </div>
-                    </div>
-                </Tabs>
+                        </div>
+                    </Tabs>
+                )}
             </DialogContent>
         </Dialog>
     );
 }
 
 // Header Component
-function CustomerHeader() {
+function CustomerHeader({ router, tenantData }: { router: any; tenantData: any }) {
     const { currentUser, isAuthenticated, logout, restaurantSettings } = useTenantData();
-    const { tenantData } = useTenant();
 
     const restaurantStatus = restaurantSettings?.openingHours ? 
         getRestaurantStatus(restaurantSettings.openingHours) : 
@@ -1704,8 +2191,21 @@ function CustomerHeader() {
                                     <span className="sm:hidden">{currentUser.name.split(' ')[0]}</span>
                                 </Button>
                             </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end">
+                            <DropdownMenuContent align="end" className="w-48">
                                 <DropdownMenuLabel>My Account</DropdownMenuLabel>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem onClick={() => router.push(`/${tenantData?.slug}/customer/dashboard`)}>
+                                    <User className="mr-2 h-4 w-4" />
+                                    <span>Dashboard</span>
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => router.push(`/${tenantData?.slug}/customer/profile`)}>
+                                    <User className="mr-2 h-4 w-4" />
+                                    <span>Profile</span>
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => router.push(`/${tenantData?.slug}/customer/orders`)}>
+                                    <Package className="mr-2 h-4 w-4" />
+                                    <span>My Orders</span>
+                                </DropdownMenuItem>
                                 <DropdownMenuSeparator />
                                 <DropdownMenuItem onClick={logout}>
                                     <LogOut className="mr-2 h-4 w-4" />
@@ -1733,14 +2233,24 @@ function MobileBottomNav({
   totalItems, 
   onCartClick, 
   onSearchClick,
-  activeSection = 'menu' 
+  activeSection = 'menu',
+  router,
+  tenantSlug
 }: { 
   totalItems: number;
   onCartClick: () => void;
   onSearchClick: () => void;
   activeSection?: 'menu' | 'cart' | 'search' | 'account';
+  router: any;
+  tenantSlug?: string;
 }) {
     const { currentUser, isAuthenticated } = useTenantData();
+
+    const handleAccountClick = () => {
+        if (isAuthenticated && tenantSlug) {
+            router.push(`/${tenantSlug}/customer/dashboard`);
+        }
+    };
 
     return (
         <div className="fixed bottom-0 left-0 right-0 z-50 bg-white/95 backdrop-blur-md border-t border-gray-200 shadow-2xl lg:hidden">
@@ -1792,16 +2302,32 @@ function MobileBottomNav({
                 </button>
 
                 {/* Account */}
-                <button 
-                    className={`flex flex-col items-center justify-center space-y-1.5 py-2 rounded-xl mx-1 transition-all duration-200 ${
-                        activeSection === 'account' 
-                            ? 'text-primary bg-primary/15 shadow-sm' 
-                            : 'text-gray-600 hover:text-primary hover:bg-primary/5'
-                    }`}
-                >
-                    <User className="h-5 w-5" />
-                    <span className="text-xs font-semibold">{isAuthenticated ? 'Account' : 'Login'}</span>
-                </button>
+                {isAuthenticated ? (
+                    <button 
+                        className={`flex flex-col items-center justify-center space-y-1.5 py-2 rounded-xl mx-1 transition-all duration-200 ${
+                            activeSection === 'account' 
+                                ? 'text-primary bg-primary/15 shadow-sm' 
+                                : 'text-gray-600 hover:text-primary hover:bg-primary/5'
+                        }`}
+                        onClick={handleAccountClick}
+                    >
+                        <User className="h-5 w-5" />
+                        <span className="text-xs font-semibold">Account</span>
+                    </button>
+                ) : (
+                    <LoginDialog>
+                        <button 
+                            className={`flex flex-col items-center justify-center space-y-1.5 py-2 rounded-xl mx-1 transition-all duration-200 ${
+                                activeSection === 'account' 
+                                    ? 'text-primary bg-primary/15 shadow-sm' 
+                                    : 'text-gray-600 hover:text-primary hover:bg-primary/5'
+                            }`}
+                        >
+                            <User className="h-5 w-5" />
+                            <span className="text-xs font-semibold">Login</span>
+                        </button>
+                    </LoginDialog>
+                )}
             </div>
         </div>
     );
@@ -1918,74 +2444,100 @@ function MobileMenuItem({
     currencySymbol 
 }: {
     item: MenuItemType;
-    onAddToCart: (item: MenuItemType, addons: Addon[], quantity: number, instructions: string) => void;
+    onAddToCart: (item: MenuItemType, quantity: number, instructions: string, selectedAddons?: SelectedAddon[]) => void;
     currencySymbol: string;
 }) {
     const [isDialogOpen, setIsDialogOpen] = React.useState(false);
 
-    const handleQuickAdd = () => {
-        onAddToCart(item, [], 1, '');
+    const handleQuickAdd = (e: React.MouseEvent) => {
+        e.stopPropagation(); // Prevent opening the dialog
+        onAddToCart(item, 1, '', []);
     };
 
     return (
-        <Card className="border-0 shadow-none hover:shadow-sm transition-all duration-200 bg-white rounded-xl overflow-hidden">
-            <CardContent className="p-0">
-                <div className="flex gap-3 p-4">
-                    {/* Content */}
-                    <div className="flex-1 space-y-2">
-                        <h4 className="font-bold text-base leading-tight line-clamp-2 text-gray-900">
-                            {item.name}
-                        </h4>
-                        {item.description && (
-                            <p className="text-sm text-gray-600 line-clamp-2 leading-relaxed">
-                                {item.description}
-                            </p>
-                        )}
-                        
-                        {/* Set Menu Items Display - Mobile */}
-                        {item.isSetMenu && item.setMenuItems && item.setMenuItems.length > 0 && (
-                            <div className="p-2.5 bg-primary/8 rounded-lg border border-primary/15">
-                                <p className="text-xs font-bold text-primary mb-1">Set includes:</p>
-                                <div className="text-xs text-gray-700 font-medium">
-                                    {item.setMenuItems.map((setItem, index) => (
-                                        <span key={setItem.id}>
-                                            {setItem.quantity > 1 ? `${setItem.quantity}x ` : ''}{setItem.name}
-                                            {index < item.setMenuItems!.length - 1 ? ', ' : ''}
-                                        </span>
-                                    ))}
+        <>
+            <Card className="border-0 shadow-none hover:shadow-md transition-all duration-200 bg-white rounded-xl overflow-hidden cursor-pointer"
+                  onClick={() => setIsDialogOpen(true)}>
+                <CardContent className="p-0">
+                    <div className="flex gap-4 p-4">
+                        {/* Content - Left Side */}
+                        <div className="flex-1">
+                            <h4 className="font-bold text-base leading-tight line-clamp-2 text-gray-900 mb-2">
+                                {item.name}
+                            </h4>
+                            {item.description && (
+                                <p className="text-sm text-gray-600 line-clamp-2 leading-relaxed mb-3">
+                                    {item.description}
+                                </p>
+                            )}
+                            
+                            {/* Set Menu Items Display - Mobile */}
+                            {item.isSetMenu && item.setMenuItems && item.setMenuItems.length > 0 && (
+                                <div className="p-2.5 bg-primary/8 rounded-lg border border-primary/15 mb-3">
+                                    <p className="text-xs font-bold text-primary mb-1">Set includes:</p>
+                                    <div className="text-xs text-gray-700 font-medium">
+                                        {item.setMenuItems.map((setItem, index) => (
+                                            <span key={setItem.id}>
+                                                {setItem.quantity > 1 ? `${setItem.quantity}x ` : ''}{setItem.name}
+                                                {index < item.setMenuItems!.length - 1 ? ', ' : ''}
+                                            </span>
+                                        ))}
+                                    </div>
                                 </div>
+                            )}
+                            
+                            <div className="flex items-center justify-between pt-1">
+                                <p className="text-lg font-bold text-primary">
+                                    {currencySymbol}{item.price.toFixed(2)}
+                                </p>
                             </div>
-                        )}
+                        </div>
                         
-                        <div className="flex items-center justify-between pt-1">
-                            <p className="text-lg font-bold text-primary">
-                                {currencySymbol}{item.price.toFixed(2)}
-                            </p>
-                            <Button
-                                size="sm"
-                                onClick={handleQuickAdd}
-                                className="rounded-full h-8 w-8 p-0 bg-primary hover:bg-primary/90 shadow-md hover:shadow-lg transition-all duration-200"
-                            >
-                                <Plus className="h-4 w-4 text-white" />
-                            </Button>
+                        {/* Image with Smart Add Button - Right Side */}
+                        <div className="relative flex-shrink-0">
+                            {item.image && item.image.length > 0 && !item.image.includes('placehold.co') ? (
+                                <div className="relative w-20 h-20 rounded-xl overflow-hidden shadow-md hover:shadow-lg transition-shadow border border-gray-200">
+                                    <img
+                                        src={item.image}
+                                        alt={item.name}
+                                        className="w-full h-full object-cover border border-gray-200"
+                                    />
+                                    {/* Smart Plus Button */}
+                                    <div className="absolute bottom-0 right-0 transform translate-x-1 translate-y-1">
+                                        <Button
+                                            size="icon"
+                                            onClick={handleQuickAdd}
+                                            className="h-10 w-10 rounded-full bg-green-500 hover:bg-green-600 shadow-lg hover:shadow-xl transition-all duration-200 hover:scale-110 border-2 border-white"
+                                            aria-label={`Add ${item.name} to cart`}
+                                        >
+                                            <Plus className="h-6 w-6 text-white" />
+                                        </Button>
+                                    </div>
+                                </div>
+                            ) : (
+                                /* Only show the plus button when no image */
+                                <Button
+                                    size="icon"
+                                    onClick={handleQuickAdd}
+                                    className="h-10 w-10 rounded-full bg-green-500 hover:bg-green-600 shadow-lg hover:shadow-xl transition-all duration-200 hover:scale-110 border-2 border-white"
+                                    aria-label={`Add ${item.name} to cart`}
+                                >
+                                    <Plus className="h-6 w-6 text-white" />
+                                </Button>
+                            )}
                         </div>
                     </div>
-                    
-                    {/* Image */}
-                    {item.image && (
-                        <div className="relative w-16 h-16 rounded-xl overflow-hidden flex-shrink-0 ring-1 ring-gray-200">
-                            <Image
-                                src={item.image}
-                                alt={item.name}
-                                fill
-                                className="object-cover"
-                                data-ai-hint={item.imageHint}
-                            />
-                        </div>
-                    )}
-                </div>
-            </CardContent>
-        </Card>
+                </CardContent>
+            </Card>
+            
+            <MenuItemDialog 
+                item={item} 
+                isOpen={isDialogOpen} 
+                onClose={() => setIsDialogOpen(false)} 
+                onAddToCart={onAddToCart}
+                currencySymbol={currencySymbol}
+            />
+        </>
     );
 }
 
@@ -2037,6 +2589,11 @@ export default function TenantCustomerInterface() {
     const [order, setOrder] = React.useState<OrderItem[]>([]);
     const [searchQuery, setSearchQuery] = React.useState('');
 
+    // Get restaurant status for mobile header
+    const restaurantStatus = restaurantSettings?.openingHours ? 
+        getRestaurantStatus(restaurantSettings.openingHours) : 
+        { isOpen: true, message: 'Open' };
+
     // Process menu data to match customer page structure
     const menuItems = getMenuWithCategoriesForCustomer();
     
@@ -2086,15 +2643,12 @@ export default function TenantCustomerInterface() {
 
     const currencySymbol = getCurrencySymbol(restaurantSettings?.currency);
 
-    const handleAddToCart = (item: MenuItemType, addons: Addon[], quantity: number, instructions: string) => {
-        // Check if the same item with identical addons and instructions already exists
+    const handleAddToCart = (item: MenuItemType, quantity: number, instructions: string, selectedAddons?: SelectedAddon[]) => {
+        // Check if the same item with identical instructions and addons already exists
         const existingItemIndex = order.findIndex(orderItem => 
             orderItem.id === item.id &&
             orderItem.specialInstructions === instructions &&
-            orderItem.selectedAddons.length === addons.length &&
-            orderItem.selectedAddons.every(existingAddon => 
-                addons.find(newAddon => newAddon.id === existingAddon.id)
-            )
+            JSON.stringify(orderItem.selectedAddons) === JSON.stringify(selectedAddons || [])
         );
 
         if (existingItemIndex !== -1) {
@@ -2112,6 +2666,7 @@ export default function TenantCustomerInterface() {
             });
         } else {
             // New item or different configuration - create new entry
+            const addonPrice = calculateSelectedAddonPrice(selectedAddons || []);
             const orderItem: OrderItem = {
                 orderItemId: `${item.id}-${Date.now()}`,
                 id: item.id,
@@ -2121,13 +2676,15 @@ export default function TenantCustomerInterface() {
                 image: item.image,
                 categoryId: item.categoryId,
                 available: item.available || true,
-                selectedAddons: addons,
+                selectedAddons: selectedAddons || [],
                 quantity,
                 specialInstructions: instructions,
+                basePrice: item.price,
+                addonPrice: addonPrice,
+                finalPrice: item.price + addonPrice,
                 
                 // Optional fields
                 imageHint: item.imageHint,
-                addons: item.addons,
                 characteristics: item.characteristics,
                 nutrition: item.nutrition,
             };
@@ -2176,27 +2733,22 @@ export default function TenantCustomerInterface() {
             <div className="min-h-screen bg-background">
                 {/* Desktop Header - Hidden on Mobile */}
                 <div className="hidden lg:block">
-                    <CustomerHeader />
+                    <CustomerHeader router={router} tenantData={tenantData} />
                     <CoverImageSection />
                 </div>
 
                 {/* Mobile App-like Header */}
-                <div className="lg:hidden bg-gradient-to-r from-white to-gray-50 shadow-sm sticky top-0 z-50 border-b border-gray-100">
-                    <div className="flex items-center p-4">
-                        <div className="flex items-center space-x-3 flex-1 min-w-0">
-                            {restaurantSettings?.logo && (
-                                <div className="relative">
-                                    <img 
-                                        src={restaurantSettings.logo} 
-                                        alt="Restaurant Logo"
-                                        className="h-10 w-10 rounded-xl object-cover flex-shrink-0 ring-2 ring-primary/10"
-                                    />
-                                </div>
-                            )}
-                            <div className="flex-1 min-w-0">
-                                <h1 className="font-bold text-lg text-gray-900 truncate leading-tight">{restaurantSettings?.name || 'Restaurant'}</h1>
-                                <p className="text-sm text-gray-600 truncate font-medium">{restaurantSettings?.description || 'Delicious food awaits'}</p>
-                            </div>
+                <div className="lg:hidden bg-white shadow-sm sticky top-0 z-50 border-b border-gray-100">
+                    <div className="flex items-center justify-between p-4">
+                        <div className="flex-1">
+                            <h1 className="font-bold text-xl text-gray-900">{restaurantSettings?.name || 'Restaurant'}</h1>
+                            <p className="text-sm text-gray-500">{restaurantSettings?.description || 'Order online'}</p>
+                        </div>
+                        <div className="flex items-center space-x-2">
+                            <div className={`h-2 w-2 rounded-full ${restaurantStatus.isOpen ? 'bg-green-500' : 'bg-red-500'}`}></div>
+                            <span className="text-xs font-medium text-gray-600">
+                                {restaurantStatus.isOpen ? 'Open' : 'Closed'}
+                            </span>
                         </div>
                     </div>
                 </div>
@@ -2255,29 +2807,82 @@ export default function TenantCustomerInterface() {
                             onCartClick={() => {
                                 const cartElement = document.getElementById('mobile-cart');
                                 if (cartElement) {
-                                    cartElement.classList.toggle('translate-y-full');
+                                    cartElement.classList.remove('translate-y-full');
                                 }
                             }}
                             onSearchClick={() => {
-                                // Open search modal or focus search input
-                                const searchInput = document.querySelector('input[type="text"]') as HTMLInputElement;
-                                if (searchInput) {
-                                    searchInput.focus();
-                                }
+                                // Scroll to top to focus on search
+                                window.scrollTo({ top: 0, behavior: 'smooth' });
+                                // Focus search input after scroll
+                                setTimeout(() => {
+                                    const searchInput = document.querySelector('input[type="text"]') as HTMLInputElement;
+                                    if (searchInput) {
+                                        searchInput.focus();
+                                    }
+                                }, 300);
                             }}
+                            router={router}
+                            tenantSlug={tenantData?.slug}
                         />
 
                         {/* Hidden Cart Summary for mobile - slides up when needed */}
-                        <div id="mobile-cart" className="fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-md border-t border-gray-200 shadow-2xl transform translate-y-full transition-transform duration-300 z-40 rounded-t-3xl overflow-hidden">
-                            <div className="w-12 h-1 bg-gray-300 rounded-full mx-auto mt-3 mb-2"></div>
-                            <OrderSummary
-                                order={order}
-                                updateQuantity={handleUpdateQuantity}
-                                removeFromOrder={handleRemoveFromOrder}
-                                clearOrder={handleClearOrder}
-                                currencySymbol={currencySymbol}
-                                router={router}
-                            />
+                        <div id="mobile-cart" className="fixed bottom-0 left-0 right-0 bg-white shadow-2xl transform translate-y-full transition-transform duration-300 z-50 h-full overflow-hidden">
+                            {/* Simple Cart Header with Back Button - Mobile App Style */}
+                            <div className="flex items-center justify-between px-4 py-4 border-b border-gray-100 bg-white sticky top-0 z-10">
+                                <button
+                                    onClick={() => {
+                                        const cartElement = document.getElementById('mobile-cart');
+                                        if (cartElement) {
+                                            cartElement.classList.add('translate-y-full');
+                                        }
+                                    }}
+                                    className="flex items-center justify-center w-10 h-10 rounded-full bg-gray-100 hover:bg-gray-200 transition-colors"
+                                >
+                                    <svg className="w-6 h-6 text-gray-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                                    </svg>
+                                </button>
+                                <h2 className="text-lg font-semibold text-gray-900">Your Order</h2>
+                                <div className="w-10"></div> {/* Spacer for center alignment */}
+                            </div>
+                            
+                            {/* Mobile Cart Content - Full Featured */}
+                            <div className="flex-1 overflow-auto pb-20">
+                                {order.length === 0 ? (
+                                    <div className="flex flex-col items-center justify-center py-16 px-6 text-center">
+                                        <div className="w-24 h-24 bg-gray-100 rounded-full flex items-center justify-center mb-4">
+                                            <ShoppingBasket className="h-12 w-12 text-gray-400" />
+                                        </div>
+                                        <h3 className="text-lg font-semibold text-gray-900 mb-2">Your cart is empty</h3>
+                                        <p className="text-gray-500 mb-6">Add items from the menu to get started</p>
+                                        <Button 
+                                            onClick={() => {
+                                                const cartElement = document.getElementById('mobile-cart');
+                                                if (cartElement) {
+                                                    cartElement.classList.add('translate-y-full');
+                                                }
+                                            }}
+                                            className="w-full max-w-xs"
+                                        >
+                                            Continue Shopping
+                                        </Button>
+                                    </div>
+                                ) : (
+                                    <div>
+                                        {/* Use the full OrderSummary component for mobile */}
+                                        <div className="p-4">
+                                            <OrderSummary
+                                                order={order}
+                                                updateQuantity={handleUpdateQuantity}
+                                                removeFromOrder={handleRemoveFromOrder}
+                                                clearOrder={handleClearOrder}
+                                                currencySymbol={currencySymbol}
+                                                router={router}
+                                            />
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
                         </div>
                     </div>
 

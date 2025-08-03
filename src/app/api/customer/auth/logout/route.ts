@@ -3,7 +3,7 @@ import { CustomerAuthService } from '@/lib/customer-auth-service';
 
 export async function POST(request: NextRequest) {
   try {
-    const token = request.cookies.get('customer-token')?.value;
+    const token = request.cookies.get('customer_token')?.value;
 
     if (!token) {
       return NextResponse.json({
@@ -20,7 +20,7 @@ export async function POST(request: NextRequest) {
     });
 
     // Clear the cookie
-    response.cookies.set('customer-token', '', {
+    response.cookies.set('customer_token', '', {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax',
@@ -41,7 +41,7 @@ export async function POST(request: NextRequest) {
 
 export async function GET(request: NextRequest) {
   try {
-    const token = request.cookies.get('customer-token')?.value;
+    const token = request.cookies.get('customer_token')?.value;
 
     if (!token) {
       return NextResponse.json({

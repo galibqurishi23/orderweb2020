@@ -8,7 +8,7 @@
   "scripts": {
     "setup": "node setup-database.js",
     "build": "next build",
-    "start": "next start -p 3000",
+    "start": "next start -p 9002",
     "production": "npm run setup && npm run build && npm start",
     "health-check": "node health-check.js",
     "dev": "next dev -p 9002",
@@ -58,6 +58,7 @@
     "mjml-react": "^2.0.8",
     "mysql2": "^3.10.1",
     "next": "15.3.3",
+    "node-fetch": "^3.3.2",
     "nodemailer": "^7.0.5",
     "patch-package": "^8.0.0",
     "react": "^18.3.1",

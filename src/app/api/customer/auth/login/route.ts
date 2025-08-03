@@ -3,34 +3,36 @@ import { CustomerAuthService } from '@/lib/customer-auth-service';
 
 export async function POST(request: NextRequest) {
   try {
-    const { email, password, tenantId } = await request.json();
+    const body = await request.json();
+    const { email, password, tenantId } = body;
 
-    if (!email || !password || !tenantId) {
+    if (!email || !password) {
       return NextResponse.json({
         success: false,
-        error: 'Email, password, and restaurant are required'
+        error: 'Email and password are required'
       }, { status: 400 });
     }
 
-    // Get client IP for rate limiting
-    const clientIP = request.headers.get('x-forwarded-for') || 
+    // Get client IP for security logging
+    const ipAddress = request.headers.get('x-forwarded-for') || 
                      request.headers.get('x-real-ip') || 
                      'unknown';
 
-    const result = await CustomerAuthService.login(email, password, tenantId, clientIP);
+    const result = await CustomerAuthService.login(email, password, tenantId, ipAddress);
 
-    if (result.success) {
+    if (result.success && result.token) {
       const response = NextResponse.json({
         success: true,
+        message: 'Login successful',
         customer: result.customer
       });
 
-      // Set HTTP-only cookie with JWT token
-      response.cookies.set('customer-token', result.token!, {
+      // Set secure HTTP-only cookie
+      response.cookies.set('customer_token', result.token, {
         httpOnly: true,
         secure: process.env.NODE_ENV === 'production',
         sameSite: 'lax',
-        maxAge: 7 * 24 * 60 * 60, // 7 days
+        maxAge: 60 * 60 * 24 * 7, // 7 days
         path: '/'
       });
 
@@ -38,7 +40,7 @@ export async function POST(request: NextRequest) {
     } else {
       return NextResponse.json({
         success: false,
-        error: result.error
+        error: result.error || 'Invalid credentials'
       }, { status: 401 });
     }
 

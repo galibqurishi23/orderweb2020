@@ -16,7 +16,7 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
     const customerId = decoded.customerId;
 
     // Verify the address belongs to the customer
-    const checkQuery = 'SELECT id FROM customer_addresses WHERE id = ? AND customer_id = ?';
+    const checkQuery = 'SELECT id FROM addresses WHERE id = ? AND customer_id = ?';
     const existingAddresses = await db.query(checkQuery, [params.id, customerId]);
     
     if (!existingAddresses || (existingAddresses as any[]).length === 0) {
@@ -25,13 +25,13 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
 
     // Update all addresses to not be default
     await db.query(
-      'UPDATE customer_addresses SET is_default = FALSE WHERE customer_id = ?',
+      'UPDATE addresses SET is_default = FALSE WHERE customer_id = ?',
       [customerId]
     );
 
     // Set the specified address as default
     await db.query(
-      'UPDATE customer_addresses SET is_default = TRUE WHERE id = ? AND customer_id = ?',
+      'UPDATE addresses SET is_default = TRUE WHERE id = ? AND customer_id = ?',
       [params.id, customerId]
     );
 

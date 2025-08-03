@@ -160,6 +160,14 @@ export class OrderPrintingService {
       lines.push('');
     });
     
+    // Add overall order special instructions
+    if (order.specialInstructions) {
+      lines.push('-'.repeat(32));
+      lines.push('OVERALL ORDER NOTES:');
+      lines.push(order.specialInstructions);
+      lines.push('');
+    }
+    
     lines.push('-'.repeat(32));
     lines.push(`Total: $${order.total.toFixed(2)}`);
     lines.push('='.repeat(32));
@@ -201,9 +209,17 @@ export class OrderPrintingService {
       lines.push('');
     });
     
+    // Add overall order special instructions to receipt
+    if (order.specialInstructions) {
+      lines.push('-'.repeat(32));
+      lines.push('SPECIAL INSTRUCTIONS:');
+      lines.push(order.specialInstructions);
+      lines.push('');
+    }
+    
     lines.push('-'.repeat(32));
     lines.push(`Subtotal: $${subtotal.toFixed(2)}`);
-    lines.push(`Tax: $${(order.total - subtotal).toFixed(2)}`);
+    // Tax line removed - application is tax-free
     lines.push(`TOTAL: $${order.total.toFixed(2)}`);
     lines.push('='.repeat(32));
     lines.push('');
@@ -249,6 +265,14 @@ export class OrderPrintingService {
       }
       lines.push('');
     });
+    
+    // Add overall order special instructions to bar receipt
+    if (order.specialInstructions) {
+      lines.push('-'.repeat(32));
+      lines.push('OVERALL ORDER NOTES:');
+      lines.push(order.specialInstructions);
+      lines.push('');
+    }
     
     lines.push('='.repeat(32));
     

@@ -173,12 +173,12 @@ fi
 
 # Step 7: Setup firewall (if applicable)
 if command -v firewall-cmd &> /dev/null; then
-    read -p "Do you want to open port 3000 in firewall? (y/n): " -n 1 -r
+    read -p "Do you want to open port 9002 in firewall? (y/n): " -n 1 -r
     echo
     if [[ $REPLY =~ ^[Yy]$ ]]; then
-        sudo firewall-cmd --permanent --add-port=3000/tcp
+        sudo firewall-cmd --permanent --add-port=9002/tcp
         sudo firewall-cmd --reload
-        log_success "Firewall configured to allow port 3000"
+        log_success "Firewall configured to allow port 9002"
     fi
 fi
 
@@ -198,7 +198,7 @@ echo
 echo "Or if you created the systemd service:"
 echo "  sudo systemctl start orderweb"
 echo
-echo "The application will be available at: http://localhost:3000"
+echo "The application will be available at: http://localhost:9002"
 echo
 echo "Default super admin credentials:"
 echo "  Email: admin@yourdomain.com (update in .env.production)"

@@ -285,6 +285,16 @@ export default function CustomerOrdersPage() {
                       </div>
                     </div>
 
+                    {/* Special Instructions Section */}
+                    {(order as any).specialInstructions && (
+                      <div>
+                        <h4 className="font-medium text-gray-900 mb-2">Special Instructions</h4>
+                        <div className="bg-yellow-50 border border-yellow-200 rounded p-3">
+                          <p className="text-sm text-yellow-800">{(order as any).specialInstructions}</p>
+                        </div>
+                      </div>
+                    )}
+
                     <div className="bg-gray-50 rounded-lg p-4">
                       <div className="flex justify-between items-center text-lg font-bold">
                         <span>Total</span>

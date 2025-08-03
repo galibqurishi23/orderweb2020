@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useMemo, useRef } from 'react';
+import React, { useState, useMemo, useRef, useCallback } from 'react';
 import { getCurrencySymbol } from '@/lib/currency-utils';
 import { 
   ChefHat, 
@@ -25,8 +25,8 @@ import {
   Utensils
 } from 'lucide-react';
 import { useTenantData } from '@/context/TenantDataContext';
-import type { Addon, SetMenuItem } from '@/lib/types';
-import type { MenuItem, MenuCategory, AddonGroup, AddonOption } from '@/lib/menu-types';
+import type { Category, SetMenuItem as OldSetMenuItem } from '@/lib/types';
+import { MenuItem, MenuCategory, SetMenuItem } from '@/lib/menu-types';
 import {
   Card,
   CardContent,
@@ -70,7 +70,7 @@ import {
   AlertDialogTitle, 
   AlertDialogTrigger 
 } from '@/components/ui/alert-dialog';
-import { Checkbox } from '@/components/ui/checkbox';
+import AddonManager from '@/components/admin/SimpleAddonManager';
 
 export default function TenantMenuPage() {
   const { 
@@ -99,23 +99,32 @@ export default function TenantMenuPage() {
     return getCurrencySymbol(restaurantSettings?.currency || 'GBP');
   }, [restaurantSettings?.currency]);
 
-  const [itemForm, setItemForm] = useState<Partial<MenuItem>>({
+  // Memoize the addon change handler to prevent infinite loops
+  const handleAddonsChange = useCallback((addons: any[]) => {
+    setItemForm(prev => ({...prev, addons}));
+  }, []);
+
+  const [itemForm, setItemForm] = useState<Omit<Partial<MenuItem>, 'addons'> & { preparationTime?: number; tags?: string[]; addons?: any[] }>({
     name: '',
     description: '',
     price: 0,
-    imageUrl: '',
+    image: '',
     imageHint: '',
     available: true,
+    isFeatured: false,
     categoryId: '',
     addons: [],
     characteristics: [],
     nutrition: undefined,
     isSetMenu: false,
-    setMenuItems: []
+    setMenuItems: [],
+    preparationTime: 15,
+    tags: []
   });
 
   const [categoryForm, setCategoryForm] = useState<Partial<MenuCategory>>({
     name: '',
+    description: '',
     active: true,
     displayOrder: 0,
     parentId: undefined
@@ -177,30 +186,69 @@ export default function TenantMenuPage() {
 
   // Image upload handler
   const handleImageUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    console.log('🔄 Image upload started');
     const file = event.target.files?.[0];
     if (file) {
+      console.log('📁 File selected:', {
+        name: file.name,
+        size: file.size,
+        type: file.type
+      });
+      
+      // Validate file
+      if (!file.type.startsWith('image/')) {
+        toast({
+          title: "Invalid File Type",
+          description: "Please select an image file (JPG, PNG, etc.)",
+          variant: "destructive"
+        });
+        return;
+      }
+      
+      if (file.size > 5 * 1024 * 1024) { // 5MB limit
+        toast({
+          title: "File Too Large", 
+          description: "Please select an image smaller than 5MB",
+          variant: "destructive"
+        });
+        return;
+      }
+      
       const reader = new FileReader();
       reader.onload = (e) => {
         const result = e.target?.result as string;
-        setItemForm({ ...itemForm, imageUrl: result });
+        console.log('✅ Image converted to base64, length:', result?.length);
+        setItemForm({ ...itemForm, image: result });
+        toast({
+          title: "Image Uploaded",
+          description: "Image preview loaded successfully",
+          variant: "default"
+        });
+      };
+      reader.onerror = () => {
+        console.error('❌ FileReader error');
+        toast({
+          title: "Upload Failed",
+          description: "Failed to process the image file",
+          variant: "destructive"
+        });
       };
       reader.readAsDataURL(file);
     }
   };
 
   const removeImage = () => {
-    setItemForm({ ...itemForm, imageUrl: '' });
+    setItemForm({ ...itemForm, image: '' });
   };
 
   // Set menu item handlers
   const addSetMenuItem = () => {
     const newSetItem: SetMenuItem = {
       id: `set_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-      menuItemId: '',
-      quantity: 1,
       name: '',
-      replaceable: false,
-      replaceableWith: []
+      description: '',
+      imageUrl: '',
+      options: []
     };
     setItemForm({
       ...itemForm,
@@ -224,97 +272,13 @@ export default function TenantMenuPage() {
     });
   };
 
-  // Add-on handlers
-  const addAddon = () => {
-    const newAddon: AddonGroup = {
-      id: `addon_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-      tenantId: '', // Will be set by service
-      name: '',
-      description: '',
-      type: 'radio',
-      required: false,
-      multiple: false,
-      maxSelections: 1,
-      active: true,
-      displayOrder: 0,
-      options: []
-    };
-    setItemForm({
-      ...itemForm,
-      addons: [...(itemForm.addons || []), newAddon]
-    });
-  };
-
-  const removeAddon = (addonId: string) => {
-    setItemForm({
-      ...itemForm,
-      addons: itemForm.addons?.filter(addon => addon.id !== addonId)
-    });
-  };
-
-  const updateAddon = (addonId: string, updates: Partial<AddonGroup>) => {
-    setItemForm({
-      ...itemForm,
-      addons: itemForm.addons?.map(addon => 
-        addon.id === addonId ? { ...addon, ...updates } : addon
-      )
-    });
-  };
-
-  const addAddonOption = (addonId: string) => {
-    const newOption: AddonOption = {
-      id: `option_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-      addonGroupId: addonId,
-      name: '',
-      price: 0,
-      available: true,
-      displayOrder: 0
-    };
-    
-    setItemForm({
-      ...itemForm,
-      addons: itemForm.addons?.map(addon => 
-        addon.id === addonId 
-          ? { ...addon, options: [...(addon.options || []), newOption] }
-          : addon
-      )
-    });
-  };
-
-  const removeAddonOption = (addonId: string, optionId: string) => {
-    setItemForm({
-      ...itemForm,
-      addons: itemForm.addons?.map(addon => 
-        addon.id === addonId 
-          ? { ...addon, options: addon.options?.filter(option => option.id !== optionId) }
-          : addon
-      )
-    });
-  };
-
-  const updateAddonOption = (addonId: string, optionId: string, updates: Partial<AddonOption>) => {
-    setItemForm({
-      ...itemForm,
-      addons: itemForm.addons?.map(addon => 
-        addon.id === addonId 
-          ? { 
-              ...addon, 
-              options: addon.options?.map(option => 
-                option.id === optionId ? { ...option, ...updates } : option
-              ) 
-            }
-          : addon
-      )
-    });
-  };
-
   // Form reset functions
   const resetItemForm = () => {
     setItemForm({
       name: '',
       description: '',
       price: 0,
-      imageUrl: '',
+      image: '',
       imageHint: '',
       available: true,
       categoryId: '',
@@ -330,6 +294,7 @@ export default function TenantMenuPage() {
   const resetCategoryForm = () => {
     setCategoryForm({
       name: '',
+      description: '',
       active: true,
       displayOrder: categories?.length || 0,
       parentId: undefined
@@ -339,6 +304,14 @@ export default function TenantMenuPage() {
 
   // Handler functions
   const handleSaveItem = async () => {
+    console.log('💾 Save item started');
+    console.log('📋 Form data:', {
+      name: itemForm.name,
+      price: itemForm.price,
+      hasImage: !!itemForm.image,
+      imageLength: itemForm.image?.length || 0
+    });
+    
     if (!itemForm.name || itemForm.price === undefined || itemForm.price < 0) {
       toast({ 
         title: "Validation Error", 
@@ -349,27 +322,42 @@ export default function TenantMenuPage() {
     }
 
     try {
-      const itemToSave: MenuItem = {
-        id: editingItem?.id || '', // Empty ID for new items
-        tenantId: '', // Will be set by the service
+      const itemToSave: any = {
+        id: editingItem?.id || `item_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+        tenantId: editingItem?.tenantId || '', // Will be set by the save function
         name: itemForm.name!,
         description: itemForm.description || '',
         price: Number(itemForm.price),
-        imageUrl: itemForm.imageUrl || '',
+        image: itemForm.image || '',
         imageHint: itemForm.imageHint || '',
         available: itemForm.available ?? true,
+        isFeatured: itemForm.isFeatured || false,
         categoryId: itemForm.categoryId || '',
-        addons: itemForm.addons || [],
+        addons: itemForm.addons as any || [],
         characteristics: itemForm.characteristics || [],
         nutrition: itemForm.nutrition,
         isSetMenu: itemForm.isSetMenu || false,
         setMenuItems: itemForm.setMenuItems || [],
-        preparationTime: itemForm.preparationTime || 0,
-        isFeatured: itemForm.isFeatured || false,
-        tags: itemForm.tags
+        preparationTime: itemForm.preparationTime || 15,
+        tags: itemForm.tags || []
       };
 
+      console.log('🔍 Admin - Saving item with addons:', {
+        itemName: itemToSave.name,
+        addonsCount: (itemToSave as any).addons?.length || 0,
+        addons: (itemToSave as any).addons
+      });
+
+      console.log('🚀 Saving item with image:', {
+        id: itemToSave.id,
+        name: itemToSave.name,
+        hasImage: !!itemToSave.image,
+        imageLength: itemToSave.image?.length || 0
+      });
+
       await saveMenuItem(itemToSave);
+      
+      console.log('✅ Item saved successfully');
       toast({ 
         title: "Success", 
         description: `Menu item ${editingItem ? 'updated' : 'created'} successfully`,
@@ -378,7 +366,7 @@ export default function TenantMenuPage() {
       setIsItemDialogOpen(false);
       resetItemForm();
     } catch (error) {
-      console.error('Error saving menu item:', error);
+      console.error('❌ Save error:', error);
       toast({ 
         title: "Error", 
         description: "Failed to save menu item. Please try again.", 
@@ -399,9 +387,10 @@ export default function TenantMenuPage() {
 
     try {
       const categoryToSave: MenuCategory = {
-        id: editingCategory?.id || '', // Empty ID for new categories
-        tenantId: '', // Will be set by the service
+        id: editingCategory?.id || `cat_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+        tenantId: editingCategory?.tenantId || '', // Will be set by the save function
         name: categoryForm.name!,
+        description: categoryForm.description || '',
         active: categoryForm.active ?? true,
         displayOrder: Number(categoryForm.displayOrder) || 0,
         parentId: categoryForm.parentId,
@@ -434,11 +423,12 @@ export default function TenantMenuPage() {
       name: item.name,
       description: item.description || '',
       price: item.price,
-      imageUrl: item.imageUrl,
+      image: item.image,
       imageHint: item.imageHint,
       available: item.available,
+      isFeatured: item.isFeatured,
       categoryId: item.categoryId,
-      addons: item.addons,
+      addons: (item as any).addons as any, // Type conversion needed - we'll fix this properly later
       characteristics: item.characteristics,
       nutrition: item.nutrition,
       isSetMenu: item.isSetMenu,
@@ -453,6 +443,7 @@ export default function TenantMenuPage() {
     setEditingCategory(category);
     setCategoryForm({
       name: category.name,
+      description: category.description || '',
       active: category.active,
       displayOrder: category.displayOrder,
       parentId: category.parentId,
@@ -513,103 +504,67 @@ export default function TenantMenuPage() {
   return (
     <div className="space-y-8">
       {/* Header */}
-      <div className="flex flex-col gap-6">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <div className="w-14 h-14 bg-gradient-to-br from-orange-500 to-red-600 rounded-xl flex items-center justify-center shadow-lg">
-              <ChefHat className="w-7 h-7 text-white" />
-            </div>
-            <div>
-              <h1 className="text-4xl font-bold text-slate-900">Menu Management</h1>
-              <p className="text-slate-600 mt-1">
-                Create and manage your restaurant's menu items, categories, and pricing
-              </p>
-            </div>
+      <div className="flex flex-col gap-4">
+        <div className="flex items-center gap-4">
+          <div className="w-12 h-12 bg-gradient-to-br from-orange-500 to-red-600 rounded-xl flex items-center justify-center shadow-lg">
+            <ChefHat className="w-6 h-6 text-white" />
           </div>
-          <div className="flex items-center gap-3">
-            <Button variant="outline" size="sm" className="flex items-center gap-2">
-              <Settings className="w-4 h-4" />
-              Settings
-            </Button>
+          <div>
+            <h1 className="text-3xl font-bold">Menu Management</h1>
+            <p className="text-muted-foreground">
+              Manage your restaurant's menu items and categories with enhanced features
+            </p>
           </div>
         </div>
         
-        {/* Enhanced Quick Stats */}
+        {/* Quick Stats */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <Card className="bg-gradient-to-br from-blue-50 to-cyan-100 border-blue-200">
+          <Card>
             <CardContent className="p-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <div className="flex items-center gap-2">
-                    <Package className="w-4 h-4 text-blue-600" />
-                    <span className="text-sm font-medium text-blue-700">Total Items</span>
-                  </div>
-                  <p className="text-2xl font-bold text-blue-900 mt-1">{menuItems?.length || 0}</p>
-                </div>
-                <div className="w-10 h-10 bg-blue-500 rounded-lg flex items-center justify-center">
-                  <Package className="w-5 h-5 text-white" />
-                </div>
+              <div className="flex items-center gap-2">
+                <Package className="w-4 h-4 text-blue-600" />
+                <span className="text-sm text-muted-foreground">Total Items</span>
               </div>
+              <p className="text-2xl font-bold">{menuItems?.length || 0}</p>
             </CardContent>
           </Card>
-          <Card className="bg-gradient-to-br from-green-50 to-emerald-100 border-green-200">
+          <Card>
             <CardContent className="p-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <div className="flex items-center gap-2">
-                    <Tag className="w-4 h-4 text-green-600" />
-                    <span className="text-sm font-medium text-green-700">Categories</span>
-                  </div>
-                  <p className="text-2xl font-bold text-green-900 mt-1">{categories?.length || 0}</p>
-                </div>
-                <div className="w-10 h-10 bg-green-500 rounded-lg flex items-center justify-center">
-                  <Tag className="w-5 h-5 text-white" />
-                </div>
+              <div className="flex items-center gap-2">
+                <Tag className="w-4 h-4 text-green-600" />
+                <span className="text-sm text-muted-foreground">Categories</span>
               </div>
+              <p className="text-2xl font-bold">{categories?.length || 0}</p>
             </CardContent>
           </Card>
-          <Card className="bg-gradient-to-br from-purple-50 to-violet-100 border-purple-200">
+          <Card>
             <CardContent className="p-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <div className="flex items-center gap-2">
-                    <Utensils className="w-4 h-4 text-purple-600" />
-                    <span className="text-sm font-medium text-purple-700">Set Menus</span>
-                  </div>
-                  <p className="text-2xl font-bold text-purple-900 mt-1">{menuItems?.filter(item => item.isSetMenu).length || 0}</p>
-                </div>
-                <div className="w-10 h-10 bg-purple-500 rounded-lg flex items-center justify-center">
-                  <Utensils className="w-5 h-5 text-white" />
-                </div>
+              <div className="flex items-center gap-2">
+                <Utensils className="w-4 h-4 text-purple-600" />
+                <span className="text-sm text-muted-foreground">Set Menus</span>
               </div>
+              <p className="text-2xl font-bold">{menuItems?.filter(item => item.isSetMenu).length || 0}</p>
             </CardContent>
           </Card>
-          <Card className="bg-gradient-to-br from-emerald-50 to-teal-100 border-emerald-200">
+          <Card>
             <CardContent className="p-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <div className="flex items-center gap-2">
-                    <CheckCircle className="w-4 h-4 text-emerald-600" />
-                    <span className="text-sm font-medium text-emerald-700">Available</span>
-                  </div>
-                  <p className="text-2xl font-bold text-emerald-900 mt-1">{menuItems?.filter(item => item.available).length || 0}</p>
-                </div>
-                <div className="w-10 h-10 bg-emerald-500 rounded-lg flex items-center justify-center">
-                  <CheckCircle className="w-5 h-5 text-white" />
-                </div>
+              <div className="flex items-center gap-2">
+                <CheckCircle className="w-4 h-4 text-emerald-600" />
+                <span className="text-sm text-muted-foreground">Available</span>
               </div>
+              <p className="text-2xl font-bold">{menuItems?.filter(item => item.available).length || 0}</p>
             </CardContent>
           </Card>
         </div>
       </div>
 
       <Tabs defaultValue="items" className="space-y-6">
-        <TabsList className="grid w-full grid-cols-2 bg-slate-100 p-1">
-          <TabsTrigger value="items" className="flex items-center gap-2 data-[state=active]:bg-white data-[state=active]:shadow-sm">
+        <TabsList className="grid w-full grid-cols-2">
+          <TabsTrigger value="items" className="flex items-center gap-2">
             <Package className="w-4 h-4" />
             Menu Items
           </TabsTrigger>
-          <TabsTrigger value="categories" className="flex items-center gap-2 data-[state=active]:bg-white data-[state=active]:shadow-sm">
+          <TabsTrigger value="categories" className="flex items-center gap-2">
             <Tag className="w-4 h-4" />
             Categories
           </TabsTrigger>
@@ -707,7 +662,7 @@ export default function TenantMenuPage() {
                           <Label htmlFor="description">Description</Label>
                           <Textarea
                             id="description"
-                            value={itemForm.description || ''}
+                            value={itemForm.description}
                             onChange={(e) => setItemForm({...itemForm, description: e.target.value})}
                             placeholder="Describe your item..."
                             rows={3}
@@ -722,12 +677,12 @@ export default function TenantMenuPage() {
                               Image Upload
                             </Label>
                             <div className="space-y-2">
-                              {itemForm.imageUrl ? (
+                              {itemForm.image ? (
                                 <div className="relative">
                                   <img
-                                    src={itemForm.imageUrl}
+                                    src={itemForm.image}
                                     alt="Preview"
-                                    className="w-full h-32 object-cover rounded-lg border"
+                                    className="w-full h-32 object-cover rounded-md border shadow-sm"
                                   />
                                   <Button
                                     type="button"
@@ -740,7 +695,7 @@ export default function TenantMenuPage() {
                                   </Button>
                                 </div>
                               ) : (
-                                <div className="w-full h-32 border-2 border-dashed border-gray-300 rounded-lg flex items-center justify-center">
+                                <div className="w-full h-32 border-2 border-dashed border-gray-300 rounded-md flex items-center justify-center bg-gradient-to-br from-gray-50 to-gray-100">
                                   <div className="text-center">
                                     <ImageIcon className="w-8 h-8 mx-auto text-gray-400 mb-2" />
                                     <p className="text-sm text-gray-500">No image uploaded</p>
@@ -759,7 +714,7 @@ export default function TenantMenuPage() {
                                 variant="outline"
                                 size="sm"
                                 onClick={() => fileInputRef.current?.click()}
-                                className="w-full"
+                                className="w-full hover:bg-primary hover:text-primary-foreground transition-colors"
                               >
                                 <Upload className="w-4 h-4 mr-2" />
                                 Upload Image
@@ -851,26 +806,24 @@ export default function TenantMenuPage() {
                                       />
                                     </div>
                                     <div>
-                                      <Label className="text-xs">Quantity</Label>
+                                      <Label className="text-xs">Description</Label>
                                       <Input
-                                        type="number"
-                                        min="1"
-                                        value={1}
-                                        onChange={(e) => {/* updateSetMenuItem(setItem.id, { quantity: parseInt(e.target.value) || 1 }) */}}
+                                        value={setItem.description || ''}
+                                        onChange={(e) => updateSetMenuItem(setItem.id, { description: e.target.value })}
+                                        placeholder="Item description"
                                         className="h-8"
                                       />
                                     </div>
                                   </div>
                                   
-                                  <div className="flex items-center space-x-2">
-                                    <Checkbox
-                                      id={`replaceable-${setItem.id}`}
-                                      checked={false}
-                                      onCheckedChange={(checked) => {/* updateSetMenuItem(setItem.id, { replaceable: checked as boolean }) */}}
+                                  <div>
+                                    <Label className="text-xs">Image URL</Label>
+                                    <Input
+                                      value={setItem.imageUrl || ''}
+                                      onChange={(e) => updateSetMenuItem(setItem.id, { imageUrl: e.target.value })}
+                                      placeholder="Image URL (optional)"
+                                      className="h-8"
                                     />
-                                    <Label htmlFor={`replaceable-${setItem.id}`} className="text-xs">
-                                      Customer can replace this item
-                                    </Label>
                                   </div>
                                 </div>
                               ))}
@@ -880,149 +833,11 @@ export default function TenantMenuPage() {
                         
                         {/* Add-ons Section */}
                         <div className="space-y-4">
-                          <div className="flex items-center justify-between">
-                            <Label className="text-sm font-medium">Add-ons</Label>
-                            <Button
-                              type="button"
-                              variant="outline"
-                              size="sm"
-                              onClick={addAddon}
-                            >
-                              <Plus className="w-4 h-4 mr-2" />
-                              Add Add-on
-                            </Button>
-                          </div>
-                          
-                          {itemForm.addons?.map((addon, index) => (
-                            <div key={addon.id} className="border rounded-lg p-4 space-y-3">
-                              <div className="flex items-center justify-between">
-                                <span className="text-sm font-medium">Add-on {index + 1}</span>
-                                <Button
-                                  type="button"
-                                  variant="ghost"
-                                  size="sm"
-                                  onClick={() => removeAddon(addon.id)}
-                                >
-                                  <Trash2 className="w-4 h-4" />
-                                </Button>
-                              </div>
-                              
-                              <div className="grid grid-cols-3 gap-2">
-                                <div>
-                                  <Label className="text-xs">Name</Label>
-                                  <Input
-                                    value={addon.name}
-                                    onChange={(e) => updateAddon(addon.id, { name: e.target.value })}
-                                    placeholder="e.g., Extra Cheese"
-                                    className="h-8"
-                                  />
-                                </div>
-                                <div>
-                                  <Label className="text-xs">Description</Label>
-                                  <Input
-                                    value={addon.description || ''}
-                                    onChange={(e) => updateAddon(addon.id, { description: e.target.value })}
-                                    placeholder="e.g., Choose your size"
-                                    className="h-8"
-                                  />
-                                </div>
-                                <div>
-                                  <Label className="text-xs">Type</Label>
-                                  <Select
-                                    value={addon.type}
-                                    onValueChange={(value: any) => updateAddon(addon.id, { type: value })}
-                                  >
-                                    <SelectTrigger className="h-8">
-                                      <SelectValue />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                      <SelectItem value="radio">Radio (Single Choice)</SelectItem>
-                                      <SelectItem value="checkbox">Checkbox (Multiple Choice)</SelectItem>
-                                    </SelectContent>
-                                  </Select>
-                                </div>
-                              </div>
-                              
-                              <div className="grid grid-cols-3 gap-2">
-                                <div className="flex items-center space-x-2">
-                                  <Checkbox
-                                    id={`required-${addon.id}`}
-                                    checked={addon.required}
-                                    onCheckedChange={(checked) => updateAddon(addon.id, { required: checked as boolean })}
-                                  />
-                                  <Label htmlFor={`required-${addon.id}`} className="text-xs">
-                                    Required
-                                  </Label>
-                                </div>
-                                <div className="flex items-center space-x-2">
-                                  <Checkbox
-                                    id={`multiple-${addon.id}`}
-                                    checked={addon.multiple}
-                                    onCheckedChange={(checked) => updateAddon(addon.id, { multiple: checked as boolean })}
-                                  />
-                                  <Label htmlFor={`multiple-${addon.id}`} className="text-xs">
-                                    Multiple selection
-                                  </Label>
-                                </div>
-                                {addon.multiple && (
-                                  <div>
-                                    <Label className="text-xs">Max selections</Label>
-                                    <Input
-                                      type="number"
-                                      min="1"
-                                      value={addon.maxSelections}
-                                      onChange={(e) => updateAddon(addon.id, { maxSelections: parseInt(e.target.value) || 1 })}
-                                      className="h-8"
-                                    />
-                                  </div>
-                                )}
-                              </div>
-                              
-                              {/* Addon Options */}
-                              <div className="space-y-2">
-                                <div className="flex items-center justify-between">
-                                  <Label className="text-xs font-medium">Options</Label>
-                                  <Button
-                                    type="button"
-                                    variant="outline"
-                                    size="sm"
-                                    onClick={() => addAddonOption(addon.id)}
-                                  >
-                                    <Plus className="w-3 h-3 mr-1" />
-                                    Add Option
-                                  </Button>
-                                </div>
-                                
-                                {addon.options?.map((option, optionIndex) => (
-                                  <div key={option.id} className="flex items-center gap-2 p-2 bg-gray-50 rounded">
-                                    <Input
-                                      value={option.name}
-                                      onChange={(e) => updateAddonOption(addon.id, option.id, { name: e.target.value })}
-                                      placeholder="Option name"
-                                      className="h-8 flex-1"
-                                    />
-                                    <Input
-                                      type="number"
-                                      step="0.01"
-                                      min="0"
-                                      value={option.price}
-                                      onChange={(e) => updateAddonOption(addon.id, option.id, { price: parseFloat(e.target.value) || 0 })}
-                                      placeholder="Price"
-                                      className="h-8 w-20"
-                                    />
-                                    <Button
-                                      type="button"
-                                      variant="ghost"
-                                      size="sm"
-                                      onClick={() => removeAddonOption(addon.id, option.id)}
-                                    >
-                                      <X className="w-3 h-3" />
-                                    </Button>
-                                  </div>
-                                ))}
-                              </div>
-                            </div>
-                          ))}
+                          <AddonManager
+                            addons={itemForm.addons || []}
+                            onChange={handleAddonsChange}
+                            currency={currencySymbol}
+                          />
                         </div>
                         
                         <div className="flex items-center space-x-2">
@@ -1067,17 +882,34 @@ export default function TenantMenuPage() {
                   </TableHeader>
                   <TableBody>
                     {filteredAndSortedItems.length > 0 ? (
-                      filteredAndSortedItems.map(item => (
+                      filteredAndSortedItems.map(item => {
+                        console.log('🖼️ Item image data:', { 
+                          id: item.id, 
+                          name: item.name, 
+                          hasImage: !!item.image, 
+                          imageLength: item.image?.length || 0,
+                          imagePreview: item.image?.substring(0, 50) + '...'
+                        });
+                        
+                        return (
                         <TableRow key={item.id} className="hover:bg-muted/50">
                           <TableCell>
-                            {item.imageUrl ? (
-                              <img 
-                                src={item.imageUrl} 
-                                alt={item.name} 
-                                className="w-12 h-12 object-cover rounded-lg shadow-sm" 
-                              />
+                            {item.image && item.image.length > 0 ? (
+                              <div className="relative h-12 w-12 flex-shrink-0">
+                                <img 
+                                  src={item.image} 
+                                  alt={item.name} 
+                                  className="w-full h-full object-cover rounded-md shadow-sm border" 
+                                  onLoad={() => console.log('✅ Image loaded for:', item.name)}
+                                  onError={(e) => {
+                                    console.error('❌ Image failed to load for:', item.name, e);
+                                    e.currentTarget.style.display = 'none';
+                                  }}
+                                />
+                                <div className="absolute -top-1 -right-1 w-3 h-3 bg-green-500 rounded-full border border-white" title="Has Image"></div>
+                              </div>
                             ) : (
-                              <div className="w-12 h-12 bg-gradient-to-br from-gray-100 to-gray-200 rounded-lg flex items-center justify-center">
+                              <div className="w-12 h-12 bg-gradient-to-br from-gray-100 to-gray-200 rounded-md flex items-center justify-center border-2 border-dashed border-gray-300">
                                 <Package className="w-6 h-6 text-gray-400" />
                               </div>
                             )}
@@ -1118,9 +950,9 @@ export default function TenantMenuPage() {
                                   Set Menu
                                 </Badge>
                               )}
-                              {item.addons && item.addons.length > 0 && (
+                              {(item as any).addons && (item as any).addons.length > 0 && (
                                 <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
-                                  {item.addons.length} Add-ons
+                                  {(item as any).addons.length} Add-ons
                                 </Badge>
                               )}
                             </div>
@@ -1174,7 +1006,8 @@ export default function TenantMenuPage() {
                             </div>
                           </TableCell>
                         </TableRow>
-                      ))
+                        );
+                      })
                     ) : (
                       <TableRow>
                         <TableCell colSpan={7} className="h-24 text-center">
@@ -1230,6 +1063,16 @@ export default function TenantMenuPage() {
                         value={categoryForm.name}
                         onChange={(e) => setCategoryForm({...categoryForm, name: e.target.value})}
                         placeholder="Category name"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="categoryDescription">Description</Label>
+                      <Textarea
+                        id="categoryDescription"
+                        value={categoryForm.description}
+                        onChange={(e) => setCategoryForm({...categoryForm, description: e.target.value})}
+                        placeholder="Category description"
+                        rows={3}
                       />
                     </div>
                     <div className="space-y-2">
@@ -1302,6 +1145,7 @@ export default function TenantMenuPage() {
                   <TableHeader>
                     <TableRow>
                       <TableHead>Name</TableHead>
+                      <TableHead>Description</TableHead>
                       <TableHead>Items Count</TableHead>
                       <TableHead>Sort Order</TableHead>
                       <TableHead>Status</TableHead>
@@ -1326,6 +1170,9 @@ export default function TenantMenuPage() {
                                 )}
                                 {category.name}
                               </div>
+                            </TableCell>
+                            <TableCell>
+                              <span className="line-clamp-2">{category.description || '-'}</span>
                             </TableCell>
                             <TableCell>
                               <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">
@@ -1395,7 +1242,7 @@ export default function TenantMenuPage() {
                       })()
                     ) : (
                       <TableRow>
-                        <TableCell colSpan={5} className="h-24 text-center">
+                        <TableCell colSpan={6} className="h-24 text-center">
                           <div className="flex flex-col items-center gap-2 text-muted-foreground">
                             <Tag className="w-12 h-12" />
                             <div>No categories yet. Create your first category!</div>
