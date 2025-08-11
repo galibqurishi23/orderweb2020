@@ -1,121 +1,145 @@
 import { NextRequest, NextResponse } from 'next/server';
+import mysql from 'mysql2/promise';
 import { LicenseKeyService } from '@/lib/license-key-service';
-import { getTenantBySlug } from '@/lib/tenant-service';
-import { TenantLicenseChecker } from '@/lib/tenant-license-checker';
+
+// Database connection
+async function getConnection() {
+  try {
+    return await mysql.createConnection({
+      host: process.env.DB_HOST || 'localhost',
+      user: process.env.DB_USER || 'root',
+      password: process.env.DB_PASSWORD || 'root',
+      database: process.env.DB_NAME || 'dinedesk_db'
+    });
+  } catch (error) {
+    console.error('Database connection error:', error);
+    throw error;
+  }
+}
 
 export async function POST(request: NextRequest) {
+  let connection;
+  
   try {
     const body = await request.json();
-    const { licenseKey, tenantSlug, tenantId, keyCode } = body;
-
-    // Support both new format (licenseKey + tenantSlug) and old format (tenantId + keyCode)
-    const finalLicenseKey = licenseKey || keyCode;
-    let finalTenantId = tenantId;
-
-    if (!finalLicenseKey) {
+    const { licenseKey, tenantSlug } = body;
+    
+    if (!licenseKey || !tenantSlug) {
       return NextResponse.json({
         success: false,
-        error: 'License key is required'
+        error: 'License key and tenant slug are required'
       }, { status: 400 });
     }
 
-    // If tenantSlug is provided, get tenant by slug
-    if (tenantSlug && !finalTenantId) {
-      const tenant = await getTenantBySlug(tenantSlug);
-      if (!tenant) {
-        return NextResponse.json({
-          success: false,
-          error: 'Restaurant not found'
-        }, { status: 404 });
-      }
-      finalTenantId = tenant.id;
-    }
-
-    if (!finalTenantId) {
+    // Validate license key format (OW + 6 characters)
+    if (!LicenseKeyService.isValidKeyFormat(licenseKey)) {
       return NextResponse.json({
         success: false,
-        error: 'Tenant ID or slug is required'
+        error: 'Invalid license key format. Must be OW + 6 characters (e.g., OWAB1234)'
       }, { status: 400 });
     }
 
-    // Activate the license for this tenant
-    const result = await LicenseKeyService.activateLicense(finalTenantId, finalLicenseKey);
+    connection = await getConnection();
+    
+    // Get tenant ID
+    const [tenants] = await connection.execute(
+      'SELECT id FROM tenants WHERE slug = ?',
+      [tenantSlug]
+    ) as any[];
+    
+    if (tenants.length === 0) {
+      return NextResponse.json({
+        success: false,
+        error: 'Restaurant not found'
+      }, { status: 404 });
+    }
+
+    const tenantId = tenants[0].id;
+
+    // Try to activate the license
+    const result = await LicenseKeyService.activateLicense(tenantId, licenseKey);
 
     if (result.success) {
-      // Reactivate the tenant if they were suspended
-      await TenantLicenseChecker.reactivateTenant(finalTenantId);
-
       return NextResponse.json({
         success: true,
-        message: 'License activated successfully',
-        license: result.license,
-        data: {
-          expiresAt: result.license?.expiresAt,
-          status: result.license?.status
-        }
+        message: result.message,
+        license: result.license
       });
     } else {
       return NextResponse.json({
         success: false,
-        error: result.message,
-        errorCode: result.error
+        error: result.message
       }, { status: 400 });
     }
 
   } catch (error) {
-    console.error('Error activating license:', error);
+    console.error('License activation error:', error);
     return NextResponse.json({
       success: false,
-      error: 'Internal server error'
+      error: 'Failed to activate license'
     }, { status: 500 });
+  } finally {
+    if (connection) {
+      await connection.end();
+    }
   }
 }
 
 export async function GET(request: NextRequest) {
+  let connection;
+  
   try {
     const { searchParams } = new URL(request.url);
-    const tenantId = searchParams.get('tenantId');
     const tenantSlug = searchParams.get('slug');
-
-    let finalTenantId = tenantId;
-
-    // If tenantSlug is provided, get tenant by slug
-    if (tenantSlug && !finalTenantId) {
-      const tenant = await getTenantBySlug(tenantSlug);
-      if (!tenant) {
-        return NextResponse.json({
-          success: false,
-          error: 'Restaurant not found'
-        }, { status: 404 });
-      }
-      finalTenantId = tenant.id;
-    }
-
-    if (!finalTenantId) {
+    
+    if (!tenantSlug) {
       return NextResponse.json({
         success: false,
-        error: 'Tenant ID or slug is required'
+        error: 'Tenant slug is required'
       }, { status: 400 });
     }
 
-    // Get license status using our new checking system
-    const accessStatus = await TenantLicenseChecker.checkTenantAccess(finalTenantId);
+    connection = await getConnection();
+    
+    // Get tenant ID
+    const [tenants] = await connection.execute(
+      'SELECT id FROM tenants WHERE slug = ?',
+      [tenantSlug]
+    ) as any[];
+    
+    if (tenants.length === 0) {
+      return NextResponse.json({
+        success: false,
+        error: 'Restaurant not found'
+      }, { status: 404 });
+    }
+
+    const tenantId = tenants[0].id;
+
+    // Get current license status
+    const licenseStatus = await LicenseKeyService.checkTenantLicenseStatus(tenantId);
 
     return NextResponse.json({
       success: true,
       data: {
-        access: accessStatus,
-        hasLicense: accessStatus.isLicenseActive,
-        isTrialActive: accessStatus.isTrialActive,
-        status: accessStatus.status
+        access: {
+          isValid: licenseStatus.hasLicense,
+          isLicenseActive: licenseStatus.status === 'active',
+          status: licenseStatus.hasLicense ? 'licensed' : 'no_license'
+        },
+        ...licenseStatus
       }
     });
 
   } catch (error) {
-    console.error('Get license status error:', error);
-    return NextResponse.json(
-      { success: false, error: 'Failed to get license status' },
-      { status: 500 }
-    );
+    console.error('License check error:', error);
+    return NextResponse.json({
+      success: false,
+      error: 'Failed to check license status'
+    }, { status: 500 });
+  } finally {
+    if (connection) {
+      await connection.end();
+    }
   }
 }

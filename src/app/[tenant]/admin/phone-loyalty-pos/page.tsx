@@ -10,16 +10,24 @@ import { Separator } from "@/components/ui/separator"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Search, Phone, User, Plus, Minus, Star, History, Settings } from 'lucide-react'
 import { toast } from "@/hooks/use-toast"
+import { useTenant } from '@/context/TenantContext'
 
 interface Customer {
-  id: number
   phone: string
-  name: string
+  displayPhone: string
+  loyaltyCardNumber: string
+  customerName: string
   email: string
-  loyalty_points: number
-  total_spent: number
-  join_date: string
-  last_visit: string
+  pointsBalance: number
+  totalPointsEarned: number
+  totalPointsRedeemed: number
+  tierLevel: string
+  nextTierPoints: number
+  isActive: number
+  joinedDate: string
+  lastOrderDate: string | null
+  totalOrders: number
+  totalSpent: string
 }
 
 interface Transaction {
@@ -48,6 +56,7 @@ export default function PhoneLoyaltyPOS() {
     max_points_redeem_percent: 50
   })
   const [loading, setLoading] = useState(false)
+  const { tenantData } = useTenant()
   const [searchMode, setSearchMode] = useState<'search' | 'create'>('search')
   const [newCustomerData, setNewCustomerData] = useState({
     name: '',
@@ -90,20 +99,39 @@ export default function PhoneLoyaltyPOS() {
       return
     }
 
+    if (!tenantData?.id) {
+      toast({
+        title: "Error",
+        description: "Tenant information not loaded",
+        variant: "destructive",
+      })
+      return
+    }
+
     setLoading(true)
     try {
       const cleanPhone = formatPhoneNumber(phoneNumber)
-      const response = await fetch(`/api/loyalty/phone-lookup?phone=${cleanPhone}`)
+      const response = await fetch(`/api/loyalty/phone-lookup?phone=${cleanPhone}&tenantId=${tenantData.id}`)
       
       if (response.ok) {
         const data = await response.json()
-        setCustomer(data.customer)
-        setTransactions(data.transactions || [])
-        setSearchMode('search')
-        toast({
-          title: "Customer Found",
-          description: `Welcome back, ${data.customer.name}!`,
-        })
+        if (data.success && data.customer) {
+          setCustomer(data.customer)
+          setTransactions(data.transactions || [])
+          setSearchMode('search')
+          toast({
+            title: "Customer Found",
+            description: `Welcome back, ${data.customer.customerName}!`,
+          })
+        } else {
+          setCustomer(null)
+          setTransactions([])
+          setSearchMode('create')
+          toast({
+            title: "New Customer",
+            description: "Customer not found. Please create a new account.",
+          })
+        }
       } else if (response.status === 404) {
         setCustomer(null)
         setTransactions([])
@@ -178,6 +206,15 @@ export default function PhoneLoyaltyPOS() {
   const addPoints = async () => {
     if (!customer || !pointsToAdd.trim()) return
 
+    if (!tenantData?.id) {
+      toast({
+        title: "Error",
+        description: "Tenant information not loaded",
+        variant: "destructive",
+      })
+      return
+    }
+
     const points = parseInt(pointsToAdd)
     if (isNaN(points) || points <= 0) {
       toast({
@@ -195,23 +232,27 @@ export default function PhoneLoyaltyPOS() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           phone: customer.phone,
-          action: 'add_points',
+          action: 'add',
           points: points,
-          description: `Manual points addition`,
-          order_value: orderValue ? parseFloat(orderValue) : undefined
+          tenantId: tenantData.id,
+          reason: `POS Manual Addition - Order Value: £${orderValue || '0'}`
         })
       })
 
       if (response.ok) {
         const data = await response.json()
-        setCustomer(data.customer)
-        setTransactions(data.transactions || [])
-        setPointsToAdd('')
-        setOrderValue('')
-        toast({
-          title: "Success",
-          description: `Added ${points} points to customer account`,
-        })
+        if (data.success && data.customer) {
+          setCustomer(data.customer)
+          setTransactions(data.transactions || [])
+          setPointsToAdd('')
+          setOrderValue('')
+          toast({
+            title: "Success",
+            description: `Added ${points} points to customer account`,
+          })
+        } else {
+          throw new Error('Failed to add points')
+        }
       } else {
         throw new Error('Failed to add points')
       }
@@ -230,6 +271,15 @@ export default function PhoneLoyaltyPOS() {
   const redeemPoints = async () => {
     if (!customer || !pointsToRedeem.trim()) return
 
+    if (!tenantData?.id) {
+      toast({
+        title: "Error",
+        description: "Tenant information not loaded",
+        variant: "destructive",
+      })
+      return
+    }
+
     const points = parseInt(pointsToRedeem)
     if (isNaN(points) || points <= 0) {
       toast({
@@ -240,7 +290,7 @@ export default function PhoneLoyaltyPOS() {
       return
     }
 
-    if (points > customer.loyalty_points) {
+    if (points > customer.pointsBalance) {
       toast({
         title: "Error",
         description: "Insufficient points balance",
@@ -265,21 +315,26 @@ export default function PhoneLoyaltyPOS() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           phone: customer.phone,
-          action: 'redeem_points',
+          action: 'redeem',
           points: points,
-          description: `Points redeemed for rewards`
+          tenantId: tenantData.id,
+          reason: `POS Points Redemption`
         })
       })
 
       if (response.ok) {
         const data = await response.json()
-        setCustomer(data.customer)
-        setTransactions(data.transactions || [])
-        setPointsToRedeem('')
-        toast({
-          title: "Success",
-          description: `Redeemed ${points} points successfully`,
-        })
+        if (data.success && data.customer) {
+          setCustomer(data.customer)
+          setTransactions(data.transactions || [])
+          setPointsToRedeem('')
+          toast({
+            title: "Success",
+            description: `Redeemed ${points} points successfully`,
+          })
+        } else {
+          throw new Error('Failed to redeem points')
+        }
       } else {
         throw new Error('Failed to redeem points')
       }
@@ -423,7 +478,7 @@ export default function PhoneLoyaltyPOS() {
                 </div>
                 <Badge variant="secondary" className="text-lg">
                   <Star className="w-4 h-4 mr-1" />
-                  {customer.loyalty_points} points
+                  {customer.pointsBalance} points
                 </Badge>
               </CardTitle>
             </CardHeader>
@@ -431,7 +486,7 @@ export default function PhoneLoyaltyPOS() {
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <Label className="text-sm font-medium">Name</Label>
-                  <p className="text-lg">{customer.name}</p>
+                  <p className="text-lg">{customer.customerName}</p>
                 </div>
                 <div>
                   <Label className="text-sm font-medium">Phone</Label>
@@ -443,15 +498,11 @@ export default function PhoneLoyaltyPOS() {
                 </div>
                 <div>
                   <Label className="text-sm font-medium">Total Spent</Label>
-                  <p className="text-lg">£{customer.total_spent.toFixed(2)}</p>
+                  <p className="text-lg">£{customer.totalSpent && !isNaN(parseFloat(customer.totalSpent)) ? parseFloat(customer.totalSpent).toFixed(2) : '0.00'}</p>
                 </div>
                 <div>
                   <Label className="text-sm font-medium">Member Since</Label>
-                  <p className="text-lg">{new Date(customer.join_date).toLocaleDateString()}</p>
-                </div>
-                <div>
-                  <Label className="text-sm font-medium">Last Visit</Label>
-                  <p className="text-lg">{new Date(customer.last_visit).toLocaleDateString()}</p>
+                  <p className="text-lg">{new Date(customer.joinedDate).toLocaleDateString()}</p>
                 </div>
               </div>
             </CardContent>
@@ -511,7 +562,7 @@ export default function PhoneLoyaltyPOS() {
                   </Button>
                 </div>
                 <p className="text-sm text-muted-foreground">
-                  Min: {loyaltySettings.min_points_redeem} points | Available: {customer.loyalty_points} points
+                  Min: {loyaltySettings.min_points_redeem} points | Available: {customer.pointsBalance} points
                 </p>
               </div>
             </CardContent>
@@ -528,7 +579,7 @@ export default function PhoneLoyaltyPOS() {
               Transaction History
             </CardTitle>
             <CardDescription>
-              Recent loyalty point transactions for {customer.name}
+              Recent loyalty point transactions for {customer.customerName}
             </CardDescription>
           </CardHeader>
           <CardContent>

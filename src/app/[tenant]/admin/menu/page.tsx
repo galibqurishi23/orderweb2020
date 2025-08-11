@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useMemo, useRef, useCallback } from 'react';
+import React, { useState, useMemo, useRef, useCallback, useEffect } from 'react';
 import { getCurrencySymbol } from '@/lib/currency-utils';
 import { 
   ChefHat, 
@@ -24,7 +24,7 @@ import {
   PlusCircle,
   Utensils
 } from 'lucide-react';
-import { useTenantData } from '@/context/TenantDataContext';
+import { useAdmin } from '@/context/AdminContext';
 import type { Category, SetMenuItem as OldSetMenuItem } from '@/lib/types';
 import { MenuItem, MenuCategory, SetMenuItem } from '@/lib/menu-types';
 import {
@@ -73,16 +73,10 @@ import {
 import AddonManager from '@/components/admin/SimpleAddonManager';
 
 export default function TenantMenuPage() {
-  const { 
-    menuItems, 
-    categories, 
-    saveMenuItem, 
-    deleteMenuItem, 
-    saveCategory, 
-    deleteCategory, 
-    restaurantSettings,
-    isLoading
-  } = useTenantData();
+  const { tenantData } = useAdmin();
+  const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
+  const [categories, setCategories] = useState<MenuCategory[]>([]);
+  const [loading, setLoading] = useState(true);
   
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
@@ -94,6 +88,169 @@ export default function TenantMenuPage() {
   const [editingCategory, setEditingCategory] = useState<MenuCategory | null>(null);
   const { toast } = useToast();
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Restaurant settings from tenantData
+  const restaurantSettings = {
+    currency: tenantData?.currency || 'GBP',
+    timezone: tenantData?.timezone || 'Europe/London'
+  };
+
+  // Use loading state
+  const isLoading = loading;
+
+  // Fetch menu items and categories
+  useEffect(() => {
+    async function fetchMenuData() {
+      if (!tenantData?.id) return;
+      
+      try {
+        setLoading(true);
+        
+        // Fetch menu items
+        const itemsResponse = await fetch(`/api/tenant/menu/items?tenantId=${tenantData.id}`);
+        if (itemsResponse.ok) {
+          const itemsResult = await itemsResponse.json();
+          if (itemsResult.success) {
+            setMenuItems(itemsResult.data || []);
+          }
+        }
+
+        // Fetch categories
+        const categoriesResponse = await fetch(`/api/tenant/menu/categories?tenantId=${tenantData.id}`);
+        if (categoriesResponse.ok) {
+          const categoriesResult = await categoriesResponse.json();
+          if (categoriesResult.success) {
+            setCategories(categoriesResult.data || []);
+          }
+        }
+      } catch (error) {
+        console.error('Failed to fetch menu data:', error);
+        toast({
+          title: "Error",
+          description: "Failed to load menu data",
+          variant: "destructive",
+        });
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    fetchMenuData();
+  }, [tenantData?.id, toast]);
+
+  // Save menu item
+  const saveMenuItem = async (item: MenuItem) => {
+    try {
+      const response = await fetch('/api/tenant/menu/items', {
+        method: item.id ? 'PUT' : 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...item, tenantId: tenantData?.id })
+      });
+      
+      if (response.ok) {
+        const result = await response.json();
+        if (result.success) {
+          if (item.id) {
+            setMenuItems(prev => prev.map(i => i.id === item.id ? result.data : i));
+          } else {
+            setMenuItems(prev => [...prev, result.data]);
+          }
+          toast({
+            title: "Success",
+            description: `Menu item ${item.id ? 'updated' : 'created'} successfully`,
+          });
+        }
+      }
+    } catch (error) {
+      console.error('Failed to save menu item:', error);
+      toast({
+        title: "Error",
+        description: "Failed to save menu item",
+        variant: "destructive",
+      });
+    }
+  };
+
+  // Delete menu item
+  const deleteMenuItem = async (itemId: string) => {
+    try {
+      const response = await fetch(`/api/tenant/menu/items/${itemId}`, {
+        method: 'DELETE'
+      });
+      
+      if (response.ok) {
+        setMenuItems(prev => prev.filter(item => item.id !== itemId));
+        toast({
+          title: "Success",
+          description: "Menu item deleted successfully",
+        });
+      }
+    } catch (error) {
+      console.error('Failed to delete menu item:', error);
+      toast({
+        title: "Error",
+        description: "Failed to delete menu item",
+        variant: "destructive",
+      });
+    }
+  };
+
+  // Save category
+  const saveCategory = async (category: MenuCategory) => {
+    try {
+      const response = await fetch('/api/tenant/menu/categories', {
+        method: category.id ? 'PUT' : 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...category, tenantId: tenantData?.id })
+      });
+      
+      if (response.ok) {
+        const result = await response.json();
+        if (result.success) {
+          if (category.id) {
+            setCategories(prev => prev.map(c => c.id === category.id ? result.data : c));
+          } else {
+            setCategories(prev => [...prev, result.data]);
+          }
+          toast({
+            title: "Success",
+            description: `Category ${category.id ? 'updated' : 'created'} successfully`,
+          });
+        }
+      }
+    } catch (error) {
+      console.error('Failed to save category:', error);
+      toast({
+        title: "Error",
+        description: "Failed to save category",
+        variant: "destructive",
+      });
+    }
+  };
+
+  // Delete category
+  const deleteCategory = async (categoryId: string) => {
+    try {
+      const response = await fetch(`/api/tenant/menu/categories/${categoryId}`, {
+        method: 'DELETE'
+      });
+      
+      if (response.ok) {
+        setCategories(prev => prev.filter(cat => cat.id !== categoryId));
+        toast({
+          title: "Success",
+          description: "Category deleted successfully",
+        });
+      }
+    } catch (error) {
+      console.error('Failed to delete category:', error);
+      toast({
+        title: "Error",
+        description: "Failed to delete category",
+        variant: "destructive",
+      });
+    }
+  };
 
   const currencySymbol = useMemo(() => {
     return getCurrencySymbol(restaurantSettings?.currency || 'GBP');
@@ -323,8 +480,7 @@ export default function TenantMenuPage() {
 
     try {
       const itemToSave: any = {
-        id: editingItem?.id || `item_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-        tenantId: editingItem?.tenantId || '', // Will be set by the save function
+        ...(editingItem?.id && { id: editingItem.id }), // Only include ID if editing
         name: itemForm.name!,
         description: itemForm.description || '',
         price: Number(itemForm.price),
@@ -386,9 +542,8 @@ export default function TenantMenuPage() {
     }
 
     try {
-      const categoryToSave: MenuCategory = {
-        id: editingCategory?.id || `cat_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-        tenantId: editingCategory?.tenantId || '', // Will be set by the save function
+      const categoryToSave: any = {
+        ...(editingCategory?.id && { id: editingCategory.id }), // Only include ID if editing
         name: categoryForm.name!,
         description: categoryForm.description || '',
         active: categoryForm.active ?? true,
@@ -980,7 +1135,7 @@ export default function TenantMenuPage() {
                                   <Button
                                     variant="ghost"
                                     size="icon"
-                                    className="h-8 w-8 hover:bg-red-100 hover:text-red-600"
+                                    className="h-8 w-8 text-red-600 hover:text-white hover:bg-red-600 border border-red-300 hover:border-red-600 transition-all duration-200"
                                   >
                                     <Trash2 className="w-4 h-4" />
                                   </Button>
@@ -996,9 +1151,9 @@ export default function TenantMenuPage() {
                                     <AlertDialogCancel>Cancel</AlertDialogCancel>
                                     <AlertDialogAction 
                                       onClick={() => handleDeleteItem(item)}
-                                      className="bg-red-600 hover:bg-red-700"
+                                      className="bg-red-600 hover:bg-red-700 text-white border-red-600 hover:border-red-700"
                                     >
-                                      Delete
+                                      Delete Item
                                     </AlertDialogAction>
                                   </AlertDialogFooter>
                                 </AlertDialogContent>
@@ -1203,7 +1358,7 @@ export default function TenantMenuPage() {
                                     <Button
                                       variant="ghost"
                                       size="icon"
-                                      className="h-8 w-8 hover:bg-red-100 hover:text-red-600"
+                                      className="h-8 w-8 text-red-600 hover:text-white hover:bg-red-600 border border-red-300 hover:border-red-600 transition-all duration-200"
                                     >
                                       <Trash2 className="w-4 h-4" />
                                     </Button>
@@ -1219,9 +1374,9 @@ export default function TenantMenuPage() {
                                       <AlertDialogCancel>Cancel</AlertDialogCancel>
                                       <AlertDialogAction 
                                         onClick={() => handleDeleteCategory(category)}
-                                        className="bg-red-600 hover:bg-red-700"
+                                        className="bg-red-600 hover:bg-red-700 text-white border-red-600 hover:border-red-700"
                                       >
-                                        Delete
+                                        Delete Category
                                       </AlertDialogAction>
                                     </AlertDialogFooter>
                                   </AlertDialogContent>

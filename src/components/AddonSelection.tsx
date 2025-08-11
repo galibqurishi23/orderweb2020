@@ -32,7 +32,7 @@ export default function AddonSelection({
   menuItem, 
   addonGroups, 
   onSelectionChange,
-  currencySymbol = '$'
+  currencySymbol = '£'
 }: AddonSelectionProps) {
   const { toast } = useToast();
   

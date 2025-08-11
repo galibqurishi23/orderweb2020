@@ -1,12 +1,12 @@
 'use server';
 
-import pool from './db';
+import db from './db';
 import type { Customer, Address } from './types';
 import { v4 as uuidv4 } from 'uuid';
 import bcrypt from 'bcryptjs';
 
 export async function getTenantCustomers(tenantId: string): Promise<Customer[]> {
-    const [rows] = await pool.query(
+    const [rows] = await db.query(
         'SELECT * FROM customers WHERE tenant_id = ?',
         [tenantId]
     );
@@ -14,7 +14,7 @@ export async function getTenantCustomers(tenantId: string): Promise<Customer[]> 
 }
 
 export async function getTenantCustomerById(tenantId: string, customerId: string): Promise<Customer | null> {
-    const [rows] = await pool.query(
+    const [rows] = await db.query(
         'SELECT * FROM customers WHERE tenant_id = ? AND id = ?',
         [tenantId, customerId]
     );
@@ -23,7 +23,7 @@ export async function getTenantCustomerById(tenantId: string, customerId: string
 }
 
 export async function getTenantCustomerByEmail(tenantId: string, email: string): Promise<Customer | null> {
-    const [rows] = await pool.query(
+    const [rows] = await db.query(
         'SELECT * FROM customers WHERE tenant_id = ? AND email = ?',
         [tenantId, email]
     );
@@ -31,22 +31,17 @@ export async function getTenantCustomerByEmail(tenantId: string, email: string):
     return customers.length > 0 ? customers[0] : null;
 }
 
-export async function createTenantCustomer(tenantId: string, customerData: {
-    name: string;
-    email: string;
-    phone?: string;
-    password: string;
-}): Promise<Customer> {
-    const id = uuidv4();
-    const hashedPassword = await bcrypt.hash(customerData.password, 10);
+export async function createTenantCustomer(tenantId: string, customerData: Omit<Customer, 'id'>): Promise<Customer> {
+    const hashedPassword = await bcrypt.hash(customerData.password!, 12);
     
-    await pool.execute(
+    const customerId = uuidv4();
+    await db.execute(
         'INSERT INTO customers (id, tenant_id, name, email, phone, password) VALUES (?, ?, ?, ?, ?, ?)',
-        [id, tenantId, customerData.name, customerData.email, customerData.phone || null, hashedPassword]
+        [customerId, tenantId, customerData.name, customerData.email, customerData.phone, hashedPassword]
     );
     
     return {
-        id,
+        id: customerId,
         tenant_id: tenantId,
         name: customerData.name,
         email: customerData.email,
@@ -64,7 +59,7 @@ export async function authenticateTenantCustomer(tenantId: string, email: string
 }
 
 export async function getTenantCustomerAddresses(tenantId: string, customerId: string): Promise<Address[]> {
-    const [rows] = await pool.query(
+    const [rows] = await db.query(
         `SELECT a.* FROM addresses a 
          JOIN customers c ON a.customerId = c.id 
          WHERE c.tenant_id = ? AND a.customerId = ?`,
@@ -82,7 +77,7 @@ export async function addTenantCustomerAddress(tenantId: string, customerId: str
         throw new Error('Customer not found for this tenant');
     }
     
-    await pool.execute(
+    await db.execute(
         'INSERT INTO addresses (id, street, city, postcode, isDefault, customerId) VALUES (?, ?, ?, ?, ?, ?)',
         [id, address.street, address.city, address.postcode, address.isDefault, customerId]
     );
@@ -90,7 +85,7 @@ export async function addTenantCustomerAddress(tenantId: string, customerId: str
 
 export async function deleteTenantCustomerAddress(tenantId: string, addressId: string): Promise<void> {
     // Verify address belongs to customer of this tenant
-    await pool.execute(
+    await db.execute(
         `DELETE a FROM addresses a 
          JOIN customers c ON a.customerId = c.id 
          WHERE c.tenant_id = ? AND a.id = ?`,

@@ -8,10 +8,10 @@ import { KitchenDisplayService } from '@/lib/kitchen-display-service';
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { tenant: string } }
+  { params }: { params: Promise<{ tenant: string }> }
 ) {
   try {
-    const tenantId = params.tenant;
+    const { tenant: tenantId } = await params;
     
     if (!tenantId) {
       return NextResponse.json(

@@ -24,10 +24,10 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Find user in tenant_users table using email (owner is the admin role)
+    // Find user in tenant_users table using email OR username (owner is the admin role)
     const [userRows] = await db.execute(
-      'SELECT id, email, password, name, role, active FROM tenant_users WHERE email = ? AND tenant_id = ? AND role = "owner"',
-      [email, tenant.id]
+      'SELECT id, email, username, password, name, role, active FROM tenant_users WHERE (email = ? OR username = ?) AND tenant_id = ? AND role = "owner"',
+      [email, email, tenant.id]
     );
 
     const users = userRows as any[];

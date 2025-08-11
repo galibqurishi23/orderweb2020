@@ -3,7 +3,7 @@
 import React, { useState } from 'react';
 import { Save, CreditCard, Wallet, ChevronDown, ChevronUp, AlertCircle, CheckCircle, Settings } from 'lucide-react';
 import type { PaymentSettings } from '@/lib/types';
-import { useTenantData } from '@/context/TenantDataContext';
+import { useAdmin } from '@/context/AdminContext';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -21,8 +21,8 @@ import {
 } from '@/components/ui/select';
 
 export default function PaymentsPage() {
-    const { restaurantSettings, saveSettings } = useTenantData();
-    const [settings, setSettings] = useState<PaymentSettings>(restaurantSettings.paymentSettings);
+    const { tenantData, refreshTenantData } = useAdmin();
+    const [settings, setSettings] = useState<PaymentSettings>(tenantData?.settings?.paymentSettings || {} as PaymentSettings);
     const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({
         stripe: false,
         globalPayments: false,
@@ -35,8 +35,10 @@ export default function PaymentsPage() {
     
     // Sync local state when context data changes
     React.useEffect(() => {
-        setSettings(restaurantSettings.paymentSettings);
-    }, [restaurantSettings.paymentSettings]);
+        if (tenantData?.settings?.paymentSettings) {
+            setSettings(tenantData.settings.paymentSettings);
+        }
+    }, [tenantData?.settings?.paymentSettings]);
 
     // Get the currently active payment gateway
     const getActiveGateway = (): 'stripe' | 'globalPayments' | 'worldpay' | null => {
@@ -55,7 +57,24 @@ export default function PaymentsPage() {
 
     const handleSave = async () => {
         try {
-            await saveSettings({ ...restaurantSettings, paymentSettings: settings });
+            const response = await fetch(`/api/tenant/settings`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-Tenant-ID': tenantData?.id || ''
+                },
+                body: JSON.stringify({
+                    ...tenantData?.settings,
+                    paymentSettings: settings
+                }),
+            });
+
+            if (!response.ok) {
+                throw new Error('Failed to save settings');
+            }
+
+            await refreshTenantData();
+            
             toast({
                 title: "Payment Settings Saved",
                 description: "Your payment gateway settings have been successfully updated.",

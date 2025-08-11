@@ -338,7 +338,7 @@ export class PhoneLoyaltyService {
       const currentBalance = currentData?.points_balance || 0;
       const totalEarned = currentData?.total_points_earned || 0;
       const newBalance = currentBalance + points;
-      const newTotalEarned = totalEarned + (transactionType === 'earn' ? points : 0);
+      const newTotalEarned = totalEarned + (transactionType === 'earn' || transactionType === 'bonus' ? points : 0);
 
       // Update points balance
       await conn.execute(`
@@ -350,12 +350,27 @@ export class PhoneLoyaltyService {
         WHERE customer_id = ? AND tenant_id = ?
       `, [newBalance, newTotalEarned, customerId, tenantId]);
 
-      // Log transaction in loyalty_transactions table
+      // Log transaction in loyalty_transactions table  
+      // Map transaction types to valid database enum values
+      let txType: string;
+      switch (transactionType) {
+        case 'earn':
+          txType = 'earned';
+          break;
+        case 'bonus':
+          txType = 'earned'; // Map bonus to earned
+          break;
+        case 'adjustment':
+          txType = 'adjustment';
+          break;
+        default:
+          txType = 'earned'; // Default to 'earned' for all point additions
+      }
       await conn.execute(`
         INSERT INTO loyalty_transactions 
         (customer_id, tenant_id, transaction_type, points_amount, description, order_id)
         VALUES (?, ?, ?, ?, ?, ?)
-      `, [customerId, tenantId, transactionType, points, reason, orderId]);
+      `, [customerId, tenantId, txType, points, reason, orderId || null]);
 
       // Also log in phone_loyalty_transactions if it exists
       try {
@@ -363,7 +378,7 @@ export class PhoneLoyaltyService {
           INSERT INTO phone_loyalty_transactions 
           (phone, tenant_id, customer_id, operation_type, points_amount, operation_details)
           VALUES (?, ?, ?, 'add_points', ?, JSON_OBJECT('reason', ?, 'order_id', ?))
-        `, [phone, tenantId, customerId, points, reason, orderId]);
+        `, [phone, tenantId, customerId, points, reason, orderId || null]);
       } catch (phoneLogError) {
         // Don't fail if phone transaction logging fails
         console.warn('Could not log to phone_loyalty_transactions:', phoneLogError);
@@ -399,13 +414,30 @@ export class PhoneLoyaltyService {
     try {
       await connection.beginTransaction();
 
+      // Get customer ID from phone lookup
+      const [lookupResult] = await connection.execute(
+        'SELECT customer_id FROM loyalty_phone_lookup WHERE normalized_phone = ? AND tenant_id = ?',
+        [this.normalizePhoneNumber(phone), tenantId]
+      );
+
+      if (!lookupResult || (lookupResult as any[]).length === 0) {
+        await connection.rollback();
+        return {
+          success: false,
+          message: 'Customer not found in loyalty program'
+        };
+      }
+
+      const customerId = (lookupResult as any[])[0].customer_id;
+
       // Get current balance
       const [balanceResult] = await connection.execute(
-        'SELECT points_balance FROM loyalty_points WHERE phone = ? AND tenant_id = ?',
-        [phone, tenantId]
+        'SELECT points_balance, total_points_redeemed FROM customer_loyalty_points WHERE customer_id = ? AND tenant_id = ?',
+        [customerId, tenantId]
       );
 
       const currentBalance = (balanceResult as any[])[0]?.points_balance || 0;
+      const totalRedeemed = (balanceResult as any[])[0]?.total_points_redeemed || 0;
 
       if (currentBalance < points) {
         await connection.rollback();
@@ -416,39 +448,37 @@ export class PhoneLoyaltyService {
       }
 
       const newBalance = currentBalance - points;
+      const newTotalRedeemed = totalRedeemed + points;
 
       // Update points balance
-      await connection.execute(`
-        UPDATE loyalty_points 
-        SET 
-          points_balance = ?,
-          total_points_redeemed = total_points_redeemed + ?,
-          last_transaction_date = NOW()
-        WHERE phone = ? AND tenant_id = ?
-      `, [newBalance, points, phone, tenantId]);
+      await connection.execute(
+        'UPDATE customer_loyalty_points SET points_balance = ?, total_points_redeemed = ?, updated_at = NOW() WHERE customer_id = ? AND tenant_id = ?',
+        [newBalance, newTotalRedeemed, customerId, tenantId]
+      );
 
-      // Log transaction
+      // Record transaction
       await connection.execute(`
         INSERT INTO phone_loyalty_transactions 
-        (phone, tenant_id, transaction_type, points_amount, points_balance_before, 
-         points_balance_after, reason, order_id)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-      `, [phone, tenantId, 'redeem', -points, currentBalance, newBalance, reason, orderId]);
+        (customer_id, tenant_id, phone, operation_type, points_amount, operation_details, transaction_reference) 
+        VALUES (?, ?, ?, 'redeem_points', ?, ?, ?)
+      `, [customerId, tenantId, phone, points, JSON.stringify({ reason, redeemedAt: new Date().toISOString() }), orderId || null]);
 
       await connection.commit();
+
+      console.log(`✅ Redeemed ${points} points for ${phone}. New balance: ${newBalance}`);
 
       return {
         success: true,
         message: `Successfully redeemed ${points} points`,
-        newBalance
+        newBalance: newBalance
       };
 
     } catch (error) {
       await connection.rollback();
-      console.error('Error redeeming points:', error);
+      console.error('❌ Error redeeming points:', error);
       return {
         success: false,
-        message: 'Failed to redeem points due to system error'
+        message: 'Failed to redeem points due to database error'
       };
     } finally {
       connection.release();

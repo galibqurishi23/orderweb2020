@@ -40,7 +40,7 @@ export default function CustomerProfilePage() {
   const [profile, setProfile] = useState<CustomerProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [activeTab, setActiveTab] = useState('personal');
+  const [activeTab, setActiveTab] = useState('main');
   
   // Password change state
   const [passwordForm, setPasswordForm] = useState({
@@ -328,138 +328,211 @@ export default function CustomerProfilePage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <div className="bg-white shadow-sm border-b">
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 via-blue-50 to-indigo-50">
+      {/* Mobile-First Header */}
+      <div className="bg-white/80 backdrop-blur-md shadow-lg border-b border-white/20 sticky top-0 z-40">
         <div className="max-w-4xl mx-auto p-4">
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
+            <div className="flex items-center gap-3">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => router.push(`/${params.tenant}/customer/dashboard`)}
+                className="text-gray-700 hover:bg-white/60 hover:text-primary transition-all duration-200 rounded-xl p-2"
+              >
+                <ArrowLeft className="h-5 w-5" />
+              </Button>
+              <div>
+                <h1 className="text-lg sm:text-xl font-bold text-gray-800">Back to Menu</h1>
+                <p className="text-xs text-gray-600 hidden sm:block">My Account</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="text-xs sm:text-sm text-primary font-medium">Kitchen Restaurant</div>
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => router.push(`/${params.tenant}/customer/dashboard`)}
-                className="border-blue-200 text-blue-600 hover:bg-blue-50"
+                onClick={saveProfile}
+                disabled={saving}
+                className="bg-white/60 border-primary/20 text-primary hover:bg-primary/10 transition-all duration-200 rounded-xl text-xs sm:text-sm"
               >
-                <ArrowLeft className="h-4 w-4 mr-2" />
-                Back
+                {saving ? 'Saving...' : 'Sign Out'}
               </Button>
-              <h1 className="text-2xl font-bold text-blue-800">My Profile</h1>
             </div>
-            <Button
-              onClick={saveProfile}
-              disabled={saving}
-              className="bg-green-600 hover:bg-green-700 text-white"
-            >
-              <Save className="h-4 w-4 mr-2" />
-              {saving ? 'Saving...' : 'Save Changes'}
-            </Button>
           </div>
         </div>
       </div>
 
-      <div className="max-w-4xl mx-auto p-4">
-        {/* Profile Summary Card */}
-        <Card className="mb-6 border-blue-200">
-          <CardContent className="p-6 bg-blue-50">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-4">
-                <div className="h-16 w-16 bg-blue-100 rounded-full flex items-center justify-center border-2 border-blue-200">
-                  <User className="h-8 w-8 text-blue-600" />
+      <div className="max-w-4xl mx-auto p-4 space-y-4">
+        {/* Welcome Section */}
+        <div className="text-center space-y-2 py-4">
+          <h2 className="text-2xl sm:text-3xl font-bold text-gray-800">
+            Welcome back, {profile.firstName} {profile.lastName}!
+          </h2>
+          <p className="text-gray-600 text-sm sm:text-base">
+            Manage your orders, profile, and loyalty rewards
+          </p>
+        </div>
+
+        {/* Loyalty Status Card */}
+        <div className="bg-gradient-to-r from-blue-500 via-purple-500 to-indigo-600 rounded-2xl p-6 text-white shadow-lg relative overflow-hidden">
+          <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full -translate-y-16 translate-x-16"></div>
+          <div className="absolute bottom-0 left-0 w-24 h-24 bg-white/10 rounded-full translate-y-12 -translate-x-12"></div>
+          <div className="relative z-10">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 bg-white/20 rounded-full flex items-center justify-center">
+                  <User className="h-4 w-4 text-white" />
                 </div>
-                <div>
-                  <h2 className="text-xl font-bold text-blue-800">
-                    {profile.firstName} {profile.lastName}
-                  </h2>
-                  <p className="text-blue-600">{profile.email}</p>
-                  <div className="flex items-center gap-2 mt-1">
-                    <span className={`px-2 py-1 rounded-full text-xs font-medium ${getTierColor(profile.loyaltyTier)}`}>
-                      {profile.loyaltyTier.toUpperCase()} MEMBER
-                    </span>
-                    <span className="text-sm text-blue-600">
-                      Member since {new Date(profile.memberSince).getFullYear()}
-                    </span>
-                  </div>
-                </div>
+                <span className="text-sm font-medium opacity-90">Loyalty Status</span>
               </div>
-              <div className="text-right">
-                <div className="text-2xl font-bold text-green-600">{profile.totalPoints}</div>
-                <div className="text-sm text-green-600">Loyalty Points</div>
-                <div className="text-sm text-blue-600 mt-1">{profile.totalOrders} orders placed</div>
+              <div className="w-8 h-8 bg-white/20 rounded-full flex items-center justify-center">
+                <Shield className="h-4 w-4 text-white" />
               </div>
             </div>
-          </CardContent>
-        </Card>
-
-        {/* Tabs */}
-        <div className="mb-6">
-          <div className="border-b border-gray-200">
-            <nav className="flex space-x-8">
-              <button
-                onClick={() => setActiveTab('personal')}
-                className={`py-2 px-1 border-b-2 font-medium text-sm ${
-                  activeTab === 'personal'
-                    ? 'border-blue-500 text-blue-600'
-                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                }`}
-              >
-                Personal Information
-              </button>
-              <button
-                onClick={() => setActiveTab('security')}
-                className={`py-2 px-1 border-b-2 font-medium text-sm ${
-                  activeTab === 'security'
-                    ? 'border-blue-500 text-blue-600'
-                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                }`}
-              >
-                Security & Password
-              </button>
-              <button
-                onClick={() => setActiveTab('danger')}
-                className={`py-2 px-1 border-b-2 font-medium text-sm ${
-                  activeTab === 'danger'
-                    ? 'border-red-500 text-red-600'
-                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                }`}
-              >
-                Delete Account
-              </button>
-            </nav>
+            <div className="space-y-2">
+              <h3 className="text-2xl font-bold">{profile.loyaltyTier}</h3>
+              <div className="w-full bg-white/20 rounded-full h-2">
+                <div className="bg-white h-2 rounded-full" style={{ width: '10%' }}></div>
+              </div>
+              <p className="text-sm opacity-90">10%</p>
+            </div>
           </div>
         </div>
 
+        {/* Points Balance Card */}
+        <div className="bg-white/80 backdrop-blur-sm rounded-2xl p-6 shadow-lg border border-white/40">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
+                <span className="text-blue-600 text-lg">🎁</span>
+              </div>
+              <span className="text-gray-700 font-medium">Points Balance</span>
+            </div>
+            <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
+              <span className="text-blue-600 text-lg">💎</span>
+            </div>
+          </div>
+          <div className="space-y-1">
+            <div className="flex items-baseline gap-1">
+              <span className="text-3xl font-bold text-blue-600">{profile.totalPoints}</span>
+            </div>
+            <p className="text-sm text-gray-600">Worth £{(profile.totalPoints * 0.01).toFixed(2)}</p>
+          </div>
+        </div>
+
+        {/* Total Orders Card */}
+        <div className="bg-white/80 backdrop-blur-sm rounded-2xl p-6 shadow-lg border border-white/40">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center">
+                <span className="text-green-600 text-sm font-bold">N</span>
+              </div>
+              <span className="text-gray-700 font-medium">Total Orders</span>
+            </div>
+            <div className="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center">
+              <span className="text-green-600 text-lg">✅</span>
+            </div>
+          </div>
+          <div className="space-y-1">
+            <div className="flex items-baseline gap-1">
+              <span className="text-3xl font-bold text-green-600">{profile.totalOrders}</span>
+            </div>
+            <p className="text-sm text-gray-600">Orders completed</p>
+          </div>
+        </div>
+
+        {/* Quick Actions */}
+        <div className="grid grid-cols-2 gap-4 mt-6">
+          <Button
+            onClick={() => setActiveTab('personal')}
+            className="bg-white/80 backdrop-blur-sm text-gray-700 hover:bg-white/90 border border-white/40 rounded-2xl p-6 h-auto flex flex-col items-center gap-3 shadow-lg hover:shadow-xl transition-all duration-200"
+            variant="outline"
+          >
+            <User className="h-8 w-8 text-blue-500" />
+            <div className="text-center">
+              <div className="font-semibold text-sm">Edit Profile</div>
+              <div className="text-xs text-gray-500">Personal Info</div>
+            </div>
+          </Button>
+          
+          <Button
+            onClick={() => setActiveTab('security')}
+            className="bg-white/80 backdrop-blur-sm text-gray-700 hover:bg-white/90 border border-white/40 rounded-2xl p-6 h-auto flex flex-col items-center gap-3 shadow-lg hover:shadow-xl transition-all duration-200"
+            variant="outline"
+          >
+            <Lock className="h-8 w-8 text-green-500" />
+            <div className="text-center">
+              <div className="font-semibold text-sm">Security</div>
+              <div className="text-xs text-gray-500">Password</div>
+            </div>
+          </Button>
+        </div>
+
+        {/* Advanced Settings */}
+        <div className="mt-8 pt-6 border-t border-gray-200">
+          <Button
+            onClick={() => setActiveTab('danger')}
+            className="w-full bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 rounded-2xl p-4 flex items-center justify-center gap-3 transition-all duration-200"
+            variant="outline"
+          >
+            <AlertTriangle className="h-5 w-5 text-red-600" />
+            <div className="text-center">
+              <div className="font-semibold text-sm">Delete Account</div>
+              <div className="text-xs text-red-500">Danger Zone</div>
+            </div>
+          </Button>
+        </div>
+
+        {/* Profile Tabs - Hidden by default, shown when editing */}
+        {activeTab !== 'main' && (
+          <>
+            {/* Back to Main Button */}
+            <div className="flex justify-center pt-4">
+              <Button
+                onClick={() => setActiveTab('main')}
+                variant="outline"
+                className="bg-white/80 backdrop-blur-sm border-gray-200 text-gray-700 hover:bg-white/90 rounded-xl"
+              >
+                <ArrowLeft className="h-4 w-4 mr-2" />
+                Back to Profile
+              </Button>
+            </div>
+
         {/* Tab Content */}
         {activeTab === 'personal' && (
-          <Card className="border-blue-200">
-            <CardHeader className="bg-blue-50">
-              <CardTitle className="flex items-center gap-2 text-blue-800">
+          <Card className="border-0 bg-white/80 backdrop-blur-sm shadow-lg rounded-2xl">
+            <CardHeader className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-t-2xl">
+              <CardTitle className="flex items-center gap-2 text-gray-800">
                 <User className="h-5 w-5 text-blue-600" />
                 Personal Information
               </CardTitle>
             </CardHeader>
-            <CardContent className="space-y-4 bg-white">
+            <CardContent className="space-y-4 bg-white/90 rounded-b-2xl">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <Label htmlFor="firstName">First Name</Label>
+                  <Label htmlFor="firstName" className="text-gray-700 font-medium">First Name</Label>
                   <Input
                     id="firstName"
                     value={profile.firstName}
                     onChange={(e) => updateProfile('firstName', e.target.value)}
+                    className="bg-white/80 border-gray-200 rounded-xl"
                   />
                 </div>
                 <div>
-                  <Label htmlFor="lastName">Last Name</Label>
+                  <Label htmlFor="lastName" className="text-gray-700 font-medium">Last Name</Label>
                   <Input
                     id="lastName"
                     value={profile.lastName}
                     onChange={(e) => updateProfile('lastName', e.target.value)}
+                    className="bg-white/80 border-gray-200 rounded-xl"
                   />
                 </div>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <Label htmlFor="email">Email Address</Label>
+                  <Label htmlFor="email" className="text-gray-700 font-medium">Email Address</Label>
                   <div className="relative">
                     <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
                     <Input
@@ -467,12 +540,12 @@ export default function CustomerProfilePage() {
                       type="email"
                       value={profile.email}
                       onChange={(e) => updateProfile('email', e.target.value)}
-                      className="pl-10"
+                      className="pl-10 bg-white/80 border-gray-200 rounded-xl"
                     />
                   </div>
                 </div>
                 <div>
-                  <Label htmlFor="phone">Phone Number</Label>
+                  <Label htmlFor="phone" className="text-gray-700 font-medium">Phone Number</Label>
                   <div className="relative">
                     <Phone className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
                     <Input
@@ -480,53 +553,66 @@ export default function CustomerProfilePage() {
                       type="tel"
                       value={profile.phone}
                       onChange={(e) => updateProfile('phone', e.target.value)}
-                      className="pl-10"
+                      className="pl-10 bg-white/80 border-gray-200 rounded-xl"
                     />
                   </div>
                 </div>
               </div>
 
               <div>
-                <Label htmlFor="dateOfBirth">Date of Birth</Label>
+                <Label htmlFor="dateOfBirth" className="text-gray-700 font-medium">Date of Birth</Label>
                 <Input
                   id="dateOfBirth"
                   type="date"
                   value={profile.dateOfBirth || ''}
                   onChange={(e) => updateProfile('dateOfBirth', e.target.value)}
+                  className="bg-white/80 border-gray-200 rounded-xl"
                 />
               </div>
 
               <div>
-                <Label htmlFor="dietaryRestrictions">Dietary Restrictions</Label>
+                <Label htmlFor="dietaryRestrictions" className="text-gray-700 font-medium">Dietary Restrictions</Label>
                 <Textarea
                   id="dietaryRestrictions"
                   placeholder="Tell us about any dietary restrictions or allergies..."
                   value={profile.preferences.dietaryRestrictions}
                   onChange={(e) => updateProfile('preferences.dietaryRestrictions', e.target.value)}
+                  className="bg-white/80 border-gray-200 rounded-xl"
                 />
+              </div>
+
+              <div className="flex justify-center pt-4">
+                <Button
+                  onClick={saveProfile}
+                  disabled={saving}
+                  className="bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 text-white px-8 py-3 rounded-xl shadow-lg font-medium"
+                >
+                  <Save className="h-4 w-4 mr-2" />
+                  {saving ? 'Saving...' : 'Save Changes'}
+                </Button>
               </div>
             </CardContent>
           </Card>
         )}
 
         {activeTab === 'security' && (
-          <Card className="border-blue-200">
-            <CardHeader className="bg-blue-50">
-              <CardTitle className="flex items-center gap-2 text-blue-800">
-                <Lock className="h-5 w-5 text-blue-600" />
+          <Card className="border-0 bg-white/80 backdrop-blur-sm shadow-lg rounded-2xl">
+            <CardHeader className="bg-gradient-to-r from-green-50 to-emerald-50 rounded-t-2xl">
+              <CardTitle className="flex items-center gap-2 text-gray-800">
+                <Lock className="h-5 w-5 text-green-600" />
                 Security & Password
               </CardTitle>
             </CardHeader>
-            <CardContent className="space-y-4 bg-white">
+            <CardContent className="space-y-4 bg-white/90 rounded-b-2xl">
               <div>
-                <Label htmlFor="currentPassword">Current Password</Label>
+                <Label htmlFor="currentPassword" className="text-gray-700 font-medium">Current Password</Label>
                 <div className="relative">
                   <Input
                     id="currentPassword"
                     type={showCurrentPassword ? 'text' : 'password'}
                     value={passwordForm.currentPassword}
                     onChange={(e) => setPasswordForm({...passwordForm, currentPassword: e.target.value})}
-                    className="pr-10"
+                    className="pr-10 bg-white/80 border-gray-200 rounded-xl"
                     placeholder="Enter your current password"
                   />
                   <button
@@ -540,14 +626,14 @@ export default function CustomerProfilePage() {
               </div>
 
               <div>
-                <Label htmlFor="newPassword">New Password</Label>
+                <Label htmlFor="newPassword" className="text-gray-700 font-medium">New Password</Label>
                 <div className="relative">
                   <Input
                     id="newPassword"
                     type={showNewPassword ? 'text' : 'password'}
                     value={passwordForm.newPassword}
                     onChange={(e) => setPasswordForm({...passwordForm, newPassword: e.target.value})}
-                    className="pr-10"
+                    className="pr-10 bg-white/80 border-gray-200 rounded-xl"
                     placeholder="Enter your new password"
                   />
                   <button
@@ -558,20 +644,20 @@ export default function CustomerProfilePage() {
                     {showNewPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                   </button>
                 </div>
-                <p className="text-sm text-blue-600 mt-1">
+                <p className="text-sm text-gray-600 mt-1">
                   Password must be at least 8 characters long
                 </p>
               </div>
 
               <div>
-                <Label htmlFor="confirmPassword">Confirm New Password</Label>
+                <Label htmlFor="confirmPassword" className="text-gray-700 font-medium">Confirm New Password</Label>
                 <div className="relative">
                   <Input
                     id="confirmPassword"
                     type={showConfirmPassword ? 'text' : 'password'}
                     value={passwordForm.confirmPassword}
                     onChange={(e) => setPasswordForm({...passwordForm, confirmPassword: e.target.value})}
-                    className="pr-10"
+                    className="pr-10 bg-white/80 border-gray-200 rounded-xl"
                     placeholder="Confirm your new password"
                   />
                   <button
@@ -584,20 +670,22 @@ export default function CustomerProfilePage() {
                 </div>
               </div>
 
-              <Button
-                onClick={changePassword}
-                disabled={saving || !passwordForm.currentPassword || !passwordForm.newPassword || !passwordForm.confirmPassword}
-                className="bg-blue-600 hover:bg-blue-700 text-white"
-              >
-                {saving ? 'Changing Password...' : 'Change Password'}
-              </Button>
+              <div className="flex justify-center pt-4">
+                <Button
+                  onClick={changePassword}
+                  disabled={saving || !passwordForm.currentPassword || !passwordForm.newPassword || !passwordForm.confirmPassword}
+                  className="bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white px-8 py-3 rounded-xl shadow-lg font-medium"
+                >
+                  {saving ? 'Changing Password...' : 'Change Password'}
+                </Button>
+              </div>
             </CardContent>
           </Card>
         )}
 
         {activeTab === 'danger' && (
-          <Card className="border-2 border-red-300 shadow-xl">
-            <CardHeader className="bg-gradient-to-r from-red-100 to-red-200">
+          <Card className="border-2 border-red-300 shadow-xl rounded-2xl bg-white/90">
+            <CardHeader className="bg-gradient-to-r from-red-100 to-red-200 rounded-t-2xl">
               <CardTitle className="flex items-center gap-3 text-red-800">
                 <div className="p-2 bg-red-500 rounded-full">
                   <AlertTriangle className="h-6 w-6 text-white animate-pulse" />
@@ -610,7 +698,7 @@ export default function CustomerProfilePage() {
                 </div>
               </CardTitle>
             </CardHeader>
-            <CardContent className="space-y-6 bg-white p-8">
+            <CardContent className="space-y-6 bg-white p-8 rounded-b-2xl">
               <div className="p-8 bg-gradient-to-br from-red-50 via-red-100 to-red-200 border-2 border-red-300 rounded-2xl shadow-inner">
                 <div className="flex items-start gap-6">
                   <div className="p-4 bg-gradient-to-br from-red-500 to-red-600 rounded-2xl shadow-lg">
@@ -710,6 +798,8 @@ export default function CustomerProfilePage() {
               </div>
             </CardContent>
           </Card>
+        )}
+        </>
         )}
       </div>
 

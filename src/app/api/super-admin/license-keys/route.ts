@@ -160,12 +160,18 @@ export async function DELETE(request: NextRequest) {
 
     const key = keys[0];
 
-    // Only allow deletion of unused keys
-    if (key.status !== 'unused') {
-      return NextResponse.json(
-        { success: false, error: 'Only unused license keys can be deleted' },
-        { status: 400 }
+    // Allow deletion of all license keys (including active ones)
+    // Note: Deleting active keys may cause service disruption for restaurants
+    console.log(`Deleting license key: ${key.key_code} (Status: ${key.status})`);
+    
+    // If the key is active, we should also remove it from tenant licenses
+    if (key.status === 'active') {
+      // Remove from tenant license assignments
+      await db.execute(
+        'UPDATE tenants SET license_key = NULL, license_expiry = NULL WHERE license_key = ?',
+        [key.key_code]
       );
+      console.log(`Removed active license key ${key.key_code} from tenant assignments`);
     }
 
     // Delete the license key

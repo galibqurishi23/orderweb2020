@@ -46,7 +46,13 @@ const PrinterCard = ({ printer, onEdit, onDelete, onTest, onToggle }: { printer:
                         <Button variant="ghost" size="icon" onClick={() => onEdit(printer)}><Edit className="w-4 h-4" /></Button>
                          <AlertDialog>
                             <AlertDialogTrigger asChild>
-                                <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive"><Trash2 className="w-4 h-4" /></Button>
+                                <Button 
+                                  variant="ghost" 
+                                  size="icon" 
+                                  className="text-red-600 hover:text-white hover:bg-red-600 border border-red-300 hover:border-red-600 transition-all duration-200"
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </Button>
                             </AlertDialogTrigger>
                             <AlertDialogContent>
                                 <AlertDialogHeader>
@@ -55,7 +61,7 @@ const PrinterCard = ({ printer, onEdit, onDelete, onTest, onToggle }: { printer:
                                 </AlertDialogHeader>
                                 <AlertDialogFooter>
                                     <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                    <AlertDialogAction onClick={() => onDelete(printer.id)} className="bg-destructive hover:bg-destructive/90">Delete</AlertDialogAction>
+                                    <AlertDialogAction onClick={() => onDelete(printer.id)} className="bg-red-600 hover:bg-red-700 text-white border-red-600 hover:border-red-700">Delete Printer</AlertDialogAction>
                                 </AlertDialogFooter>
                             </AlertDialogContent>
                         </AlertDialog>

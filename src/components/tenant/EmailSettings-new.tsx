@@ -9,7 +9,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Textarea } from "@/components/ui/textarea";
 import { CheckCircle, AlertCircle, Mail, Settings, TestTube, Palette, Upload, Facebook, Twitter, Instagram, Globe } from "lucide-react";
 import { useTenant } from "@/context/TenantContext";
-import { useTenantData } from "@/context/TenantDataContext";
+import { useAdmin } from "@/context/AdminContext";
 
 interface EmailTemplateCustomization {
   logo: string;
@@ -34,7 +34,7 @@ interface EmailTemplateCustomization {
 
 export default function EmailSettings() {
   const { tenantSlug } = useTenant();
-  const { restaurantSettings } = useTenantData();
+  const { tenantData } = useAdmin();
   
   const [templateCustomization, setTemplateCustomization] = useState<EmailTemplateCustomization>({
     logo: "",
@@ -173,11 +173,11 @@ export default function EmailSettings() {
 
   // Get timing from order timing settings
   const getCollectionTime = () => {
-    return restaurantSettings?.collectionTimeSettings?.collectionTimeMinutes || 30;
+    return tenantData?.settings?.collectionTimeSettings?.collectionTimeMinutes || 30;
   };
 
   const getDeliveryTime = () => {
-    return restaurantSettings?.deliveryTimeSettings?.deliveryTimeMinutes || 45;
+    return tenantData?.settings?.deliveryTimeSettings?.deliveryTimeMinutes || 45;
   };
 
   // Generate preview HTML

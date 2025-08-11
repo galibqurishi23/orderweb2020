@@ -88,7 +88,8 @@ export async function GET(
     const [tenantRows] = await db.execute(
       `SELECT t.*, 
               tu.name as admin_name, 
-              tu.email as admin_email
+              tu.email as admin_email,
+              tu.username as admin_username
        FROM tenants t 
        LEFT JOIN tenant_users tu ON t.id = tu.tenant_id AND tu.role = 'owner'
        WHERE t.id = ?`,
@@ -175,12 +176,14 @@ export async function PUT(
        SET name = ?, slug = ?, email = ?, phone = ?, address = ?, updated_at = NOW()
        WHERE id = ?`,
       [name, slug, email, phone, address, id]
-    );      // Update admin user if admin details are provided
-      if (adminName || adminPassword) {
-        const [adminUser] = await db.execute(
-          'SELECT id, password FROM tenant_users WHERE tenant_id = ? AND role = "owner"',
-          [id]
-        );
+    );
+
+    // Update admin user if admin details are provided
+    if (adminName || adminUsername || adminPassword) {
+      const [adminUser] = await db.execute(
+        'SELECT id, password FROM tenant_users WHERE tenant_id = ? AND role = "owner"',
+        [id]
+      );
 
       const adminUsers = adminUser as any[];
       if (adminUsers.length > 0) {
@@ -192,6 +195,11 @@ export async function PUT(
         if (adminName) {
           updateFields.push('name = ?');
           updateParams.push(adminName);
+        }
+
+        if (adminUsername) {
+          updateFields.push('username = ?');
+          updateParams.push(adminUsername);
         }
 
         if (adminPassword) {
@@ -207,6 +215,8 @@ export async function PUT(
 
           await db.execute(updateQuery, updateParams);
         }
+      } else {
+        console.warn('No admin user found for tenant:', id);
       }
     }
 
@@ -214,7 +224,8 @@ export async function PUT(
     const [updatedTenant] = await db.execute(
       `SELECT t.*, 
               tu.name as admin_name, 
-              tu.email as admin_email
+              tu.email as admin_email,
+              tu.username as admin_username
        FROM tenants t 
        LEFT JOIN tenant_users tu ON t.id = tu.tenant_id AND tu.role = 'owner'
        WHERE t.id = ?`,

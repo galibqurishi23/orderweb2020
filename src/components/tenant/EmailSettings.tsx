@@ -9,7 +9,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Textarea } from "@/components/ui/textarea";
 import { CheckCircle, AlertCircle, Mail, Settings, TestTube, Palette, Upload, Facebook, Twitter, Instagram, Globe, Server, Eye, EyeOff, Music } from "lucide-react";
 import { useTenant } from "@/context/TenantContext";
-import { useTenantData } from "@/context/TenantDataContext";
+import { useAdmin } from "@/context/AdminContext";
 
 interface SMTPSettings {
   host: string;
@@ -50,7 +50,7 @@ interface EmailTemplateCustomization {
 
 export default function EmailSettings() {
   const { tenantSlug } = useTenant();
-  const { restaurantSettings } = useTenantData();
+  const { tenantData } = useAdmin();
   
   // SMTP Settings State
   const [smtpSettings, setSMTPSettings] = useState<SMTPSettings>({
@@ -425,20 +425,20 @@ export default function EmailSettings() {
 
   // Get timing from order timing settings
   const getCollectionTime = () => {
-    return restaurantSettings?.collectionTimeSettings?.collectionTimeMinutes || 30;
+    return tenantData?.settings?.collectionTimeSettings?.collectionTimeMinutes || 30;
   };
 
   const getDeliveryTime = () => {
-    return restaurantSettings?.deliveryTimeSettings?.deliveryTimeMinutes || 45;
+    return tenantData?.settings?.deliveryTimeSettings?.deliveryTimeMinutes || 45;
   };
 
   // Generate preview HTML
   const generatePreviewHTML = () => {
     const collectionTime = getCollectionTime();
     const deliveryTime = getDeliveryTime();
-    const restaurantName = restaurantSettings?.name || 'Restaurant Name';
-    const restaurantAddress = restaurantSettings?.address || '';
-    const restaurantPhone = restaurantSettings?.phone || '';
+    const restaurantName = tenantData?.name || 'Restaurant Name';
+    const restaurantAddress = tenantData?.address || '';
+    const restaurantPhone = tenantData?.phone || '';
     
     // Prioritize logoLink over uploaded logo
     const logoUrl = templateCustomization.logoLink || templateCustomization.logo;

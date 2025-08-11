@@ -14,6 +14,13 @@ export async function sendWelcomeEmail(
   password: string, 
   tenantSlug: string
 ): Promise<void> {
+  console.log('🔍 DEBUG: sendWelcomeEmail function called with:', {
+    restaurantName,
+    adminEmail,
+    adminName,
+    tenantSlug
+  });
+
   try {
     // Use the universal email service to send welcome email
     const success = await emailService.sendWelcomeEmail({
@@ -202,7 +209,29 @@ export async function createTenant(data: {
       await connection.commit();
       
       // Send welcome email to the admin
-      await sendWelcomeEmail(data.name, data.adminEmail, data.adminName, password, data.slug);
+      console.log('🔍 DEBUG: About to call sendWelcomeEmail with:', {
+        name: data.name,
+        adminEmail: data.adminEmail,
+        adminName: data.adminName,
+        slug: data.slug
+      });
+      
+      try {
+        await sendWelcomeEmail(data.name, data.adminEmail, data.adminName, password, data.slug);
+        console.log('✅ sendWelcomeEmail completed without throwing error');
+        
+        // Also write to a log file for debugging
+        const fs = require('fs');
+        const logMessage = `${new Date().toISOString()} - Welcome email sent to ${data.adminEmail} for restaurant ${data.name}\n`;
+        fs.appendFileSync('./email-debug.log', logMessage);
+      } catch (emailError) {
+        console.error('❌ sendWelcomeEmail threw an error:', emailError);
+        
+        // Log the error to file
+        const fs = require('fs');
+        const logMessage = `${new Date().toISOString()} - ERROR sending email to ${data.adminEmail}: ${emailError}\n`;
+        fs.appendFileSync('./email-debug.log', logMessage);
+      }
       
       // Return the created tenant and admin user details
       return {
@@ -736,8 +765,8 @@ export async function getTenantOrderStats(tenantId: string): Promise<{
 export async function getRecentTenantOrders(tenantId: string, limit: number = 10): Promise<any[]> {
   try {
     const [orders] = await pool.execute(
-      `SELECT o.id, o.order_number as orderNumber, o.total, o.status, o.createdAt as createdAt, 
-              o.customerName as customerName, o.customerEmail as customerEmail
+      `SELECT o.id, o.orderNumber, o.total, o.status, o.createdAt, 
+              o.customerName, o.customerEmail
        FROM orders o
        WHERE o.tenant_id = ?
        ORDER BY o.createdAt DESC
@@ -754,8 +783,8 @@ export async function getRecentTenantOrders(tenantId: string, limit: number = 10
 export async function getTenantOrders(tenantId: string, limit: number = 50): Promise<any[]> {
   try {
     const [orders] = await pool.execute(
-      `SELECT o.id, o.order_number as orderNumber, o.total, o.status, o.createdAt as createdAt,
-              o.customerName as customerName, o.customerEmail as customerEmail
+      `SELECT o.id, o.orderNumber, o.total, o.status, o.createdAt,
+              o.customerName, o.customerEmail
        FROM orders o
        WHERE o.tenant_id = ?
        ORDER BY o.createdAt DESC

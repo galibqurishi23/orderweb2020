@@ -18,7 +18,6 @@ import {
   CreditCard,
   Sparkles,
   Crown,
-  TrendingUp,
   Calendar,
   Phone,
   Mail
@@ -41,6 +40,14 @@ interface LoyaltyData {
   total_points_earned: number;
   total_points_redeemed: number;
   next_tier_points: number;
+}
+
+interface LoyaltyTransaction {
+  transaction_type: string;
+  points: number;
+  reason: string;
+  admin_action: boolean;
+  created_at: string;
 }
 
 interface RecentOrder {
@@ -71,6 +78,7 @@ export default function CustomerDashboard({ params }: { params: Promise<{ tenant
   const [customer, setCustomer] = useState<Customer | null>(null);
   const [loyaltyData, setLoyaltyData] = useState<LoyaltyData | null>(null);
   const [recentOrders, setRecentOrders] = useState<RecentOrder[]>([]);
+  const [loyaltyTransactions, setLoyaltyTransactions] = useState<LoyaltyTransaction[]>([]);
   const [loading, setLoading] = useState(true);
   const [tenantName, setTenantName] = useState('');
 
@@ -114,17 +122,40 @@ export default function CustomerDashboard({ params }: { params: Promise<{ tenant
   const fetchDashboardData = async (customerId: string) => {
     try {
       // Fetch loyalty data
-      const loyaltyResponse = await fetch(`/api/customer/loyalty?customerId=${customerId}&tenantId=${resolvedParams.tenant}`);
+      const loyaltyResponse = await fetch(`/api/customer/loyalty`);
       const loyaltyData = await loyaltyResponse.json();
       if (loyaltyData.success) {
-        setLoyaltyData(loyaltyData.loyalty);
+        // Convert phone loyalty data to match our interface
+        const loyalty = loyaltyData.loyalty;
+        setLoyaltyData({
+          points_balance: loyalty.pointsBalance,
+          tier_level: loyalty.tierLevel,
+          total_points_earned: loyalty.totalPointsEarned,
+          total_points_redeemed: loyalty.totalPointsRedeemed,
+          next_tier_points: loyalty.nextTierPoints
+        });
       }
 
       // Fetch recent orders (last 5)
-      const ordersResponse = await fetch(`/api/customer/orders?customerId=${customerId}&tenantId=${resolvedParams.tenant}&limit=5`);
+      const ordersResponse = await fetch(`/api/customer/orders?limit=5`, {
+        credentials: 'include'
+      });
       const ordersData = await ordersResponse.json();
       if (ordersData.success) {
-        setRecentOrders(ordersData.orders);
+        setRecentOrders(ordersData.orders.map((order: any) => ({
+          id: order.id,
+          total: order.total,
+          status: order.status,
+          created_at: order.createdAt, // Use the formatted timestamp from API
+          items_count: order.items_count
+        })));
+      }
+
+      // Fetch loyalty transactions (last 5)
+      const transactionsResponse = await fetch(`/api/customer/loyalty-transactions?customerId=${customerId}&tenantId=${resolvedParams.tenant}&limit=5`);
+      const transactionsData = await transactionsResponse.json();
+      if (transactionsData.success) {
+        setLoyaltyTransactions(transactionsData.transactions);
       }
 
     } catch (error) {
@@ -166,20 +197,53 @@ export default function CustomerDashboard({ params }: { params: Promise<{ tenant
   };
 
   const getTierProgress = () => {
-    if (!loyaltyData) return 0;
+    if (!loyaltyData || !loyaltyData.total_points_earned) return 0;
     
     const tierThresholds = { bronze: 0, silver: 500, gold: 1500, platinum: 3000 };
     const currentTier = loyaltyData.tier_level as keyof typeof tierThresholds;
-    const currentThreshold = tierThresholds[currentTier];
+    const currentThreshold = tierThresholds[currentTier] || 0;
     const nextTier = currentTier === 'platinum' ? 'platinum' : 
                     currentTier === 'gold' ? 'platinum' :
                     currentTier === 'silver' ? 'gold' : 'silver';
-    const nextThreshold = tierThresholds[nextTier as keyof typeof tierThresholds];
+    const nextThreshold = tierThresholds[nextTier as keyof typeof tierThresholds] || 0;
     
     if (currentTier === 'platinum') return 100;
     
     const progress = ((loyaltyData.total_points_earned - currentThreshold) / (nextThreshold - currentThreshold)) * 100;
     return Math.min(Math.max(progress, 0), 100);
+  };
+
+  const formatTransactionType = (type: string, adminAction: boolean) => {
+    if (adminAction) {
+      return type === 'earned' ? 'Admin Award' : type === 'redeemed' ? 'Admin Deduction' : type;
+    }
+    
+    switch (type) {
+      case 'earned':
+        return 'Points Earned';
+      case 'redeemed':
+        return 'Points Redeemed';
+      case 'expired':
+        return 'Points Expired';
+      case 'adjusted':
+        return 'Points Adjusted';
+      default:
+        return type;
+    }
+  };
+
+  const getTransactionColor = (type: string) => {
+    switch (type) {
+      case 'earned':
+        return 'text-green-600';
+      case 'redeemed':
+      case 'expired':
+        return 'text-red-600';
+      case 'adjusted':
+        return 'text-blue-600';
+      default:
+        return 'text-gray-600';
+    }
   };
 
   if (loading) {
@@ -270,7 +334,7 @@ export default function CustomerDashboard({ params }: { params: Promise<{ tenant
               <Gift className="h-4 w-4 text-blue-600" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-blue-600">{loyaltyData?.points_balance?.toLocaleString() || 0}</div>
+              <div className="text-2xl font-bold text-blue-600">{loyaltyData?.points_balance?.toLocaleString() || '0'}</div>
               <p className="text-xs text-blue-600">
                 Worth {formatCurrency((loyaltyData?.points_balance || 0) * 0.01)}
               </p>
@@ -375,39 +439,50 @@ export default function CustomerDashboard({ params }: { params: Promise<{ tenant
                     Delivery Addresses
                   </Button>
                 </Link>
-                <Link href={`/${resolvedParams.tenant}/customer/loyalty`}>
-                  <Button variant="outline" className="w-full justify-start border-green-200 text-green-600 hover:bg-green-50">
-                    <Gift className="w-4 h-4 mr-2" />
-                    Loyalty Points
-                  </Button>
-                </Link>
               </CardContent>
             </Card>
 
-            {/* Loyalty Insights */}
-            {loyaltyData && (
-              <Card className="border-green-200">
-                <CardHeader className="bg-green-50">
-                  <CardTitle className="flex items-center space-x-2 text-green-800">
-                    <TrendingUp className="w-5 h-5 text-green-600" />
-                    <span>Loyalty Insights</span>
+            {/* Recent Loyalty Activity */}
+            {loyaltyTransactions.length > 0 && (
+              <Card className="border-purple-200">
+                <CardHeader className="bg-purple-50">
+                  <CardTitle className="flex items-center space-x-2 text-purple-800">
+                    <History className="w-5 h-5 text-purple-600" />
+                    <span>Recent Activity</span>
                   </CardTitle>
+                  <CardDescription className="text-purple-600">Your latest loyalty point transactions</CardDescription>
                 </CardHeader>
-                <CardContent className="space-y-4 bg-white">
-                  <div>
-                    <p className="text-sm text-green-600">Points Earned</p>
-                    <p className="text-2xl font-bold text-green-600">{loyaltyData.total_points_earned.toLocaleString()}</p>
+                <CardContent className="bg-white">
+                  <div className="space-y-3">
+                    {loyaltyTransactions.map((transaction, index) => (
+                      <div key={index} className="flex items-center justify-between p-3 border border-purple-100 rounded-lg">
+                        <div className="flex items-center space-x-3">
+                          <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
+                            transaction.transaction_type === 'earned' ? 'bg-green-100' : 'bg-red-100'
+                          }`}>
+                            <Gift className={`w-4 h-4 ${
+                              transaction.transaction_type === 'earned' ? 'text-green-600' : 'text-red-600'
+                            }`} />
+                          </div>
+                          <div>
+                            <p className="font-medium text-gray-900">
+                              {formatTransactionType(transaction.transaction_type, transaction.admin_action)}
+                            </p>
+                            <p className="text-sm text-gray-600">{transaction.reason}</p>
+                            <p className="text-xs text-gray-500">{formatDate(transaction.created_at)}</p>
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <p className={`font-semibold ${getTransactionColor(transaction.transaction_type)}`}>
+                            {transaction.transaction_type === 'earned' ? '+' : '-'}{Math.abs(transaction.points)} pts
+                          </p>
+                          {transaction.admin_action && (
+                            <p className="text-xs text-purple-600">Admin Action</p>
+                          )}
+                        </div>
+                      </div>
+                    ))}
                   </div>
-                  <div>
-                    <p className="text-sm text-blue-600">Points Redeemed</p>
-                    <p className="text-2xl font-bold text-blue-600">{loyaltyData.total_points_redeemed.toLocaleString()}</p>
-                  </div>
-                  {loyaltyData.tier_level !== 'platinum' && (
-                    <div>
-                      <p className="text-sm text-blue-600">Points to Next Tier</p>
-                      <p className="text-lg font-semibold text-blue-600">{loyaltyData.next_tier_points - loyaltyData.total_points_earned}</p>
-                    </div>
-                  )}
                 </CardContent>
               </Card>
             )}

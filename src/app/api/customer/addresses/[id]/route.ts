@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import jwt from 'jsonwebtoken';
 import db from '@/lib/db';
 
-export async function PUT(request: NextRequest, { params }: { params: { id: string } }) {
+export async function PUT(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     // Get JWT token from cookie
     const token = request.cookies.get('customer_token')?.value;
@@ -15,6 +15,7 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
     const decoded = jwt.verify(token, process.env.JWT_SECRET || 'fallback_secret') as any;
     const customerId = decoded.customerId;
 
+    const { id } = await params;
     const body = await request.json();
     const {
       type,
@@ -28,9 +29,9 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
       deliveryInstructions
     } = body;
 
-    // Verify the address belongs to the customer
-    const checkQuery = 'SELECT id FROM addresses WHERE id = ? AND customer_id = ?';
-    const existingAddresses = await db.query(checkQuery, [params.id, customerId]);
+    // Check if address exists and belongs to user
+    const checkQuery = 'SELECT id FROM customer_addresses WHERE id = ? AND customer_id = ?';
+    const existingAddresses = await db.query(checkQuery, [id, customerId]);
     
     if (!existingAddresses || (existingAddresses as any[]).length === 0) {
       return NextResponse.json({ error: 'Address not found' }, { status: 404 });
@@ -39,29 +40,26 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
     // If this is being set as default, update all other addresses to not be default
     if (isDefault) {
       await db.query(
-        'UPDATE addresses SET is_default = FALSE WHERE customer_id = ? AND id != ?',
-        [customerId, params.id]
+        'UPDATE addresses SET isDefault = FALSE WHERE customerId = ? AND id != ?',
+        [customerId, id]
       );
     }
 
-    // Update address - mapping to actual database schema
-    const addressType = type === 'home' || type === 'work' ? 'delivery' : 'delivery';
+    // Update address - using correct column names
     const streetAddress = addressLine2 ? `${addressLine1}, ${addressLine2}` : addressLine1;
     
     const updateQuery = `
       UPDATE addresses 
-      SET type = ?, is_default = ?, street_address = ?, city = ?, postal_code = ?, country = ?
-      WHERE id = ? AND customer_id = ?
+      SET isDefault = ?, street = ?, city = ?, postcode = ?, updated_at = NOW()
+      WHERE id = ? AND customerId = ?
     `;
 
     await db.query(updateQuery, [
-      addressType,
       isDefault ? 1 : 0,
       streetAddress,
       city,
       postcode,
-      country,
-      params.id,
+      id,
       customerId
     ]);
 
@@ -73,7 +71,7 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
   }
 }
 
-export async function DELETE(request: NextRequest, { params }: { params: { id: string } }) {
+export async function DELETE(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     // Get JWT token from cookie
     const token = request.cookies.get('customer_token')?.value;
@@ -86,9 +84,11 @@ export async function DELETE(request: NextRequest, { params }: { params: { id: s
     const decoded = jwt.verify(token, process.env.JWT_SECRET || 'fallback_secret') as any;
     const customerId = decoded.customerId;
 
+    const { id } = await params;
+
     // Verify the address belongs to the customer
-    const checkQuery = 'SELECT id, is_default FROM addresses WHERE id = ? AND customer_id = ?';
-    const existingAddresses = await db.query(checkQuery, [params.id, customerId]);
+    const checkQuery = 'SELECT id, isDefault FROM addresses WHERE id = ? AND customerId = ?';
+    const existingAddresses = await db.query(checkQuery, [id, customerId]);
     
     if (!existingAddresses || (existingAddresses as any[]).length === 0) {
       return NextResponse.json({ error: 'Address not found' }, { status: 404 });
@@ -97,8 +97,8 @@ export async function DELETE(request: NextRequest, { params }: { params: { id: s
     const address = (existingAddresses as any[])[0];
 
     // Don't allow deletion of the default address if it's the only one
-    if (address.is_default) {
-      const countQuery = 'SELECT COUNT(*) as count FROM addresses WHERE customer_id = ?';
+    if (address.isDefault) {
+      const countQuery = 'SELECT COUNT(*) as count FROM addresses WHERE customerId = ?';
       const countResult = await db.query(countQuery, [customerId]);
       const totalAddresses = (countResult[0] as any).count;
 
@@ -111,18 +111,18 @@ export async function DELETE(request: NextRequest, { params }: { params: { id: s
       // If deleting default address and there are others, make the next one default
       await db.query(
         `UPDATE addresses 
-         SET is_default = TRUE 
-         WHERE customer_id = ? AND id != ? 
+         SET isDefault = TRUE 
+         WHERE customerId = ? AND id != ? 
          ORDER BY created_at ASC 
          LIMIT 1`,
-        [customerId, params.id]
+        [customerId, id]
       );
     }
 
     // Delete the address
     await db.query(
-      'DELETE FROM addresses WHERE id = ? AND customer_id = ?',
-      [params.id, customerId]
+      'DELETE FROM addresses WHERE id = ? AND customerId = ?',
+      [id, customerId]
     );
 
     return NextResponse.json({ success: true });

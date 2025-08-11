@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
-import { TenantAccessMiddleware } from '@/lib/tenant-access-middleware';
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
@@ -10,7 +9,7 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next();
   }
   
-  // Allow API routes to pass through (except tenant-specific ones that need checking)
+  // Allow API routes to pass through
   if (pathname.startsWith('/api')) {
     return NextResponse.next();
   }
@@ -33,46 +32,18 @@ export async function middleware(request: NextRequest) {
       const tenantSlug = potentialTenant;
       const remainingPath = segments.slice(1).join('/');
       
-      // Skip license checking for exempt routes
-      if (TenantAccessMiddleware.isExemptRoute(pathname)) {
-        const response = NextResponse.next();
-        response.headers.set('x-tenant-slug', tenantSlug);
-        return response;
+      // DISABLE LICENSE CHECKING - Allow all tenant routes to pass through
+      const response = NextResponse.next();
+      response.headers.set('x-tenant-slug', tenantSlug);
+      
+      // Add tenant context to headers
+      if (remainingPath.startsWith('admin')) {
+        response.headers.set('x-tenant-context', 'admin');
+      } else {
+        response.headers.set('x-tenant-context', 'customer');
       }
       
-      // Check tenant access (trial/license status)
-      try {
-        const accessCheck = await TenantAccessMiddleware.checkTenantAccess(tenantSlug, request);
-        
-        if (!accessCheck.allowed && accessCheck.response) {
-          return accessCheck.response;
-        }
-        
-        // Add tenant context to headers
-        const response = NextResponse.next();
-        response.headers.set('x-tenant-slug', tenantSlug);
-        
-        // Add access status to headers for debugging
-        if (accessCheck.accessStatus) {
-          response.headers.set('x-tenant-status', accessCheck.accessStatus.status);
-          response.headers.set('x-tenant-valid', accessCheck.accessStatus.isValid.toString());
-        }
-        
-        // If accessing admin panel
-        if (remainingPath.startsWith('admin')) {
-          response.headers.set('x-tenant-context', 'admin');
-        } 
-        // If accessing customer interface
-        else {
-          response.headers.set('x-tenant-context', 'customer');
-        }
-        
-        return response;
-      } catch (error) {
-        console.error('Middleware error:', error);
-        // In case of error, redirect to error page
-        return NextResponse.redirect(new URL(`/${tenantSlug}/error`, request.url));
-      }
+      return response;
     }
   }
   

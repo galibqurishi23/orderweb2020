@@ -4,27 +4,26 @@ import { CreateAddonOptionRequest } from '@/lib/addon-types';
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { tenant: string } }
+  { params }: { params: Promise<{ tenant: string }> }
 ) {
   try {
-    const tenantId = params.tenant;
+    const { tenant: tenantId } = await params;
     const { searchParams } = new URL(request.url);
     const addonGroupId = searchParams.get('addonGroupId');
     
     if (!addonGroupId) {
       return NextResponse.json({
         success: false,
-        error: 'addonGroupId parameter is required'
+        error: 'addonGroupId is required'
       }, { status: 400 });
     }
-    
-    const options = await getAddonOptionsByGroupId(addonGroupId);
+
+    const addonOptions = await getAddonOptionsByGroupId(addonGroupId);
     
     return NextResponse.json({
       success: true,
-      data: options
+      data: addonOptions
     });
-    
   } catch (error) {
     console.error('Error fetching addon options:', error);
     return NextResponse.json({
@@ -36,10 +35,10 @@ export async function GET(
 
 export async function POST(
   request: NextRequest,
-  { params }: { params: { tenant: string } }
+  { params }: { params: Promise<{ tenant: string }> }
 ) {
   try {
-    const tenantId = params.tenant;
+    const { tenant: tenantId } = await params;
     const body: CreateAddonOptionRequest = await request.json();
     
     const addonOption = await createAddonOption(tenantId, body);

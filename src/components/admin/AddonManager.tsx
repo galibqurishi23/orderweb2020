@@ -287,7 +287,7 @@ export default function AddonManager({
                       variant="ghost"
                       size="sm"
                       onClick={() => deleteGroup(groupIndex)}
-                      className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                      className="text-red-600 hover:text-white hover:bg-red-600 border border-red-300 hover:border-red-600 transition-all duration-200"
                     >
                       <Trash2 className="w-4 h-4" />
                     </Button>
@@ -446,7 +446,7 @@ export default function AddonManager({
                           variant="ghost"
                           size="sm"
                           onClick={() => deleteOption(groupIndex, optionIndex)}
-                          className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                          className="text-red-600 hover:text-white hover:bg-red-600 border border-red-300 hover:border-red-600 transition-all duration-200"
                         >
                           <Trash2 className="w-4 h-4" />
                         </Button>

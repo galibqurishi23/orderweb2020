@@ -13,7 +13,8 @@ import {
   LogOut,
   Crown,
   Mail,
-  Activity
+  Activity,
+  Send
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { GlobalSettingsProvider, useGlobalSettings } from '@/context/GlobalSettingsContext';
@@ -24,6 +25,7 @@ const navItems = [
   { href: '/super-admin/restaurants', icon: Store, label: 'Restaurants' },
   { href: '/super-admin/users', icon: Users, label: 'Users' },
   { href: '/super-admin/email-monitoring', icon: Mail, label: 'Email Monitoring' },
+  { href: '/super-admin/email-management', icon: Send, label: 'Send Email' },
   { href: '/super-admin/license-management', icon: Crown, label: 'License Keys' },
   { href: '/super-admin/billing', icon: CreditCard, label: 'Billing' },
   { href: '/super-admin/settings', icon: Settings, label: 'Settings' }

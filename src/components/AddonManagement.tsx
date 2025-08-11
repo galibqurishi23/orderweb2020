@@ -528,6 +528,7 @@ export default function AddonManagement({ tenantId }: AddonManagementProps) {
                               variant="ghost"
                               size="sm"
                               onClick={() => removeOptionFromGroupForm(index)}
+                              className="text-red-600 hover:text-white hover:bg-red-600 border border-red-300 hover:border-red-600 transition-all duration-200"
                             >
                               <Trash2 className="h-4 w-4" />
                             </Button>
@@ -655,7 +656,11 @@ export default function AddonManagement({ tenantId }: AddonManagementProps) {
                           
                           <AlertDialog>
                             <AlertDialogTrigger asChild>
-                              <Button variant="ghost" size="sm">
+                              <Button 
+                                variant="ghost" 
+                                size="sm"
+                                className="text-red-600 hover:text-white hover:bg-red-600 border border-red-300 hover:border-red-600 transition-all duration-200"
+                              >
                                 <Trash2 className="h-4 w-4" />
                               </Button>
                             </AlertDialogTrigger>
@@ -670,9 +675,9 @@ export default function AddonManagement({ tenantId }: AddonManagementProps) {
                                 <AlertDialogCancel>Cancel</AlertDialogCancel>
                                 <AlertDialogAction 
                                   onClick={() => handleDeleteGroup(group.id)}
-                                  className="bg-red-600 hover:bg-red-700"
+                                  className="bg-red-600 hover:bg-red-700 text-white border-red-600 hover:border-red-700"
                                 >
-                                  Delete
+                                  Delete Group
                                 </AlertDialogAction>
                               </AlertDialogFooter>
                             </AlertDialogContent>

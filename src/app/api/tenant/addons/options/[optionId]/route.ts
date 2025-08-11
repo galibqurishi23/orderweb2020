@@ -4,11 +4,10 @@ import { UpdateAddonOptionRequest } from '@/lib/addon-types';
 
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { tenant: string; optionId: string } }
+  { params }: { params: Promise<{ tenant: string; optionId: string }> }
 ) {
   try {
-    const tenantId = params.tenant;
-    const optionId = params.optionId;
+    const { tenant: tenantId, optionId } = await params;
     const body = await request.json();
     
     const updateData: UpdateAddonOptionRequest = {
@@ -34,11 +33,10 @@ export async function PUT(
 
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { tenant: string; optionId: string } }
+  { params }: { params: Promise<{ tenant: string; optionId: string }> }
 ) {
   try {
-    const tenantId = params.tenant;
-    const optionId = params.optionId;
+    const { tenant: tenantId, optionId } = await params;
     
     await deleteAddonOption(tenantId, optionId);
     

@@ -709,49 +709,56 @@ export default function LicenseManagement() {
                           </Dialog>
                         )}
 
-                        {/* Delete Button - Only for unused keys */}
-                        {key.status === 'unused' && (
-                          <AlertDialog>
-                            <AlertDialogTrigger asChild>
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                disabled={deletingKeyId === key.id}
-                                className="text-red-600 border-red-200 hover:bg-red-50"
-                              >
-                                {deletingKeyId === key.id ? (
-                                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                                ) : (
-                                  <Trash2 className="w-4 h-4 mr-2" />
+                        {/* Delete Button - Available for all license keys */}
+                        <AlertDialog>
+                          <AlertDialogTrigger asChild>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              disabled={deletingKeyId === key.id}
+                              className="text-red-600 border-red-200 hover:bg-red-50"
+                            >
+                              {deletingKeyId === key.id ? (
+                                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                              ) : (
+                                <Trash2 className="w-4 w-4 mr-2" />
+                              )}
+                              Delete
+                            </Button>
+                          </AlertDialogTrigger>
+                          <AlertDialogContent>
+                            <AlertDialogHeader>
+                              <AlertDialogTitle className="flex items-center gap-2">
+                                <AlertTriangle className="h-5 w-5 text-red-500" />
+                                Delete License Key
+                              </AlertDialogTitle>
+                              <AlertDialogDescription>
+                                Are you sure you want to delete license key <code className="bg-gray-100 px-2 py-1 rounded font-mono">{key.keyCode}</code>?
+                                <br />
+                                <br />
+                                <span className="text-red-600 font-medium">This action cannot be undone.</span> 
+                                {key.status === 'unused' && 'This unused license key will be permanently deleted.'}
+                                {key.status === 'active' && (
+                                  <span className="text-orange-600">
+                                    <strong>Warning:</strong> This license key is currently active and in use by a restaurant. 
+                                    Deleting it may cause service disruption.
+                                  </span>
                                 )}
-                                Delete
-                              </Button>
-                            </AlertDialogTrigger>
-                            <AlertDialogContent>
-                              <AlertDialogHeader>
-                                <AlertDialogTitle className="flex items-center gap-2">
-                                  <AlertTriangle className="h-5 w-5 text-red-500" />
-                                  Delete License Key
-                                </AlertDialogTitle>
-                                <AlertDialogDescription>
-                                  Are you sure you want to delete license key <code className="bg-gray-100 px-2 py-1 rounded font-mono">{key.keyCode}</code>?
-                                  <br />
-                                  <br />
-                                  <span className="text-red-600 font-medium">This action cannot be undone.</span> Only unused license keys can be deleted.
-                                </AlertDialogDescription>
-                              </AlertDialogHeader>
-                              <AlertDialogFooter>
-                                <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                <AlertDialogAction
-                                  onClick={() => handleDeleteKey(key.id)}
-                                  className="bg-red-600 hover:bg-red-700"
-                                >
-                                  Delete Key
-                                </AlertDialogAction>
-                              </AlertDialogFooter>
-                            </AlertDialogContent>
-                          </AlertDialog>
-                        )}
+                                {key.status === 'expired' && 'This expired license key will be permanently deleted.'}
+                                {key.status === 'revoked' && 'This revoked license key will be permanently deleted.'}
+                              </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                              <AlertDialogCancel>Cancel</AlertDialogCancel>
+                              <AlertDialogAction
+                                onClick={() => handleDeleteKey(key.id)}
+                                className="bg-red-600 hover:bg-red-700"
+                              >
+                                Delete Key
+                              </AlertDialogAction>
+                            </AlertDialogFooter>
+                          </AlertDialogContent>
+                        </AlertDialog>
 
                         {/* Status Info for Active/Expired keys */}
                         {key.status !== 'unused' && (

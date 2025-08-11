@@ -3,6 +3,11 @@ import type { RestaurantSettings } from '@/lib/types';
 export const defaultRestaurantSettings: RestaurantSettings = {
   name: 'My Restaurant',
   description: 'A great place to dine',
+  logo: '',
+  logoHint: '',
+  coverImage: '',
+  coverImageHint: '',
+  favicon: '',
   address: '123 Main Street, City',
   phone: '+1234567890',
   email: 'contact@restaurant.com',

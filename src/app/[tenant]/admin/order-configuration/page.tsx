@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { Save, Clock, Settings, AlertCircle, Calendar, Timer, Users } from 'lucide-react';
-import { useTenantData } from '@/context/TenantDataContext';
+import { useAdmin } from '@/context/AdminContext';
 import type { RestaurantSettings, OrderThrottlingSettings } from '@/lib/types';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -25,30 +25,131 @@ const daysOfWeek = [
 ];
 
 export default function OrderConfigurationPage() {
-    const { restaurantSettings, saveSettings } = useTenantData();
+    const { tenantData, refreshTenantData } = useAdmin();
     const { toast } = useToast();
     
-    const [settings, setSettings] = useState<RestaurantSettings>(restaurantSettings);
-    const [throttlingSettings, setThrottlingSettings] = useState<OrderThrottlingSettings>(restaurantSettings.orderThrottling);
+    // Use any to avoid complex typing issues for now
+    const [settings, setSettings] = useState<any>({
+        orderTypeSettings: {
+            collectionEnabled: true,
+            deliveryEnabled: true,
+            advanceOrderEnabled: true
+        },
+        collectionTimeSettings: {
+            collectionTimeMinutes: 45,
+            enabled: true,
+            displayMessage: 'Your order will be ready for collection in {time} minutes'
+        },
+        deliveryTimeSettings: {
+            deliveryTimeMinutes: 60,
+            enabled: true,
+            displayMessage: 'Your order will be delivered in {time} minutes'
+        },
+        advanceOrderSettings: {
+            maxDaysInAdvance: 60,
+            minHoursNotice: 4,
+            enableTimeSlots: true,
+            timeSlotInterval: 30,
+            autoAccept: true,
+            sendReminders: true
+        }
+    });
+    
+    const [throttlingSettings, setThrottlingSettings] = useState<any>({});
 
     useEffect(() => {
-        setSettings(restaurantSettings);
-        setThrottlingSettings(restaurantSettings.orderThrottling);
-    }, [restaurantSettings]);
+        if (tenantData?.settings) {
+            console.log('🔄 Loading settings from tenantData:', tenantData.settings);
+            
+            // Merge existing settings with defaults to ensure all required fields exist
+            setSettings((prev: any) => {
+                const newSettings = {
+                    ...prev,
+                    ...tenantData.settings,
+                    orderTypeSettings: {
+                        collectionEnabled: true,
+                        deliveryEnabled: true,
+                        advanceOrderEnabled: true,
+                        ...tenantData.settings.orderTypeSettings
+                    },
+                    collectionTimeSettings: {
+                        collectionTimeMinutes: 45,
+                        enabled: true,
+                        displayMessage: 'Your order will be ready for collection in {time} minutes',
+                        ...tenantData.settings.collectionTimeSettings
+                    },
+                    deliveryTimeSettings: {
+                        deliveryTimeMinutes: 60,
+                        enabled: true,
+                        displayMessage: 'Your order will be delivered in {time} minutes',
+                        ...tenantData.settings.deliveryTimeSettings
+                    },
+                    advanceOrderSettings: {
+                        maxDaysInAdvance: 60,
+                        minHoursNotice: 4,
+                        enableTimeSlots: true,
+                        timeSlotInterval: 30,
+                        autoAccept: true,
+                        sendReminders: true,
+                        ...tenantData.settings.advanceOrderSettings
+                    }
+                };
+                
+                console.log('📝 Updated settings state:', newSettings);
+                return newSettings;
+            });
+            setThrottlingSettings(tenantData.settings.orderThrottling || {});
+        }
+    }, [tenantData?.settings]);
 
     const handleSave = async () => {
         try {
-            await saveSettings({
-                ...settings,
+            console.log('💾 Saving settings...');
+            console.log('Current settings state:', settings);
+            console.log('Delivery time minutes:', settings.deliveryTimeSettings?.deliveryTimeMinutes);
+            console.log('Throttling settings:', throttlingSettings);
+            console.log('Tenant ID:', tenantData?.id);
+            
+            if (!tenantData?.id) {
+                throw new Error('Tenant ID is required');
+            }
+
+            // Merge the current order configuration settings with existing tenant settings
+            const payload = {
+                ...tenantData.settings, // Preserve all existing settings
+                ...settings, // Override with our new settings
                 orderThrottling: throttlingSettings
+            };
+
+            console.log('🚀 Payload being sent:', payload);
+            console.log('🎯 Delivery settings in payload:', payload.deliveryTimeSettings);
+
+            const response = await fetch(`/api/tenant/settings`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-Tenant-ID': tenantData.id
+                },
+                body: JSON.stringify(payload),
             });
+
+            console.log('📡 Response status:', response.status);
+
+            if (!response.ok) {
+                const errorData = await response.text();
+                console.error('❌ Error response:', errorData);
+                throw new Error(`Failed to save settings: ${response.status} ${errorData}`);
+            }
+
+            console.log('🔄 Refreshing tenant data...');
+            await refreshTenantData();
             
             toast({
                 title: "Order Configuration Saved",
                 description: "All order settings have been updated successfully.",
             });
         } catch (error) {
-            console.error('Error saving order configuration:', error);
+            console.error('❌ Error saving order configuration:', error);
             toast({
                 title: "Error",
                 description: "Failed to save order configuration. Please try again.",
@@ -57,8 +158,8 @@ export default function OrderConfigurationPage() {
         }
     };
 
-    const handleOrderTypeChange = (field: keyof RestaurantSettings['orderTypeSettings'], value: boolean) => {
-        setSettings(prev => ({
+    const handleOrderTypeChange = (field: string, value: boolean) => {
+        setSettings((prev: any) => ({
             ...prev,
             orderTypeSettings: {
                 ...prev.orderTypeSettings,
@@ -68,7 +169,7 @@ export default function OrderConfigurationPage() {
     };
 
     const handleCollectionTimeChange = (field: string, value: any) => {
-        setSettings(prev => ({
+        setSettings((prev: any) => ({
             ...prev,
             collectionTimeSettings: {
                 ...prev.collectionTimeSettings,
@@ -78,17 +179,24 @@ export default function OrderConfigurationPage() {
     };
 
     const handleDeliveryTimeChange = (field: string, value: any) => {
-        setSettings(prev => ({
-            ...prev,
-            deliveryTimeSettings: {
-                ...prev.deliveryTimeSettings,
-                [field]: value
-            }
-        }));
+        console.log(`🚀 Delivery time change: ${field} = ${value}`);
+        
+        setSettings((prev: any) => {
+            const newSettings = {
+                ...prev,
+                deliveryTimeSettings: {
+                    ...prev.deliveryTimeSettings,
+                    [field]: value
+                }
+            };
+            
+            console.log('📝 New delivery settings:', newSettings.deliveryTimeSettings);
+            return newSettings;
+        });
     };
 
     const handleThrottlingChange = (day: string, field: string, value: any) => {
-        setThrottlingSettings(prev => ({
+        setThrottlingSettings((prev: any) => ({
             ...prev,
             [day]: {
                 ...prev[day],
@@ -360,7 +468,7 @@ export default function OrderConfigurationPage() {
                                                 min="1"
                                                 max="90"
                                                 value={settings.advanceOrderSettings?.maxDaysInAdvance || 60}
-                                                onChange={(e) => setSettings(prev => ({
+                                                onChange={(e) => setSettings((prev: any) => ({
                                                     ...prev,
                                                     advanceOrderSettings: {
                                                         ...prev.advanceOrderSettings,
@@ -381,7 +489,7 @@ export default function OrderConfigurationPage() {
                                                 min="1"
                                                 max="24"
                                                 value={settings.advanceOrderSettings?.minHoursNotice || 4}
-                                                onChange={(e) => setSettings(prev => ({
+                                                onChange={(e) => setSettings((prev: any) => ({
                                                     ...prev,
                                                     advanceOrderSettings: {
                                                         ...prev.advanceOrderSettings,
@@ -410,7 +518,7 @@ export default function OrderConfigurationPage() {
                                             </div>
                                             <Switch
                                                 checked={settings.advanceOrderSettings?.enableTimeSlots ?? false}
-                                                onCheckedChange={(checked) => setSettings(prev => ({
+                                                onCheckedChange={(checked) => setSettings((prev: any) => ({
                                                     ...prev,
                                                     advanceOrderSettings: {
                                                         ...prev.advanceOrderSettings,
@@ -429,7 +537,7 @@ export default function OrderConfigurationPage() {
                                                     max="120"
                                                     step="15"
                                                     value={settings.advanceOrderSettings?.timeSlotInterval || 15}
-                                                    onChange={(e) => setSettings(prev => ({
+                                                    onChange={(e) => setSettings((prev: any) => ({
                                                         ...prev,
                                                         advanceOrderSettings: {
                                                             ...prev.advanceOrderSettings,
@@ -461,7 +569,7 @@ export default function OrderConfigurationPage() {
                                         </div>
                                         <Switch
                                             checked={settings.advanceOrderSettings?.autoAccept ?? true}
-                                            onCheckedChange={(checked) => setSettings(prev => ({
+                                            onCheckedChange={(checked) => setSettings((prev: any) => ({
                                                 ...prev,
                                                 advanceOrderSettings: {
                                                     ...prev.advanceOrderSettings,
@@ -480,7 +588,7 @@ export default function OrderConfigurationPage() {
                                         </div>
                                         <Switch
                                             checked={settings.advanceOrderSettings?.sendReminders ?? false}
-                                            onCheckedChange={(checked) => setSettings(prev => ({
+                                            onCheckedChange={(checked) => setSettings((prev: any) => ({
                                                 ...prev,
                                                 advanceOrderSettings: {
                                                     ...prev.advanceOrderSettings,

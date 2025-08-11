@@ -3,7 +3,7 @@
 import React, { useState, useRef, useMemo } from 'react';
 import { getCurrencySymbol } from '@/lib/currency-utils';
 import { MapPin, Edit, Trash2, Plus, Save, X, Upload, Clock } from 'lucide-react';
-import { useTenantData } from '@/context/TenantDataContext';
+import { useAdmin } from '@/context/AdminContext';
 import { useTenant } from '@/context/TenantContext';
 import type { DeliveryZone } from '@/lib/types';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -45,7 +45,11 @@ const ZoneCard = ({ zone, onEdit, onDelete, currencySymbol }: {
                     </Button>
                     <AlertDialog>
                         <AlertDialogTrigger asChild>
-                            <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive">
+                            <Button 
+                                variant="outline" 
+                                size="icon" 
+                                className="text-red-600 border-red-200 hover:bg-red-50 hover:text-red-700 hover:border-red-300"
+                            >
                                 <Trash2 className="w-4 h-4" />
                             </Button>
                         </AlertDialogTrigger>
@@ -58,8 +62,11 @@ const ZoneCard = ({ zone, onEdit, onDelete, currencySymbol }: {
                             </AlertDialogHeader>
                             <AlertDialogFooter>
                                 <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                <AlertDialogAction onClick={() => onDelete(zone.id)} className="bg-destructive hover:bg-destructive/90">
-                                    Delete
+                                <AlertDialogAction 
+                                    onClick={() => onDelete(zone.id)} 
+                                    className="bg-red-600 hover:bg-red-700 text-white border-red-600 hover:border-red-700"
+                                >
+                                    Delete Zone
                                 </AlertDialogAction>
                             </AlertDialogFooter>
                         </AlertDialogContent>
@@ -364,15 +371,22 @@ const ZoneFormDialog = ({ isOpen, onClose, onSave, zone, currencySymbol, allZone
 };
 
 export default function DeliveryZonesPage() {
-    const { deliveryZones, saveDeliveryZone, deleteDeliveryZone, restaurantSettings } = useTenantData();
-    const { tenantData } = useTenant();
+    const { deliveryZones, refreshDeliveryZones, tenantData } = useAdmin();
+    const { tenantData: tenantDataFromTenant } = useTenant();
     const [editingZone, setEditingZone] = useState<DeliveryZone | null>(null);
     const [isFormOpen, setIsFormOpen] = useState(false);
     const { toast } = useToast();
 
+    // Force refresh zones when component mounts
+    React.useEffect(() => {
+        if (tenantData?.id) {
+            refreshDeliveryZones();
+        }
+    }, [tenantData?.id, refreshDeliveryZones]);
+
     const currencySymbol = useMemo(() => {
-        return getCurrencySymbol(restaurantSettings.currency);
-    }, [restaurantSettings.currency]);
+        return getCurrencySymbol(tenantData?.settings?.currency || 'GBP');
+    }, [tenantData?.settings?.currency]);
 
     const handleAddNew = () => {
         setEditingZone(null);
@@ -384,22 +398,79 @@ export default function DeliveryZonesPage() {
         setIsFormOpen(true);
     };
 
-    const handleDelete = (zoneId: string) => {
-        deleteDeliveryZone(zoneId);
-        toast({ 
-            title: "Zone Deleted", 
-            description: "The delivery zone has been removed." 
-        });
+    const handleDelete = async (zoneId: string) => {
+        try {
+            if (!tenantData?.id) {
+                throw new Error('Tenant ID is required');
+            }
+
+            const response = await fetch(`/api/tenant/zones`, {
+                method: 'DELETE',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-Tenant-ID': tenantData.id
+                },
+                body: JSON.stringify({ id: zoneId }),
+            });
+
+            if (!response.ok) {
+                throw new Error('Failed to delete delivery zone');
+            }
+
+            await refreshDeliveryZones();
+            toast({ 
+                title: "Zone Deleted", 
+                description: "The delivery zone has been removed." 
+            });
+        } catch (error) {
+            console.error('Error deleting delivery zone:', error);
+            toast({
+                title: "Delete Failed",
+                description: "Failed to delete delivery zone. Please try again.",
+                variant: "destructive",
+            });
+        }
     };
     
-    const handleSave = (zoneData: DeliveryZone) => {
-        saveDeliveryZone(zoneData);
-        toast({ 
-            title: zoneData.id.startsWith('zone-') ? "Zone Added" : "Zone Updated", 
-            description: `The "${zoneData.name}" zone has been saved.`
-        });
-        setIsFormOpen(false);
-        setEditingZone(null);
+    const handleSave = async (zoneData: DeliveryZone) => {
+        try {
+            if (!tenantData?.id) {
+                throw new Error('Tenant ID is required');
+            }
+
+            const isEditing = editingZone && !zoneData.id.startsWith('zone-');
+            
+            // For tenant zones API, we always use POST and let the backend handle create/update
+            const response = await fetch('/api/tenant/zones', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-Tenant-ID': tenantData.id
+                },
+                body: JSON.stringify(zoneData),
+            });
+
+            if (!response.ok) {
+                const errorData = await response.text();
+                console.error('Error response:', errorData);
+                throw new Error(`Failed to save delivery zone: ${response.status} ${errorData}`);
+            }
+
+            await refreshDeliveryZones();
+            toast({ 
+                title: isEditing ? "Zone Updated" : "Zone Added", 
+                description: `The "${zoneData.name}" zone has been saved.`
+            });
+            setIsFormOpen(false);
+            setEditingZone(null);
+        } catch (error) {
+            console.error('Error saving delivery zone:', error);
+            toast({
+                title: "Save Failed",
+                description: "Failed to save delivery zone. Please try again.",
+                variant: "destructive",
+            });
+        }
     };
     
     return (

@@ -1,9 +1,12 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, use } from 'react';
 import Link from 'next/link';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { 
   ShoppingCart, 
   Banknote, 
@@ -17,197 +20,129 @@ import {
   Printer,
   Store,
   Tag
+  // License-related icons removed: Lock, Shield, CheckCircle, XCircle
 } from "lucide-react";
-import { useTenant } from '@/context/TenantContext';
 
-interface DashboardStats {
-  todayOrders: number;
-  todayRevenue: number;
-  totalCustomers: number;
-  totalRefunds: number;
-}
-
-export default function TenantAdminDashboard() {
-  const { tenantData, isLoading: isTenantLoading } = useTenant();
-  const [stats, setStats] = useState<DashboardStats | null>(null);
+export default function AdminDashboard({ params }: { params: Promise<{ tenant: string }> }) {
+  // Unwrap params using React.use() for Next.js 15
+  const resolvedParams = use(params);
+  const [tenantData, setTenantData] = useState<any>(null);
+  const [stats, setStats] = useState<any>(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [authLoading, setAuthLoading] = useState(true);
+  // LICENSE-RELATED STATES REMOVED
 
-  // Check authentication first
   useEffect(() => {
-    const checkAuth = async () => {
+    // DISABLE LICENSE CHECKING - No license validation needed
+    console.log('License checking disabled for admin dashboard');
+  }, [resolvedParams.tenant]);
+
+  // LICENSE RENEWAL FUNCTION REMOVED
+
+  useEffect(() => {
+    const fetchData = async () => {
       try {
-        const response = await fetch('/api/auth/check-admin');
-        const data = await response.json();
+        // Check authentication using API instead of localStorage
+        const authResponse = await fetch('/api/auth/check-admin');
+        const authData = await authResponse.json();
         
-        if (data.authenticated) {
-          setIsAuthenticated(true);
-        } else {
-          const tenantSlug = window.location.pathname.split('/')[1];
-          window.location.href = `/${tenantSlug}/admin`;
+        if (!authData.authenticated) {
+          console.log('Not authenticated, redirecting to login');
+          window.location.href = `/${resolvedParams.tenant}/admin`;
+          return;
         }
+
+        // Check if authenticated for the correct tenant
+        if (authData.tenantSlug && authData.tenantSlug !== resolvedParams.tenant) {
+          console.log('Wrong tenant, redirecting to login');
+          window.location.href = `/${resolvedParams.tenant}/admin`;
+          return;
+        }
+
+        // Fetch tenant data
+        const tenantResponse = await fetch(`/api/tenant/info?slug=${resolvedParams.tenant}`);
+        
+        if (!tenantResponse.ok) {
+          throw new Error('Failed to fetch tenant data');
+        }
+        
+        const tenantResult = await tenantResponse.json();
+        setTenantData(tenantResult);
+
+        // Fetch dashboard stats
+        const statsResponse = await fetch(`/api/tenant/stats?tenant=${resolvedParams.tenant}`);
+        
+        if (statsResponse.ok) {
+          const statsResult = await statsResponse.json();
+          setStats(statsResult);
+        }
+        
       } catch (error) {
-        const tenantSlug = window.location.pathname.split('/')[1];
-        window.location.href = `/${tenantSlug}/admin`;
-      } finally {
-        setAuthLoading(false);
-      }
-    };
-
-    checkAuth();
-  }, []);
-
-  // Fetch stats only (simplified - no orders fetch to avoid errors)
-  useEffect(() => {
-    const fetchStats = async () => {
-      if (!tenantData) return;
-      
-      setLoading(true);
-      setError(null);
-      
-      try {
-        const statsResponse = await fetch(`/api/tenant/stats?tenantId=${tenantData.id}`);
-        const statsResult = await statsResponse.json();
-        
-        if (statsResult.success) {
-          setStats(statsResult.data);
-        } else {
-          throw new Error(statsResult.error || 'Failed to load statistics');
-        }
-      } catch (err: any) {
-        console.error('Dashboard error:', err);
-        setError(err.message || 'Failed to load dashboard data');
+        console.error('Error fetching data:', error);
+        window.location.href = `/${resolvedParams.tenant}/admin`;
       } finally {
         setLoading(false);
       }
     };
 
-    if (isAuthenticated && tenantData) {
-      fetchStats();
-    }
-  }, [isAuthenticated, tenantData]);
+    fetchData();
+  }, [resolvedParams.tenant]);
 
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('en-GB', {
-      style: 'currency',
-      currency: 'GBP'
-    }).format(amount);
-  };
+  // Instead of blocking access, show dashboard with license renewal notification
+  // if (licenseInfo?.isExpired) {
+  //   return (
+  //     <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+  //       ...license blocking UI...
+  //     </div>
+  //   );
+  // }
 
-  if (authLoading || isTenantLoading) {
+  if (loading || !tenantData) {
     return (
-      <div className="p-6 space-y-6">
-        <Card>
-          <CardContent className="pt-6">
-            <div className="flex flex-col items-center justify-center py-12 text-center">
-              <Loader2 className="h-8 w-8 animate-spin text-gray-400 mb-4" />
-              <p className="text-gray-600">Loading dashboard...</p>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-    );
-  }
-
-  if (!tenantData) {
-    return (
-      <div className="p-6 space-y-6">
-        <Card>
-          <CardContent className="pt-6">
-            <div className="flex flex-col items-center justify-center py-12 text-center">
-              <AlertCircle className="h-12 w-12 text-red-500 mb-4" />
-              <h2 className="text-xl font-semibold text-gray-900 mb-2">Restaurant Not Found</h2>
-              <p className="text-gray-600 mb-4">
-                Unable to load restaurant information.
-              </p>
-              <Button onClick={() => window.location.reload()} variant="outline">
-                Try Again
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className="p-6 space-y-6">
-        <Card>
-          <CardContent className="pt-6">
-            <div className="flex flex-col items-center justify-center py-12 text-center">
-              <AlertCircle className="h-12 w-12 text-red-500 mb-4" />
-              <h2 className="text-xl font-semibold text-gray-900 mb-2">Error Loading Dashboard</h2>
-              <p className="text-gray-600 mb-4">{error}</p>
-              <p className="text-sm text-gray-500 mb-4">
-                Tenant ID: {tenantData.id}
-              </p>
-              <Button onClick={() => window.location.reload()} variant="outline">
-                Retry
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
+      <div className="flex items-center justify-center min-h-screen">
+        <Loader2 className="h-8 w-8 animate-spin" />
       </div>
     );
   }
 
   return (
     <div className="p-6 space-y-6">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+      {/* LICENSE BLOCKING REMOVED - Admin dashboard always accessible */}
+
+      <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
-          <p className="text-gray-600">Welcome back to {tenantData.name}</p>
+          <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
+          <p className="text-muted-foreground">
+            Welcome back! Here's what's happening at {tenantData.name}.
+          </p>
         </div>
-        <div className="flex gap-2">
-          <Button onClick={() => window.location.reload()} variant="outline" size="sm">
-            <Loader2 className="h-4 w-4 mr-2" />
-            Refresh
-          </Button>
+        <div className="flex items-center space-x-2">
+          <Link href={`/${tenantData.slug}/admin/settings`}>
+            <Button variant="outline" size="sm">
+              <Settings className="h-4 w-4 mr-2" />
+              Settings
+            </Button>
+          </Link>
         </div>
       </div>
 
-      {/* Stats Cards */}
+      {/* Stats Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        {/* Today's Sales */}
+        {/* Today's Revenue */}
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Today's Sales</CardTitle>
+            <CardTitle className="text-sm font-medium">Today's Revenue</CardTitle>
             <Banknote className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
               {loading ? (
-                <div className="h-8 w-32 bg-gray-200 animate-pulse rounded" />
+                <div className="h-8 w-20 bg-gray-200 animate-pulse rounded" />
               ) : (
-                formatCurrency(stats?.todayRevenue ?? 0)
+                `£${stats?.todayRevenue?.toFixed(2) ?? '0.00'}`
               )}
             </div>
             <p className="text-xs text-muted-foreground">
-              Revenue from today only
-            </p>
-          </CardContent>
-        </Card>
-
-        {/* Refunds */}
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Refunds</CardTitle>
-            <AlertCircle className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">
-              {loading ? (
-                <div className="h-8 w-32 bg-gray-200 animate-pulse rounded" />
-              ) : (
-                formatCurrency(stats?.totalRefunds ?? 0)
-              )}
-            </div>
-            <p className="text-xs text-muted-foreground">
-              Amount refunded to customers
+              From today's orders
             </p>
           </CardContent>
         </Card>
@@ -216,23 +151,43 @@ export default function TenantAdminDashboard() {
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Today's Orders</CardTitle>
+            <ShoppingCart className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">
+              {loading ? (
+                <div className="h-8 w-12 bg-gray-200 animate-pulse rounded" />
+              ) : (
+                stats?.todayOrders ?? 0
+              )}
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Orders placed today
+            </p>
+          </CardContent>
+        </Card>
+
+        {/* Pending Orders */}
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Pending Orders</CardTitle>
             <Clock className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
               {loading ? (
-                <div className="h-8 w-16 bg-gray-200 animate-pulse rounded" />
+                <div className="h-8 w-8 bg-gray-200 animate-pulse rounded" />
               ) : (
-                `${stats?.todayOrders ?? 0}`
+                stats?.pendingOrders ?? 0
               )}
             </div>
             <p className="text-xs text-muted-foreground">
-              Orders received today
+              Awaiting preparation
             </p>
           </CardContent>
         </Card>
 
-        {/* Total Customers */}
+        {/* Total Customers - Always show (license checks removed) */}
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Total Customers</CardTitle>
@@ -243,7 +198,7 @@ export default function TenantAdminDashboard() {
               {loading ? (
                 <div className="h-8 w-16 bg-gray-200 animate-pulse rounded" />
               ) : (
-                `${stats?.totalCustomers ?? 0}`
+                stats?.totalCustomers ?? 0
               )}
             </div>
             <p className="text-xs text-muted-foreground">
@@ -252,6 +207,8 @@ export default function TenantAdminDashboard() {
           </CardContent>
         </Card>
       </div>
+
+      {/* LICENSE RENEWAL MODAL REMOVED */}
 
       {/* Quick Actions */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -297,7 +254,13 @@ export default function TenantAdminDashboard() {
             <Link href={`/${tenantData.slug}/admin/vouchers`}>
               <Button variant="outline" className="w-full justify-start">
                 <Tag className="h-4 w-4 mr-2" />
-                Vouchers & Discounts
+                Manage Vouchers
+              </Button>
+            </Link>
+            <Link href={`/${tenantData.slug}/admin/customers`}>
+              <Button variant="outline" className="w-full justify-start">
+                <Users className="h-4 w-4 mr-2" />
+                Customer Management
               </Button>
             </Link>
           </CardContent>
@@ -305,49 +268,31 @@ export default function TenantAdminDashboard() {
 
         <Card>
           <CardHeader>
-            <CardTitle className="text-lg">Settings</CardTitle>
-            <CardDescription>Configure your restaurant</CardDescription>
+            <CardTitle className="text-lg">Restaurant Info</CardTitle>
+            <CardDescription>Your restaurant details</CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
+            <div className="flex items-center space-x-2">
+              <Store className="h-4 w-4 text-muted-foreground" />
+              <span className="text-sm">{tenantData.name}</span>
+            </div>
+            <div className="text-xs text-muted-foreground">
+              {tenantData.address && (
+                <p>{tenantData.address}</p>
+              )}
+              {tenantData.phone && (
+                <p>Tel: {tenantData.phone}</p>
+              )}
+            </div>
             <Link href={`/${tenantData.slug}/admin/settings`}>
               <Button variant="outline" className="w-full justify-start">
                 <Settings className="h-4 w-4 mr-2" />
                 Restaurant Settings
               </Button>
             </Link>
-            <Link href={`/${tenantData.slug}/admin/zones`}>
-              <Button variant="outline" className="w-full justify-start">
-                <Store className="h-4 w-4 mr-2" />
-                Delivery Zones
-              </Button>
-            </Link>
           </CardContent>
         </Card>
       </div>
-
-      {/* System Status */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-lg">System Status</CardTitle>
-          <CardDescription>Current system information</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="flex items-center space-x-2">
-              <div className="h-2 w-2 bg-green-500 rounded-full"></div>
-              <span className="text-sm">Database Connected</span>
-            </div>
-            <div className="flex items-center space-x-2">
-              <div className="h-2 w-2 bg-green-500 rounded-full"></div>
-              <span className="text-sm">API Services Active</span>
-            </div>
-            <div className="flex items-center space-x-2">
-              <div className="h-2 w-2 bg-green-500 rounded-full"></div>
-              <span className="text-sm">Dashboard Operational</span>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
     </div>
   );
 }

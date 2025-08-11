@@ -21,7 +21,7 @@ export default function SimpleAddonSelection({
   menuItem, 
   addonGroups, 
   onSelectionChange,
-  currencySymbol = '$'
+  currencySymbol = '£'
 }: SimpleAddonSelectionProps) {
   const [selections, setSelections] = useState<Record<string, Record<string, number>>>({});
 

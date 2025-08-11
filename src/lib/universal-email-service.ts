@@ -34,10 +34,23 @@ class UniversalEmailService {
 
   async sendWelcomeEmail(data: WelcomeEmailData): Promise<boolean> {
     try {
+      console.log('🔍 DEBUG: sendWelcomeEmail called with data:', {
+        restaurantName: data.restaurantName,
+        adminEmail: data.adminEmail,
+        adminName: data.adminName,
+        tenantSlug: data.tenantSlug,
+        hasPassword: !!data.password
+      });
+
       if (!this.transporter) {
-        console.log('Email transporter not available, skipping welcome email');
+        console.log('❌ Email transporter not available, skipping welcome email');
+        console.log('🔍 DEBUG: Transporter state:', this.transporter);
+        console.log('🔍 DEBUG: SMTP_HOST:', process.env.SMTP_HOST);
+        console.log('🔍 DEBUG: SMTP_USER:', process.env.SMTP_USER ? 'SET' : 'NOT SET');
         return false;
       }
+
+      console.log('✅ Email transporter is available');
 
       const mailOptions = {
         from: process.env.FROM_EMAIL || 'noreply@orderweb.com',
@@ -64,21 +77,52 @@ class UniversalEmailService {
         `,
       };
 
-      await this.transporter.sendMail(mailOptions);
-      console.log('Welcome email sent successfully to:', data.adminEmail);
+      console.log('📧 Mail options prepared:', {
+        from: mailOptions.from,
+        to: mailOptions.to,
+        subject: mailOptions.subject
+      });
+
+      console.log('📤 Attempting to send email via SMTP...');
+      const result = await this.transporter.sendMail(mailOptions);
+      console.log('✅ Welcome email sent successfully to:', data.adminEmail);
+      console.log('📧 SMTP Result:', result.messageId);
+      
+      // Write success to log file
+      const fs = require('fs');
+      const logMessage = `${new Date().toISOString()} - SUCCESS: Welcome email sent to ${data.adminEmail}, MessageID: ${result.messageId}\n`;
+      fs.appendFileSync('./email-debug.log', logMessage);
+      
       return true;
     } catch (error) {
-      console.error('Failed to send welcome email:', error);
+      console.error('❌ Failed to send welcome email:', error);
+      
+      // Write error to log file
+      const fs = require('fs');
+      const logMessage = `${new Date().toISOString()} - ERROR: Failed to send welcome email to ${data.adminEmail}: ${error}\n`;
+      fs.appendFileSync('./email-debug.log', logMessage);
+      
       return false;
     }
   }
 
-  async sendEmail(to: string, subject: string, html: string): Promise<boolean> {
+  async sendEmail(to: string, subject: string, html: string): Promise<{ success: boolean; messageId?: string }> {
     try {
+      console.log('🔍 DEBUG: sendEmail called with:', {
+        to,
+        subject,
+        htmlLength: html.length
+      });
+
       if (!this.transporter) {
-        console.log('Email transporter not available, skipping email');
-        return false;
+        console.log('❌ Email transporter not available, skipping email');
+        console.log('🔍 DEBUG: Transporter state:', this.transporter);
+        console.log('🔍 DEBUG: SMTP_HOST:', process.env.SMTP_HOST);
+        console.log('🔍 DEBUG: SMTP_USER:', process.env.SMTP_USER ? 'SET' : 'NOT SET');
+        return { success: false };
       }
+
+      console.log('✅ Email transporter is available');
 
       const mailOptions = {
         from: process.env.FROM_EMAIL || 'noreply@orderweb.com',
@@ -87,12 +131,33 @@ class UniversalEmailService {
         html,
       };
 
-      await this.transporter.sendMail(mailOptions);
-      console.log('Email sent successfully to:', to);
-      return true;
+      console.log('📧 Mail options prepared:', {
+        from: mailOptions.from,
+        to: mailOptions.to,
+        subject: mailOptions.subject,
+        htmlLength: html.length
+      });
+
+      console.log('📤 Attempting to send email via SMTP...');
+      const result = await this.transporter.sendMail(mailOptions);
+      console.log('✅ Email sent successfully to:', to);
+      console.log('📧 SMTP Result:', result.messageId);
+      
+      // Write success to log file
+      const fs = require('fs');
+      const logMessage = `${new Date().toISOString()} - SUCCESS: Manual email sent to ${to}, Subject: "${subject}", MessageID: ${result.messageId}\n`;
+      fs.appendFileSync('./email-debug.log', logMessage);
+      
+      return { success: true, messageId: result.messageId };
     } catch (error) {
-      console.error('Failed to send email:', error);
-      return false;
+      console.error('❌ Failed to send email:', error);
+      
+      // Write error to log file
+      const fs = require('fs');
+      const logMessage = `${new Date().toISOString()} - ERROR: Failed to send manual email to ${to}: ${error}\n`;
+      fs.appendFileSync('./email-debug.log', logMessage);
+      
+      return { success: false };
     }
   }
 }

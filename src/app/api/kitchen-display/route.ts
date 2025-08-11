@@ -9,10 +9,10 @@ import { KitchenDisplayService } from '@/lib/kitchen-display-service';
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { tenant: string } }
+  { params }: { params: Promise<{ tenant: string }> }
 ) {
   try {
-    const tenantId = params.tenant;
+    const { tenant: tenantId } = await params;
     
     if (!tenantId) {
       return NextResponse.json(
@@ -39,10 +39,10 @@ export async function GET(
 
 export async function POST(
   request: NextRequest,
-  { params }: { params: { tenant: string } }
+  { params }: { params: Promise<{ tenant: string }> }
 ) {
   try {
-    const tenantId = params.tenant;
+    const { tenant: tenantId } = await params;
     const body = await request.json();
     
     if (!tenantId) {

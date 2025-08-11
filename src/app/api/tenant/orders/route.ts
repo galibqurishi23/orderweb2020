@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getRecentTenantOrders } from '@/lib/tenant-service';
+import { getTenantOrders } from '@/lib/tenant-order-service';
 
 export async function GET(request: NextRequest) {
   try {
@@ -13,8 +13,8 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Always fetch the 10 most recent orders
-    const orders = await getRecentTenantOrders(tenantId, 10);
+    // Fetch all orders with full details
+    const orders = await getTenantOrders(tenantId);
     
     return NextResponse.json({
       success: true,

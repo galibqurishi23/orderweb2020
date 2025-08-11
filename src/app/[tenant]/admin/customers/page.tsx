@@ -5,6 +5,9 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { 
   Users, 
   Search, 
@@ -87,6 +90,13 @@ export default function CustomersPage() {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [deletingCustomerId, setDeletingCustomerId] = useState<number | null>(null);
+  
+  // Loyalty Points Dialog State
+  const [loyaltyDialogOpen, setLoyaltyDialogOpen] = useState(false);
+  const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
+  const [loyaltyPoints, setLoyaltyPoints] = useState('');
+  const [loyaltyReason, setLoyaltyReason] = useState('');
+  const [addingPoints, setAddingPoints] = useState(false);
 
   useEffect(() => {
     if (tenantData) {
@@ -128,12 +138,14 @@ export default function CustomersPage() {
   };
 
   const deleteCustomer = async (customerId: number, customerName: string) => {
-    if (!confirm(`Are you sure you want to delete customer "${customerName}"? This action cannot be undone.`)) {
+    if (!confirm(`⚠️ Are you sure you want to delete customer "${customerName}"?\n\nThis will permanently delete:\n• Customer profile\n• All customer addresses\n• Customer loyalty points and transactions\n• All order history\n\nThis action cannot be undone!`)) {
       return;
     }
 
     setDeletingCustomerId(customerId);
     try {
+      console.log('🗑️ Deleting customer:', customerName);
+      
       const response = await fetch(`/api/admin/customers/${customerId}`, {
         method: 'DELETE',
         headers: {
@@ -142,19 +154,82 @@ export default function CustomersPage() {
         body: JSON.stringify({ tenantId: tenantData?.id }),
       });
 
-      if (response.ok) {
+      const result = await response.json();
+
+      if (response.ok && result.success) {
         // Remove customer from local state
         setCustomers(customers.filter(customer => customer.id !== customerId));
-        alert(`Customer "${customerName}" has been deleted successfully.`);
+        alert(`✅ Customer "${customerName}" and all associated data have been deleted successfully.`);
+        console.log('✅ Customer deleted successfully');
       } else {
-        const error = await response.json();
-        alert(`Failed to delete customer: ${error.message || 'Unknown error'}`);
+        console.error('❌ Delete failed:', result);
+        alert(`❌ Failed to delete customer: ${result.error || result.message || 'Unknown error'}`);
       }
     } catch (error) {
-      console.error('Error deleting customer:', error);
-      alert('Failed to delete customer. Please try again.');
+      console.error('❌ Error deleting customer:', error);
+      alert('❌ Failed to delete customer. Please check your connection and try again.');
     } finally {
       setDeletingCustomerId(null);
+    }
+  };
+
+  const openLoyaltyDialog = (customer: Customer) => {
+    setSelectedCustomer(customer);
+    setLoyaltyPoints('');
+    setLoyaltyReason('');
+    setLoyaltyDialogOpen(true);
+  };
+
+  const addLoyaltyPoints = async () => {
+    if (!selectedCustomer || !loyaltyPoints || !tenantData) {
+      return;
+    }
+
+    const points = parseInt(loyaltyPoints);
+    if (isNaN(points) || points <= 0) {
+      alert('Please enter a valid number of points greater than 0');
+      return;
+    }
+
+    setAddingPoints(true);
+    try {
+      const response = await fetch('/api/admin/loyalty-points', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          customerId: selectedCustomer.id,
+          points: points,
+          reason: loyaltyReason || 'Admin awarded points',
+          tenantId: tenantData.id
+        }),
+      });
+
+      const result = await response.json();
+
+      if (result.success) {
+        // Update the customer in the local state
+        setCustomers(customers.map(customer => 
+          customer.id === selectedCustomer.id 
+            ? { 
+                ...customer, 
+                points_balance: result.loyaltyUpdate.newBalance,
+                tier_level: result.loyaltyUpdate.tierLevel
+              }
+            : customer
+        ));
+
+        alert(`Successfully added ${points} points to ${selectedCustomer.name}!`);
+        setLoyaltyDialogOpen(false);
+      } else {
+        alert(`Failed to add loyalty points: ${result.error}`);
+      }
+    } catch (error) {
+      console.error('Error adding loyalty points:', error);
+      alert('Failed to add loyalty points. Please try again.');
+    } finally {
+      setAddingPoints(false);
     }
   };
 
@@ -352,9 +427,18 @@ export default function CustomersPage() {
                     <Button 
                       variant="outline" 
                       size="sm"
+                      onClick={() => openLoyaltyDialog(customer)}
+                      className="text-green-600 hover:text-green-700 hover:bg-green-50 border-green-200"
+                    >
+                      <Gift className="w-4 h-4 mr-1" />
+                      Add Points
+                    </Button>
+                    <Button 
+                      variant="outline" 
+                      size="sm"
                       onClick={() => deleteCustomer(customer.id, customer.name)}
                       disabled={deletingCustomerId === customer.id}
-                      className="text-red-600 hover:text-red-700 hover:bg-red-50 border-red-200"
+                      className="text-red-600 hover:text-white hover:bg-red-600 border-red-300 hover:border-red-600 disabled:hover:bg-red-100 disabled:hover:text-red-600 transition-all duration-200"
                     >
                       {deletingCustomerId === customer.id ? (
                         <>
@@ -397,6 +481,81 @@ export default function CustomersPage() {
           </div>
         </CardContent>
       </Card>
+
+      {/* Add Loyalty Points Dialog */}
+      <Dialog open={loyaltyDialogOpen} onOpenChange={setLoyaltyDialogOpen}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle>Add Loyalty Points</DialogTitle>
+            <DialogDescription>
+              Award loyalty points to {selectedCustomer?.name}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="points" className="text-right">
+                Points
+              </Label>
+              <Input
+                id="points"
+                type="number"
+                min="1"
+                placeholder="Enter points to add"
+                value={loyaltyPoints}
+                onChange={(e) => setLoyaltyPoints(e.target.value)}
+                className="col-span-3"
+              />
+            </div>
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="reason" className="text-right">
+                Reason
+              </Label>
+              <Textarea
+                id="reason"
+                placeholder="Optional reason for awarding points"
+                value={loyaltyReason}
+                onChange={(e) => setLoyaltyReason(e.target.value)}
+                className="col-span-3"
+                rows={3}
+              />
+            </div>
+            {selectedCustomer && (
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                <p className="text-sm text-blue-700">
+                  <strong>Customer:</strong> {selectedCustomer.name}<br />
+                  <strong>Current Points:</strong> {selectedCustomer.points_balance || 0}<br />
+                  <strong>Current Tier:</strong> <span className="capitalize">{selectedCustomer.tier_level || 'bronze'}</span>
+                </p>
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button 
+              variant="outline" 
+              onClick={() => setLoyaltyDialogOpen(false)}
+              disabled={addingPoints}
+            >
+              Cancel
+            </Button>
+            <Button 
+              onClick={addLoyaltyPoints}
+              disabled={addingPoints || !loyaltyPoints}
+            >
+              {addingPoints ? (
+                <>
+                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2" />
+                  Adding...
+                </>
+              ) : (
+                <>
+                  <Gift className="w-4 h-4 mr-2" />
+                  Add Points
+                </>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

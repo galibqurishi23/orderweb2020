@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, use } from 'react';
 import { useRouter } from 'next/navigation';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -16,6 +16,8 @@ export default function TenantAdminLoginPage({
 }: { 
   params: Promise<{ tenant: string }>
 }) {
+  // Unwrap params using React.use() for Next.js 15
+  const resolvedParams = use(params);
   const router = useRouter();
   const { tenantData, isLoading: isTenantLoading } = useTenant();
   const [tenantSlug, setTenantSlug] = useState<string>('');
@@ -28,30 +30,13 @@ export default function TenantAdminLoginPage({
   const [showPassword, setShowPassword] = useState(false);
 
   useEffect(() => {
-    // Get tenant slug from params
-    params.then(({ tenant }) => {
-      setTenantSlug(tenant);
-    });
+    // Get tenant slug from resolved params (Next.js 15 fix)
+    setTenantSlug(resolvedParams.tenant);
 
-    // Check if already authenticated
-    const checkAuth = async () => {
-      try {
-        const response = await fetch('/api/auth/check-admin');
-        if (response.ok) {
-          const data = await response.json();
-          if (data.authenticated && data.tenantSlug === tenantSlug) {
-            router.push(`/${tenantSlug}/admin/dashboard`);
-          }
-        }
-      } catch (error) {
-        // Not authenticated, stay on login page
-      }
-    };
-
-    if (tenantSlug) {
-      checkAuth();
-    }
-  }, [tenantSlug, router]);
+    // DISABLED: Auto-redirect check to prevent loops
+    // Only check auth after explicit login attempt
+    console.log('Login page loaded for tenant:', resolvedParams.tenant);
+  }, [resolvedParams.tenant]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();

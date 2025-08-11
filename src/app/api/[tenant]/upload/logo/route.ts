@@ -5,10 +5,10 @@ import path from "path";
 
 export async function POST(
   request: NextRequest,
-  { params }: { params: { tenant: string } }
+  { params }: { params: Promise<{ tenant: string }> }
 ) {
   try {
-    const tenantSlug = params.tenant;
+    const { tenant: tenantSlug } = await params;
     const tenant = await getTenantBySlug(tenantSlug);
     
     if (!tenant) {

@@ -130,12 +130,12 @@ export async function saveTenantDeliveryZone(tenantId: string, zone: DeliveryZon
             id: zone.id,
             tenant_id: tenantId,
             name: zone.name,
-            type: zone.type,
+            type: zone.type || 'postcode', // Default to 'postcode' if not provided
             postcodes: postcodes,
             deliveryFee: zone.deliveryFee,
             minOrder: zone.minOrder,
             deliveryTime: zone.deliveryTime,
-            collectionTime: zone.collectionTime
+            collectionTime: zone.collectionTime || null // Allow null for collectionTime
         };
         
         // Check if zone exists

@@ -3,7 +3,7 @@
 import React, { useState, useMemo } from 'react';
 import { getCurrencySymbol } from '@/lib/currency-utils';
 import { Tag, Plus, Edit, Trash2, Save, X, Check, Ban } from 'lucide-react';
-import { useTenantData } from '@/context/TenantDataContext';
+import { useAdmin } from '@/context/AdminContext';
 import type { Voucher } from '@/lib/types';
 import {
   Card,
@@ -87,7 +87,13 @@ const VoucherCard = ({ voucher, onEdit, onDelete, onToggle, currencySymbol }: { 
                      <Button variant="outline" size="icon" onClick={() => onEdit(voucher)} className="flex-grow"><Edit className="w-4 h-4" /></Button>
                     <AlertDialog>
                         <AlertDialogTrigger asChild>
-                           <Button variant="destructive" size="icon" className="flex-grow"><Trash2 className="w-4 h-4" /></Button>
+                           <Button 
+                             variant="ghost" 
+                             size="icon" 
+                             className="flex-grow text-red-600 hover:text-white hover:bg-red-600 border border-red-300 hover:border-red-600 transition-all duration-200"
+                           >
+                             <Trash2 className="w-4 h-4" />
+                           </Button>
                         </AlertDialogTrigger>
                         <AlertDialogContent>
                             <AlertDialogHeader>
@@ -96,7 +102,7 @@ const VoucherCard = ({ voucher, onEdit, onDelete, onToggle, currencySymbol }: { 
                             </AlertDialogHeader>
                             <AlertDialogFooter>
                                 <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                <AlertDialogAction onClick={() => onDelete(voucher.id)} className="bg-destructive hover:bg-destructive/90">Delete</AlertDialogAction>
+                                <AlertDialogAction onClick={() => onDelete(voucher.id)} className="bg-red-600 hover:bg-red-700 text-white border-red-600 hover:border-red-700">Delete Voucher</AlertDialogAction>
                             </AlertDialogFooter>
                         </AlertDialogContent>
                     </AlertDialog>
@@ -220,10 +226,144 @@ const VoucherFormDialog = ({ isOpen, onClose, onSave, voucher, currencySymbol }:
 
 
 export default function VouchersPage() {
-    const { vouchers, saveVoucher, deleteVoucher, toggleVoucherStatus, restaurantSettings } = useTenantData();
+    const { tenantData, vouchers, refreshVouchers } = useAdmin();
+    const [loading, setLoading] = useState(true);
     const [editingVoucher, setEditingVoucher] = useState<Voucher | null>(null);
     const [isFormOpen, setIsFormOpen] = useState(false);
     const { toast } = useToast();
+
+    // Load vouchers when component mounts
+    React.useEffect(() => {
+        const loadVouchers = async () => {
+            if (tenantData?.id) {
+                await refreshVouchers();
+                setLoading(false);
+            }
+        };
+        loadVouchers();
+    }, [tenantData?.id, refreshVouchers]);
+
+    // Restaurant settings from tenantData
+    const restaurantSettings = {
+        currency: tenantData?.currency || 'GBP',
+        timezone: tenantData?.timezone || 'Europe/London'
+    };
+
+    // Save voucher function
+    const saveVoucher = async (voucher: Voucher) => {
+        try {
+            const response = await fetch('/api/tenant/vouchers', {
+                method: 'POST',
+                headers: { 
+                    'Content-Type': 'application/json',
+                    'X-Tenant-ID': tenantData?.id || ''
+                },
+                body: JSON.stringify(voucher)
+            });
+            
+            if (response.ok) {
+                await refreshVouchers();
+                toast({
+                    title: "Success",
+                    description: `Voucher ${voucher.id ? 'updated' : 'created'} successfully`,
+                });
+            }
+        } catch (error) {
+            console.error('Failed to save voucher:', error);
+            toast({
+                title: "Error",
+                description: "Failed to save voucher",
+                variant: "destructive",
+            });
+        }
+    };
+
+    // Delete voucher function
+    const deleteVoucher = async (voucherId: string) => {
+        try {
+            const response = await fetch('/api/tenant/vouchers', {
+                method: 'DELETE',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-Tenant-ID': tenantData?.id || ''
+                },
+                body: JSON.stringify({ id: voucherId })
+            });
+            
+            if (response.ok) {
+                await refreshVouchers();
+                toast({
+                    title: "Success",
+                    description: "Voucher deleted successfully",
+                });
+            }
+        } catch (error) {
+            console.error('Failed to delete voucher:', error);
+            toast({
+                title: "Error",
+                description: "Failed to delete voucher",
+                variant: "destructive",
+            });
+        }
+    };
+
+    // Toggle voucher status function
+    const toggleVoucherStatus = async (voucherId: string) => {
+        try {
+            const response = await fetch('/api/tenant/vouchers', {
+                method: 'PATCH',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-Tenant-ID': tenantData?.id || ''
+                },
+                body: JSON.stringify({ id: voucherId, action: 'toggle' })
+            });
+            
+            if (response.ok) {
+                await refreshVouchers();
+                toast({
+                    title: "Success",
+                    description: "Voucher status updated",
+                });
+            }
+        } catch (error) {
+            console.error('Failed to toggle voucher status:', error);
+            toast({
+                title: "Error",
+                description: "Failed to update voucher status",
+                variant: "destructive",
+            });
+        }
+    };
+
+    // Delete all vouchers function
+    const deleteAllVouchers = async () => {
+        try {
+            const response = await fetch('/api/tenant/vouchers', {
+                method: 'PATCH',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-Tenant-ID': tenantData?.id || ''
+                },
+                body: JSON.stringify({ action: 'deleteAll' })
+            });
+            
+            if (response.ok) {
+                await refreshVouchers();
+                toast({
+                    title: "Success",
+                    description: "All vouchers deleted successfully",
+                });
+            }
+        } catch (error) {
+            console.error('Failed to delete all vouchers:', error);
+            toast({
+                title: "Error",
+                description: "Failed to delete all vouchers",
+                variant: "destructive",
+            });
+        }
+    };
 
     const currencySymbol = useMemo(() => {
         return getCurrencySymbol(restaurantSettings.currency);
@@ -267,10 +407,39 @@ export default function VouchersPage() {
                         </CardTitle>
                         <CardDescription>Create and manage discounts and promotions.</CardDescription>
                     </div>
-                    <Button onClick={handleAddNew}>
-                        <Plus className="w-4 h-4 mr-2"/>
-                        Add Voucher
-                    </Button>
+                    <div className="flex gap-2">
+                        {vouchers.length > 0 && (
+                            <AlertDialog>
+                                <AlertDialogTrigger asChild>
+                                    <Button variant="destructive">
+                                        <Trash2 className="w-4 h-4 mr-2"/>
+                                        Delete All
+                                    </Button>
+                                </AlertDialogTrigger>
+                                <AlertDialogContent>
+                                    <AlertDialogHeader>
+                                        <AlertDialogTitle>Delete All Vouchers?</AlertDialogTitle>
+                                        <AlertDialogDescription>
+                                            This will permanently delete all {vouchers.length} voucher(s). This action cannot be undone.
+                                        </AlertDialogDescription>
+                                    </AlertDialogHeader>
+                                    <AlertDialogFooter>
+                                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                        <AlertDialogAction 
+                                            onClick={deleteAllVouchers} 
+                                            className="bg-red-600 hover:bg-red-700 text-white border-red-600 hover:border-red-700"
+                                        >
+                                            Delete All Vouchers
+                                        </AlertDialogAction>
+                                    </AlertDialogFooter>
+                                </AlertDialogContent>
+                            </AlertDialog>
+                        )}
+                        <Button onClick={handleAddNew}>
+                            <Plus className="w-4 h-4 mr-2"/>
+                            Add Voucher
+                        </Button>
+                    </div>
                 </CardHeader>
             </Card>
 

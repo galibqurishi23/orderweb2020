@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Button } from '@/components/ui/button';
 import { DateRange } from "react-day-picker";
 import { addDays, format, startOfMonth, startOfWeek, endOfMonth, endOfWeek } from 'date-fns';
-import { useTenantData } from '@/context/TenantDataContext';
+import { useAdmin } from '@/context/AdminContext';
 import type { Order } from '@/lib/types';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { cn } from '@/lib/utils';
@@ -63,7 +63,7 @@ const generateReport = (orders: Order[]): ReportData => {
       const current = itemSalesMap.get(item.menuItem.name) || { quantity: 0, revenue: 0 };
       current.quantity += item.quantity;
       const itemPrice = parseFloat(item.menuItem.price?.toString() || '0') || 0;
-      const addonPrice = item.selectedAddons.reduce((sum, addon) => sum + (parseFloat(addon.price?.toString() || '0') || 0), 0);
+      const addonPrice = item.selectedAddons.reduce((sum, addon) => sum + addon.totalPrice, 0);
       current.revenue += (itemPrice + addonPrice) * item.quantity;
       itemSalesMap.set(item.menuItem.name, current);
     });
@@ -78,11 +78,48 @@ const generateReport = (orders: Order[]): ReportData => {
 
 
 export default function ReportsPage() {
-    const { orders: allOrders, restaurantSettings } = useTenantData();
+    const { tenantData } = useAdmin();
+    const [allOrders, setAllOrders] = useState<Order[]>([]);
+    const [loading, setLoading] = useState(true);
     const [date, setDate] = useState<DateRange | undefined>();
     const [granularity, setGranularity] = useState<'daily' | 'weekly' | 'monthly'>('daily');
     
     const { toast } = useToast();
+
+    // Restaurant settings from tenantData
+    const restaurantSettings = {
+        currency: tenantData?.currency || 'GBP',
+        timezone: tenantData?.timezone || 'Europe/London'
+    };
+
+    // Fetch orders for reports
+    useEffect(() => {
+        async function fetchOrders() {
+            if (!tenantData?.id) return;
+            
+            try {
+                setLoading(true);
+                const response = await fetch(`/api/tenant/orders?tenantId=${tenantData.id}`);
+                if (response.ok) {
+                    const result = await response.json();
+                    if (result.success) {
+                        setAllOrders(result.data || []);
+                    }
+                }
+            } catch (error) {
+                console.error('Failed to fetch orders for reports:', error);
+                toast({
+                    title: "Error",
+                    description: "Failed to load order data",
+                    variant: "destructive",
+                });
+            } finally {
+                setLoading(false);
+            }
+        }
+
+        fetchOrders();
+    }, [tenantData?.id, toast]);
 
     useEffect(() => {
         const today = new Date();

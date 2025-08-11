@@ -23,8 +23,8 @@ const createDatabaseConfig = () => {
     
     // Production-optimized pool settings with better connection management
     waitForConnections: true,
-    connectionLimit: process.env.NODE_ENV === 'production' ? 25 : 5, // Reduced for development
-    queueLimit: 20, // Reduced queue limit
+    connectionLimit: process.env.NODE_ENV === 'production' ? 10 : 3, // Much lower for development
+    queueLimit: 10, // Reduced queue limit
     multipleStatements: true,
     
     // Character set and collation

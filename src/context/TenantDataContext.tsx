@@ -1,6 +1,7 @@
 'use client';
 
 import React, { createContext, useContext, useState, ReactNode, useEffect, useCallback } from 'react';
+import { usePathname } from 'next/navigation';
 import type { 
     Order, RestaurantSettings, Customer, Address, OrderStatus,
     OpeningHours, OpeningHoursPerDay, Voucher, DeliveryZone, Printer
@@ -95,6 +96,9 @@ const TenantDataContext = createContext<TenantDataContextType | undefined>(undef
 // Create the provider component
 export const TenantDataProvider = ({ children }: { children: ReactNode }) => {
     const { tenantData, isLoading: tenantLoading } = useTenant();
+    const pathname = usePathname();
+    const isAdminRoute = pathname.includes('/admin');
+    
     const [orders, setOrders] = useState<Order[]>([]);
     const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
     const [categories, setCategories] = useState<MenuCategory[]>([]);
@@ -183,6 +187,9 @@ export const TenantDataProvider = ({ children }: { children: ReactNode }) => {
                     name: tenantData.name,
                     // Keep logo from tenant settings if available
                     logo: tenantData.settings.logo || parsedSettings?.logo || defaultRestaurantSettings.logo,
+                    // Keep cover image from parsed settings if available
+                    coverImage: parsedSettings?.coverImage || '',
+                    coverImageHint: parsedSettings?.coverImageHint || '',
                     // Ensure nested objects are properly merged
                     openingHours,
                     paymentSettings: {
@@ -274,10 +281,10 @@ export const TenantDataProvider = ({ children }: { children: ReactNode }) => {
         }
     }, [restaurantSettings?.theme]);
 
-    // Check for existing authentication on load
+    // Check for existing authentication on load (skip for admin routes to prevent logout calls)
     useEffect(() => {
         const checkAuth = async () => {
-            if (!tenantData?.id) return;
+            if (!tenantData?.id || isAdminRoute) return;
             
             try {
                 const response = await fetch('/api/customer/auth/logout', {
@@ -299,7 +306,7 @@ export const TenantDataProvider = ({ children }: { children: ReactNode }) => {
         };
         
         checkAuth();
-    }, [tenantData?.id]);
+    }, [tenantData?.id, isAdminRoute]);
 
     // --- Handler Functions ---
     const createOrder = async (orderData: Omit<Order, 'id' | 'createdAt' | 'status' | 'orderNumber'>) => {

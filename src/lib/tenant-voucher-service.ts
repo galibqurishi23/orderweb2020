@@ -89,7 +89,16 @@ export async function saveTenantVoucher(tenantId: string, voucher: Voucher): Pro
         
         // Generate new ID if needed
         const voucherId = (voucher.id && !voucher.id.startsWith('voucher-')) ? voucher.id : uuidv4();
-        const isNewVoucher = !voucher.id || voucher.id.startsWith('voucher-');
+        
+        // Check if voucher exists in database to determine if it's new or update
+        let isNewVoucher = true;
+        if (voucher.id && !voucher.id.startsWith('voucher-')) {
+            const [existingRows] = await pool.query(
+                'SELECT id FROM vouchers WHERE id = ? AND tenant_id = ?',
+                [voucher.id, tenantId]
+            );
+            isNewVoucher = (existingRows as any[]).length === 0;
+        }
         
         // Prepare the data
         const code = voucher.code?.trim();
@@ -171,6 +180,10 @@ export async function updateTenantVoucher(tenantId: string, voucher: Voucher): P
 
 export async function deleteTenantVoucher(tenantId: string, voucherId: string): Promise<void> {
     await pool.execute('DELETE FROM vouchers WHERE id = ? AND tenant_id = ?', [voucherId, tenantId]);
+}
+
+export async function deleteAllTenantVouchers(tenantId: string): Promise<void> {
+    await pool.execute('DELETE FROM vouchers WHERE tenant_id = ?', [tenantId]);
 }
 
 export async function incrementVoucherUsage(tenantId: string, voucherId: string): Promise<void> {

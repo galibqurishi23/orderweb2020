@@ -68,7 +68,11 @@ export class TenantAccessMiddleware {
       '/license-required',
       '/suspended',
       '/error',
+      '/admin',          // Allow admin login page even with expired license
+      '/admin/dashboard', // Allow admin dashboard even with expired license (will show renewal interface)
+      '/admin/settings',  // Allow admin settings for license renewal
       '/api/tenant/license',
+      '/api/tenant/license-status', // Allow license status API
       '/api/tenant/info',
       '/api/auth',
       '/favicon.ico',

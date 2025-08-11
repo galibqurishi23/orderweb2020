@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { 
@@ -19,24 +19,34 @@ import {
   Mail,
   Star,
   Users2,
-  Phone
+  Phone,
+  Key,
+  Eye
 } from 'lucide-react';
 import { DineDeskLogo } from '@/components/icons/logo';
 import AdminLogo from '@/components/icons/admin-logo';
 import { cn } from '@/lib/utils';
-import { useTenant } from '@/context/TenantContext';
-import { TenantDataProvider } from '@/context/TenantDataContext';
+import { AdminProvider, useAdmin } from '@/context/AdminContext';
 
-export default function TenantAdminLayout({
+// Component that uses AdminContext
+function AdminLayoutInner({
   children,
 }: {
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
-  const { tenantData, isLoading } = useTenant();
+  const { tenantData } = useAdmin();
+  const [isLoading, setIsLoading] = useState(true);
   
   // Extract tenant from pathname to avoid async params issue
   const tenant = pathname.split('/')[1];
+
+  // Add loading effect
+  useEffect(() => {
+    if (tenantData !== null) {
+      setIsLoading(false);
+    }
+  }, [tenantData]);
 
   const handleLogout = async () => {
     try {
@@ -62,22 +72,25 @@ export default function TenantAdminLayout({
     { href: `/${tenant}/admin/phone-loyalty-pos`, icon: Phone, label: 'Phone Loyalty POS' },
     { href: `/${tenant}/admin/loyalty-points`, icon: Star, label: 'Loyalty Points' },
     { href: `/${tenant}/admin/vouchers`, icon: Tag, label: 'Vouchers' },
+    { href: `/${tenant}/admin/shop`, icon: ShoppingBag, label: 'Shop & Gift Cards' },
     { href: `/${tenant}/admin/zones`, icon: MapPin, label: 'Delivery Zones' },
     { href: `/${tenant}/admin/order-configuration`, icon: Settings, label: 'Order Configuration' },
     { href: `/${tenant}/admin/printers`, icon: Printer, label: 'Printers' },
     { href: `/${tenant}/admin/payments`, icon: CreditCard, label: 'Payments' },
     { href: `/${tenant}/admin/email-settings`, icon: Mail, label: 'Email Settings' },
-    { href: `/${tenant}/admin/feedback`, icon: Star, label: 'Customer Feedback' },
     { href: `/${tenant}/admin/reports`, icon: BarChart3, label: 'Reports' },
+    { href: `/${tenant}/admin/license-management`, icon: Key, label: 'License Management' },
     { href: `/${tenant}/admin/settings`, icon: Settings, label: 'Settings' }
   ];
 
+  // Show loading state while tenant data is being fetched
   if (isLoading) {
     return (
       <div className="flex h-screen bg-background items-center justify-center">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
-          <p>Loading restaurant...</p>
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <h1 className="text-xl font-semibold text-gray-700">Loading Restaurant...</h1>
+          <p className="text-gray-500">Fetching "{tenant}" information</p>
         </div>
       </div>
     );
@@ -102,104 +115,128 @@ export default function TenantAdminLayout({
   }
 
   return (
-    <TenantDataProvider>
-      <div className="flex h-screen bg-slate-50">
-        {/* Sidebar */}
-        <div className="w-72 bg-white shadow-xl border-r border-slate-200 flex flex-col">
-          {/* Header */}
-          <div className="p-6 border-b border-slate-200">
-            <div className="flex items-center space-x-3 mb-4">
-              <div className="relative">
-                <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-purple-600 rounded-xl flex items-center justify-center shadow-lg overflow-hidden">
-                  {tenantData.settings?.logo ? (
-                    <img src={tenantData.settings.logo} alt={tenantData.name} className="w-12 h-12 object-cover rounded-xl" />
-                  ) : (
-                    <AdminLogo className="w-8 h-8 text-white" />
-                  )}
-                </div>
-                <div className="absolute -bottom-1 -right-1 w-4 h-4 bg-green-500 rounded-full border-2 border-white"></div>
+    <div className="flex h-screen bg-slate-50">
+      {/* Sidebar */}
+      <div className="w-72 bg-white shadow-xl border-r border-slate-200 flex flex-col">
+        {/* Header */}
+        <div className="p-6 border-b border-slate-200">
+          <div className="flex items-center space-x-3 mb-4">
+            <div className="relative">
+              <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-purple-600 rounded-xl flex items-center justify-center shadow-lg overflow-hidden">
+                {tenantData.settings?.logo ? (
+                  <img src={tenantData.settings.logo} alt={tenantData.name} className="w-12 h-12 object-cover rounded-xl" />
+                ) : (
+                  <AdminLogo className="w-8 h-8 text-white" />
+                )}
               </div>
-              <div className="flex-1">
-                <h1 className="text-xl font-bold text-slate-800 leading-tight">
-                  {tenantData.name}
-                </h1>
-                <p className="text-sm text-slate-500 font-medium">Restaurant Admin</p>
-              </div>
+              <div className="absolute -bottom-1 -right-1 w-4 h-4 bg-green-500 rounded-full border-2 border-white"></div>
             </div>
-            
-            {/* Quick Actions */}
-            <div className="space-y-2">
-              <Link
-                href={`/${tenant}`}
-                target="_blank"
-                className="flex items-center justify-center space-x-2 w-full px-4 py-2.5 text-sm font-medium text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors duration-200"
-              >
-                <span>👀</span>
-                <span>View Live Store</span>
-              </Link>
-              <button
-                onClick={handleLogout}
-                className="flex items-center justify-center space-x-2 w-full px-4 py-2.5 text-sm font-medium text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors duration-200"
-              >
-                <LogOut className="w-4 h-4" />
-                <span>Sign Out</span>
-              </button>
+            <div className="flex-1">
+              <h1 className="text-xl font-bold text-slate-800 leading-tight">
+                {tenantData.name}
+              </h1>
+              <p className="text-sm text-slate-500 font-medium">Restaurant Admin</p>
             </div>
           </div>
-
-          {/* Navigation */}
-          <nav className="flex-1 py-6">
-            <div className="space-y-1 px-4">
-              {navItems.map(item => {
-                const Icon = item.icon;
-                const isActive = pathname === item.href;
-                
-                return (
-                  <Link
-                    key={item.href}
-                    href={item.href}
-                    className={cn(
-                      'flex items-center space-x-3 px-4 py-3 text-sm font-medium rounded-lg transition-all duration-200 group',
-                      isActive 
-                        ? 'bg-gradient-to-r from-blue-500 to-purple-600 text-white shadow-lg' 
-                        : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
-                    )}
-                  >
-                    <Icon className={cn(
-                      'w-5 h-5 transition-transform duration-200',
-                      isActive ? 'scale-110' : 'group-hover:scale-105'
-                    )} />
-                    <span>{item.label}</span>
-                    {isActive && (
-                      <div className="ml-auto w-2 h-2 bg-white rounded-full animate-pulse"></div>
-                    )}
-                  </Link>
-                );
-              })}
-            </div>
-          </nav>
           
-          {/* Footer */}
-          <div className="p-4 border-t border-slate-200 bg-slate-50">
-            <div className="flex items-center justify-center">
-              <p className="text-xs text-slate-600 font-medium">
-                Powered by Order Web LTD
-              </p>
-            </div>
+          {/* Quick Actions */}
+          <div className="space-y-2">
+                        <Link
+              href={`/${tenant}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center justify-center space-x-2 w-full px-4 py-2.5 text-sm font-medium text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors duration-200"
+            >
+              <Eye className="w-4 h-4" />
+              <span>View Live Store</span>
+            </Link>
+            <Link
+              href={`/${tenant}/shop`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center justify-center space-x-2 w-full px-4 py-2.5 text-sm font-medium text-green-600 bg-green-50 hover:bg-green-100 rounded-lg transition-colors duration-200"
+            >
+              <ShoppingBag className="w-4 h-4" />
+              <span>Visit Shop</span>
+            </Link>
+            <button
+              onClick={handleLogout}
+              className="flex items-center justify-center space-x-2 w-full px-4 py-2.5 text-sm font-medium text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors duration-200"
+            >
+              <LogOut className="w-4 h-4" />
+              <span>Sign Out</span>
+            </button>
           </div>
         </div>
+
+        {/* Navigation */}
+        <nav className="flex-1 py-6">
+          <div className="space-y-1 px-4">
+            {navItems.map(item => {
+              const Icon = item.icon;
+              const isActive = pathname === item.href;
+              
+              return (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  className={cn(
+                    'flex items-center space-x-3 px-4 py-3 text-sm font-medium rounded-lg transition-all duration-200 group',
+                    isActive 
+                      ? 'bg-gradient-to-r from-blue-500 to-purple-600 text-white shadow-lg' 
+                      : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+                  )}
+                >
+                  <Icon className={cn(
+                    'w-5 h-5 transition-transform duration-200',
+                    isActive ? 'scale-110' : 'group-hover:scale-105'
+                  )} />
+                  <span>{item.label}</span>
+                  {isActive && (
+                    <div className="ml-auto w-2 h-2 bg-white rounded-full animate-pulse"></div>
+                  )}
+                </Link>
+              );
+            })}
+          </div>
+        </nav>
         
-        {/* Main Content */}
-        <div className="flex-1 overflow-hidden">
-          <main className="h-full overflow-y-auto">
-            <div className="p-8">
-              <div className="max-w-7xl mx-auto">
-                {children}
-              </div>
-            </div>
-          </main>
+        {/* Footer */}
+        <div className="p-4 border-t border-slate-200 bg-slate-50">
+          <div className="flex items-center justify-center">
+            <p className="text-xs text-slate-600 font-medium">
+              Powered by Order Web LTD
+            </p>
+          </div>
         </div>
       </div>
-    </TenantDataProvider>
+      
+      {/* Main Content */}
+      <div className="flex-1 overflow-hidden">
+        <main className="h-full overflow-y-auto">
+          <div className="p-8">
+            <div className="max-w-7xl mx-auto">
+              {children}
+            </div>
+          </div>
+        </main>
+      </div>
+    </div>
+  );
+}
+
+// Main layout component with AdminProvider wrapper
+export default function TenantAdminLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
+  const pathname = usePathname();
+  const tenant = pathname.split('/')[1];
+
+  return (
+    <AdminProvider tenantSlug={tenant}>
+      <AdminLayoutInner>{children}</AdminLayoutInner>
+    </AdminProvider>
   );
 }

@@ -115,3 +115,54 @@ export async function DELETE(request: NextRequest) {
     );
   }
 }
+
+export async function PATCH(request: NextRequest) {
+  try {
+    const tenantId = request.headers.get('X-Tenant-ID');
+    
+    if (!tenantId) {
+      return NextResponse.json(
+        { success: false, error: 'Tenant ID is required' },
+        { status: 400 }
+      );
+    }
+
+    const { id, action } = await request.json();
+    
+    if (!id && action !== 'deleteAll') {
+      return NextResponse.json(
+        { success: false, error: 'Voucher ID is required' },
+        { status: 400 }
+      );
+    }
+
+    if (action === 'toggle') {
+      const { toggleTenantVoucherStatus } = await import('@/lib/tenant-voucher-service');
+      await toggleTenantVoucherStatus(tenantId, id);
+      
+      return NextResponse.json({
+        success: true,
+        message: 'Voucher status toggled successfully'
+      });
+    } else if (action === 'deleteAll') {
+      const { deleteAllTenantVouchers } = await import('@/lib/tenant-voucher-service');
+      await deleteAllTenantVouchers(tenantId);
+      
+      return NextResponse.json({
+        success: true,
+        message: 'All vouchers deleted successfully'
+      });
+    }
+
+    return NextResponse.json(
+      { success: false, error: 'Invalid action' },
+      { status: 400 }
+    );
+  } catch (error) {
+    console.error('Error in PATCH vouchers:', error);
+    return NextResponse.json(
+      { success: false, error: 'Failed to process request' },
+      { status: 500 }
+    );
+  }
+}

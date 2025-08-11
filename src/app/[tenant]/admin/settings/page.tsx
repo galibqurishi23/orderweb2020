@@ -1,8 +1,8 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Save, Upload, Mail, Phone, MapPin, Settings as SettingsIcon, Image as ImageIcon, KeyRound, Palette } from 'lucide-react';
-import { useTenantData } from '@/context/TenantDataContext';
+import { useAdmin } from '@/context/AdminContext';
 import { useTenant } from '@/context/TenantContext';
 import type { RestaurantSettings, OpeningHoursPerDay, ThemeSettings } from '@/lib/types';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
@@ -161,8 +161,92 @@ const ColorPickerInput = ({
 }
 
 export default function SettingsPage() {
-    const { restaurantSettings, saveSettings } = useTenantData();
-    const { tenantData } = useTenant();
+    const { tenantData, refreshTenantData } = useAdmin();
+    const [loading, setLoading] = useState(true);
+    const [restaurantSettings, setRestaurantSettings] = useState<RestaurantSettings | null>(null);
+    const { toast } = useToast();
+
+    // Fetch restaurant settings
+    useEffect(() => {
+        async function fetchSettings() {
+            if (!tenantData?.id) return;
+            
+            try {
+                setLoading(true);
+                const response = await fetch(`/api/tenant/settings?tenantId=${tenantData.id}`, {
+                    headers: {
+                        'X-Tenant-ID': tenantData.id
+                    }
+                });
+                
+                if (response.ok) {
+                    const result = await response.json();
+                    if (result.success) {
+                        setRestaurantSettings(result.data);
+                    }
+                } else {
+                    const errorData = await response.json();
+                    console.error('Settings API error:', errorData);
+                }
+            } catch (error) {
+                console.error('Failed to fetch settings:', error);
+                toast({
+                    title: "Error",
+                    description: "Failed to load settings",
+                    variant: "destructive",
+                });
+            } finally {
+                setLoading(false);
+            }
+        }
+
+        fetchSettings();
+    }, [tenantData?.id, toast]);
+
+    // Save settings function
+    const saveSettings = async (settings: RestaurantSettings) => {
+        if (!tenantData?.id) {
+            toast({
+                title: "Error",
+                description: "No tenant ID available",
+                variant: "destructive",
+            });
+            return;
+        }
+        
+        try {
+            const response = await fetch('/api/tenant/settings', {
+                method: 'PUT',
+                headers: { 
+                    'Content-Type': 'application/json',
+                    'X-Tenant-ID': tenantData.id
+                },
+                body: JSON.stringify(settings)
+            });
+            
+            if (response.ok) {
+                const result = await response.json();
+                if (result.success) {
+                    setRestaurantSettings(settings);
+                    await refreshTenantData();
+                    toast({
+                        title: "Success",
+                        description: "Settings saved successfully",
+                    });
+                }
+            } else {
+                const error = await response.json();
+                throw new Error(error.error || 'Failed to save settings');
+            }
+        } catch (error) {
+            console.error('Failed to save settings:', error);
+            toast({
+                title: "Error",
+                description: error instanceof Error ? error.message : "Failed to save settings",
+                variant: "destructive",
+            });
+        }
+    };
     
     // Create proper default settings
     const defaultSettings: RestaurantSettings = {
@@ -242,7 +326,6 @@ export default function SettingsPage() {
         };
     });
     
-    const { toast } = useToast();
     const [passwordData, setPasswordData] = useState({
         currentPassword: '',
         newPassword: '',
@@ -631,7 +714,7 @@ export default function SettingsPage() {
                                                   }}
                                                 />
                                                 <Button variant="outline" onClick={() => document.getElementById('logo-upload')?.click()}><Upload className="w-4 h-4 mr-2" />Change Logo</Button>
-                                                {settings.logo && <Button variant="destructive" onClick={() => handleInputChange('logo', '')}>Remove</Button>}
+                                                {settings.logo && <Button variant="outline" onClick={() => handleInputChange('logo', '')} className="text-red-600 hover:text-white hover:bg-red-600 border-red-300 hover:border-red-600 transition-all duration-200">Remove</Button>}
                                             </div>
                                         </div>
                                     </CardContent>
@@ -667,7 +750,7 @@ export default function SettingsPage() {
                                                   }}
                                                 />
                                                 <Button variant="outline" onClick={() => document.getElementById('cover-upload')?.click()}><Upload className="w-4 h-4 mr-2" />Change Cover</Button>
-                                                {settings.coverImage && <Button variant="destructive" onClick={() => handleInputChange('coverImage', '')}>Remove</Button>}
+                                                {settings.coverImage && <Button variant="outline" onClick={() => handleInputChange('coverImage', '')} className="text-red-600 hover:text-white hover:bg-red-600 border-red-300 hover:border-red-600 transition-all duration-200">Remove</Button>}
                                             </div>
                                         </div>
                                     </CardContent>

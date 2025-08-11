@@ -3,7 +3,7 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { getCurrencySymbol } from '@/lib/currency-utils';
 import { ShoppingBag, Printer, Eye, CheckCircle, Search, Trash2, Calendar, CreditCard, Wallet, Gift } from 'lucide-react';
-import { useTenantData } from '@/context/TenantDataContext';
+import { useAdmin } from '@/context/AdminContext';
 import type { Order, OrderStatus } from '@/lib/types';
 import {
   Card,
@@ -38,15 +38,114 @@ import { format, startOfWeek, startOfMonth, endOfWeek, endOfMonth, isWithinInter
 import { Skeleton } from '@/components/ui/skeleton';
 
 export default function TenantOrdersPage() {
-  const { orders, updateOrderPrintStatus, deleteOrder, restaurantSettings } = useTenantData();
+  const { tenantData } = useAdmin();
+  const [orders, setOrders] = useState<Order[]>([]);
+  const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
   const [isClient, setIsClient] = useState(false);
   const { toast } = useToast();
 
+  // Fetch orders from API
+  useEffect(() => {
+    async function fetchOrders() {
+      if (!tenantData?.id) return;
+      
+      try {
+        setLoading(true);
+        const response = await fetch(`/api/tenant/orders?tenantId=${tenantData.id}`);
+        if (response.ok) {
+          const result = await response.json();
+          if (result.success) {
+            setOrders(result.data || []);
+          }
+        }
+      } catch (error) {
+        console.error('Failed to fetch orders:', error);
+        toast({
+          title: "Error",
+          description: "Failed to load orders",
+          variant: "destructive",
+        });
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    fetchOrders();
+  }, [tenantData?.id, toast]);
+
   useEffect(() => {
     setIsClient(true);
   }, []);
+
+  // Update order print status
+  const updateOrderPrintStatus = async (orderId: string, printed: boolean) => {
+    try {
+      const response = await fetch(`/api/tenant/orders/${orderId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ printed })
+      });
+      
+      if (response.ok) {
+        setOrders(prev => prev.map(order => 
+          order.id === orderId ? { ...order, printed } : order
+        ));
+        toast({
+          title: "Success",
+          description: `Order marked as ${printed ? 'printed' : 'not printed'}`,
+        });
+      }
+    } catch (error) {
+      console.error('Failed to update print status:', error);
+      toast({
+        title: "Error",
+        description: "Failed to update print status",
+        variant: "destructive",
+      });
+    }
+  };
+
+  // Delete order
+  const deleteOrder = async (orderId: string) => {
+    try {
+      if (!tenantData?.id) {
+        throw new Error('Tenant data not available');
+      }
+
+      console.log('🗑️ Deleting order:', orderId, 'for tenant:', tenantData.id);
+      
+      const response = await fetch(`/api/tenant/orders/${orderId}?tenantId=${tenantData.id}`, {
+        method: 'DELETE'
+      });
+      
+      if (response.ok) {
+        setOrders(prev => prev.filter(order => order.id !== orderId));
+        toast({
+          title: "Success",
+          description: "Order deleted successfully",
+        });
+        console.log('✅ Order deleted successfully');
+      } else {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to delete order');
+      }
+    } catch (error) {
+      console.error('❌ Failed to delete order:', error);
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to delete order",
+        variant: "destructive",
+      });
+    }
+  };
+
+  // Restaurant settings (using tenantData)
+  const restaurantSettings = {
+    currency: tenantData?.currency || 'GBP',
+    timezone: tenantData?.timezone || 'Europe/London'
+  };
 
   const currencySymbol = useMemo(() => {
     return getCurrencySymbol(restaurantSettings.currency);
@@ -100,9 +199,10 @@ export default function TenantOrdersPage() {
   }, [orders, isClient]);
 
   const handlePrintStatusToggle = (orderId: string) => {
-    updateOrderPrintStatus(orderId);
     const order = orders.find(o => o.id === orderId);
     if(order) {
+        const newPrintStatus = !order.printed;
+        updateOrderPrintStatus(orderId, newPrintStatus);
         toast({
             title: order.printed ? "Marked as Not Printed" : "Marked as Printed",
             description: `Order ${orderId} has been updated.`,
@@ -112,16 +212,21 @@ export default function TenantOrdersPage() {
 
   const handleRefund = async (orderId: string, orderNumber: string) => {
     try {
+      console.log('🔄 Processing refund for order:', orderNumber);
+      
       await deleteOrder(orderId);
+      
       toast({
-        title: "Order refunded",
-        description: `Order ${orderNumber} has been refunded and removed.`,
+        title: "Refund Processed",
+        description: `Order ${orderNumber} has been refunded and completely removed from the system`,
       });
+      
+      console.log('✅ Order refunded and deleted successfully');
     } catch (error) {
-      console.error('Refund error:', error);
+      console.error('❌ Refund error:', error);
       toast({
         title: "Error",
-        description: "Failed to refund the order.",
+        description: "Failed to process refund. Please try again.",
         variant: "destructive",
       });
     }
@@ -352,6 +457,28 @@ export default function TenantOrdersPage() {
                                         <div className="flex justify-between"><strong>Status:</strong> <Badge variant={getStatusBadgeVariant(selectedOrder.status)} className="capitalize font-semibold rounded-full">{selectedOrder.status}</Badge></div>
                                         <div className="flex justify-between"><strong>Type:</strong> <Badge variant="outline" className="capitalize">{selectedOrder.orderType}</Badge></div>
                                         <div className="flex justify-between"><strong>Print Status:</strong> <Badge variant={selectedOrder.printed ? 'default' : 'secondary'}>{selectedOrder.printed ? 'Printed' : 'Not Printed'}</Badge></div>
+                                        <div className="flex justify-between"><strong>Payment Method:</strong> 
+                                          <div className="flex items-center gap-2">
+                                            {selectedOrder.paymentMethod === 'cash' && (
+                                              <>
+                                                <Wallet className="w-4 h-4 text-green-600" />
+                                                <Badge variant="secondary" className="bg-green-100 text-green-800 border-green-200">Cash</Badge>
+                                              </>
+                                            )}
+                                            {selectedOrder.paymentMethod === 'card' && (
+                                              <>
+                                                <CreditCard className="w-4 h-4 text-blue-600" />
+                                                <Badge variant="secondary" className="bg-blue-100 text-blue-800 border-blue-200">Card</Badge>
+                                              </>
+                                            )}
+                                            {selectedOrder.paymentMethod === 'voucher' && (
+                                              <>
+                                                <Gift className="w-4 h-4 text-purple-600" />
+                                                <Badge variant="secondary" className="bg-purple-100 text-purple-800 border-purple-200">Voucher</Badge>
+                                              </>
+                                            )}
+                                          </div>
+                                        </div>
                                         <div className="flex justify-between"><strong>Voucher:</strong> <span>{selectedOrder.voucherCode || 'N/A'}</span></div>
                                     </CardContent>
                                 </Card>
@@ -385,11 +512,11 @@ export default function TenantOrdersPage() {
                                             <div className="flex justify-between items-start">
                                             <div>
                                                 <div className="font-semibold">{item.quantity}x {item.menuItem.name}</div>
-                                                {item.selectedAddons.length > 0 && <div className="text-xs text-muted-foreground">+ {item.selectedAddons.map(addon => `${addon.name} (${currencySymbol}${parseFloat(String(addon.price || '0')).toFixed(2)})`).join(', ')}</div>}
+                                                {item.selectedAddons.length > 0 && <div className="text-xs text-muted-foreground">+ {item.selectedAddons.map(addon => `${addon.groupName} (${currencySymbol}${addon.totalPrice.toFixed(2)})`).join(', ')}</div>}
                                                 {item.specialInstructions && <div className="text-xs text-muted-foreground italic">Note: {item.specialInstructions}</div>}
                                             </div>
                                             <div className="font-semibold">
-                                                {currencySymbol}{((parseFloat(String(item.menuItem.price || '0')) + item.selectedAddons.reduce((sum, addon) => sum + parseFloat(String(addon.price || '0')), 0)) * item.quantity).toFixed(2)}
+                                                {currencySymbol}{((parseFloat(String(item.menuItem.price || '0')) + item.selectedAddons.reduce((sum, addon) => sum + addon.totalPrice, 0)) * item.quantity).toFixed(2)}
                                             </div>
                                             </div>
                                         </div>

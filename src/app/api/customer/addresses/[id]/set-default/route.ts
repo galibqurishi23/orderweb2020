@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import jwt from 'jsonwebtoken';
 import db from '@/lib/db';
 
-export async function PUT(request: NextRequest, { params }: { params: { id: string } }) {
+export async function PUT(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     // Get JWT token from cookie
     const token = request.cookies.get('customer_token')?.value;
@@ -15,9 +15,11 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
     const decoded = jwt.verify(token, process.env.JWT_SECRET || 'fallback_secret') as any;
     const customerId = decoded.customerId;
 
+    const { id } = await params;
+
     // Verify the address belongs to the customer
-    const checkQuery = 'SELECT id FROM addresses WHERE id = ? AND customer_id = ?';
-    const existingAddresses = await db.query(checkQuery, [params.id, customerId]);
+    const checkQuery = 'SELECT id FROM addresses WHERE id = ? AND customerId = ?';
+    const existingAddresses = await db.query(checkQuery, [id, customerId]);
     
     if (!existingAddresses || (existingAddresses as any[]).length === 0) {
       return NextResponse.json({ error: 'Address not found' }, { status: 404 });
@@ -25,14 +27,14 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
 
     // Update all addresses to not be default
     await db.query(
-      'UPDATE addresses SET is_default = FALSE WHERE customer_id = ?',
+      'UPDATE addresses SET isDefault = FALSE WHERE customerId = ?',
       [customerId]
     );
 
     // Set the specified address as default
     await db.query(
-      'UPDATE addresses SET is_default = TRUE WHERE id = ? AND customer_id = ?',
-      [params.id, customerId]
+      'UPDATE addresses SET isDefault = TRUE WHERE id = ? AND customerId = ?',
+      [id, customerId]
     );
 
     return NextResponse.json({ success: true });

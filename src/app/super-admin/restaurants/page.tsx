@@ -99,7 +99,10 @@ export default function RestaurantsPage() {
     setIsCreating(true);
     setError(null);
 
+    console.log('🚀 Form submission started with data:', formData);
+
     try {
+      console.log('📤 Sending POST request to /api/super-admin/tenants');
       const response = await fetch('/api/super-admin/tenants', {
         method: 'POST',
         headers: {
@@ -108,9 +111,12 @@ export default function RestaurantsPage() {
         body: JSON.stringify(formData),
       });
 
+      console.log('📥 Response status:', response.status);
       const result = await response.json();
+      console.log('📄 Response data:', result);
 
       if (result.success) {
+        console.log('✅ Restaurant created successfully!');
         await fetchRestaurants(); // Refresh the list
         setShowCreateDialog(false);
         
@@ -118,7 +124,8 @@ export default function RestaurantsPage() {
         setSuccessMessage(
           `✅ Restaurant "${formData.name}" created successfully! ` +
           `Admin can login with email: ${formData.ownerEmail}. ` +
-          `Dashboard URL: /${formData.slug}/admin`
+          `Dashboard URL: /${formData.slug}/admin. ` +
+          `📧 Welcome email has been sent to ${formData.ownerEmail}!`
         );
         
         // Clear success message after 10 seconds
@@ -134,9 +141,11 @@ export default function RestaurantsPage() {
           ownerPassword: ''
         });
       } else {
+        console.error('❌ Restaurant creation failed:', result.error);
         setError(result.error || 'Failed to create restaurant');
       }
     } catch (err) {
+      console.error('💥 Error during restaurant creation:', err);
       setError('Failed to create restaurant');
       console.error('Error creating restaurant:', err);
     } finally {
