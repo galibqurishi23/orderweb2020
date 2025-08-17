@@ -64,7 +64,6 @@ interface ShopItem {
     category_name: string;
     name: string;
     description: string;
-    short_description: string;
     price: number;
     image_url?: string;
     type: 'physical' | 'digital' | 'gift_card';
@@ -129,7 +128,6 @@ export default function AdminGiftCardsPage() {
         category_id: '',
         name: '',
         description: '',
-        short_description: '',
         price: '',
         image_url: '',
         type: 'physical' as 'physical' | 'digital' | 'gift_card',
@@ -283,7 +281,6 @@ export default function AdminGiftCardsPage() {
                     category_id: '',
                     name: '',
                     description: '',
-                    short_description: '',
                     price: '',
                     image_url: '',
                     type: 'physical',
@@ -371,7 +368,6 @@ export default function AdminGiftCardsPage() {
             category_id: item.category_id,
             name: item.name,
             description: item.description,
-            short_description: item.short_description,
             price: item.price.toString(),
             image_url: item.image_url || '',
             type: item.type,
@@ -472,6 +468,35 @@ export default function AdminGiftCardsPage() {
             toast({
                 title: "Error",
                 description: "Failed to update order status",
+                variant: "destructive"
+            });
+        }
+    };
+
+    const handleDeleteGiftCard = async (cardId: string) => {
+        try {
+            const response = await fetch(`/api/tenant/${tenant}/admin/gift-cards/${cardId}`, {
+                method: 'DELETE'
+            });
+
+            if (response.ok) {
+                toast({
+                    title: "Success",
+                    description: "Gift card deleted successfully"
+                });
+                fetchData();
+            } else {
+                const error = await response.json();
+                toast({
+                    title: "Error",
+                    description: error.error || "Failed to delete gift card",
+                    variant: "destructive"
+                });
+            }
+        } catch (error) {
+            toast({
+                title: "Error",
+                description: "Failed to delete gift card",
                 variant: "destructive"
             });
         }
@@ -1079,15 +1104,6 @@ export default function AdminGiftCardsPage() {
                                                     </Select>
                                                 </div>
                                                 <div className="col-span-2">
-                                                    <Label htmlFor="item-short-description">Short Description</Label>
-                                                    <Input
-                                                        id="item-short-description"
-                                                        value={itemFormData.short_description}
-                                                        onChange={(e) => setItemFormData({...itemFormData, short_description: e.target.value})}
-                                                        placeholder="Brief description for listings"
-                                                    />
-                                                </div>
-                                                <div className="col-span-2">
                                                     <Label htmlFor="item-description">Description</Label>
                                                     <Textarea
                                                         id="item-description"
@@ -1273,15 +1289,6 @@ export default function AdminGiftCardsPage() {
                                     </Select>
                                 </div>
                                 <div className="col-span-2">
-                                    <Label htmlFor="edit-item-short-description">Short Description</Label>
-                                    <Input
-                                        id="edit-item-short-description"
-                                        value={itemFormData.short_description}
-                                        onChange={(e) => setItemFormData({...itemFormData, short_description: e.target.value})}
-                                        placeholder="Brief description for listings"
-                                    />
-                                </div>
-                                <div className="col-span-2">
                                     <Label htmlFor="edit-item-description">Description</Label>
                                     <Textarea
                                         id="edit-item-description"
@@ -1421,44 +1428,78 @@ export default function AdminGiftCardsPage() {
                             </div>
                         </CardHeader>
                         <CardContent>
-                            <Table>
-                                <TableHeader>
-                                    <TableRow>
-                                        <TableHead>Card Number</TableHead>
-                                        <TableHead>Type</TableHead>
-                                        <TableHead>Amount</TableHead>
-                                        <TableHead>Balance</TableHead>
-                                        <TableHead>Status</TableHead>
-                                        <TableHead>Expiry Date</TableHead>
-                                        <TableHead>Actions</TableHead>
-                                    </TableRow>
-                                </TableHeader>
-                                <TableBody>
-                                    {filteredCards.map((card) => (
-                                        <TableRow key={card.id}>
-                                            <TableCell className="font-medium">{card.card_number}</TableCell>
-                                            <TableCell>
-                                                <Badge variant="outline">{card.card_type}</Badge>
-                                            </TableCell>
-                                            <TableCell>£{card.amount}</TableCell>
-                                            <TableCell>£{card.remaining_balance}</TableCell>
-                                            <TableCell>
-                                                <Badge variant={card.status === 'active' ? 'default' : 'secondary'}>
-                                                    {card.status}
-                                                </Badge>
-                                            </TableCell>
-                                            <TableCell>
-                                                {card.expiry_date ? new Date(card.expiry_date).toLocaleDateString() : 'No expiry'}
-                                            </TableCell>
-                                            <TableCell>
-                                                <Button variant="ghost" size="sm">
-                                                    <Eye className="h-4 w-4" />
-                                                </Button>
-                                            </TableCell>
+                            <div className="overflow-x-auto">
+                                <Table>
+                                    <TableHeader>
+                                        <TableRow>
+                                            <TableHead>Card Number</TableHead>
+                                            <TableHead>Type</TableHead>
+                                            <TableHead>Amount</TableHead>
+                                            <TableHead>Balance</TableHead>
+                                            <TableHead>Status</TableHead>
+                                            <TableHead>Expiry Date</TableHead>
+                                            <TableHead className="w-[120px]">Actions</TableHead>
                                         </TableRow>
-                                    ))}
-                                </TableBody>
-                            </Table>
+                                    </TableHeader>
+                                    <TableBody>
+                                        {filteredCards.map((card) => (
+                                            <TableRow key={card.id}>
+                                                <TableCell className="font-medium font-mono text-sm">{card.card_number}</TableCell>
+                                                <TableCell>
+                                                    <Badge variant="outline">{card.card_type}</Badge>
+                                                </TableCell>
+                                                <TableCell>£{card.amount}</TableCell>
+                                                <TableCell>£{card.remaining_balance}</TableCell>
+                                                <TableCell>
+                                                    <Badge variant={card.status === 'active' ? 'default' : 'secondary'}>
+                                                        {card.status}
+                                                    </Badge>
+                                                </TableCell>
+                                                <TableCell>
+                                                    {card.expiry_date ? new Date(card.expiry_date).toLocaleDateString() : 'No expiry'}
+                                                </TableCell>
+                                                <TableCell>
+                                                    <div className="flex items-center gap-1">
+                                                        <Button variant="ghost" size="sm" title="View Details">
+                                                            <Eye className="h-4 w-4" />
+                                                        </Button>
+                                                        <AlertDialog>
+                                                            <AlertDialogTrigger asChild>
+                                                                <Button 
+                                                                    variant="ghost" 
+                                                                    size="sm" 
+                                                                    className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                                                                    title="Delete Gift Card"
+                                                                >
+                                                                    <Trash2 className="h-4 w-4" />
+                                                                </Button>
+                                                            </AlertDialogTrigger>
+                                                            <AlertDialogContent>
+                                                                <AlertDialogHeader>
+                                                                    <AlertDialogTitle>Delete Gift Card</AlertDialogTitle>
+                                                                    <AlertDialogDescription>
+                                                                        Are you sure you want to delete gift card {card.card_number}? 
+                                                                        This action cannot be undone. Gift cards with remaining balance or recent transactions cannot be deleted.
+                                                                    </AlertDialogDescription>
+                                                                </AlertDialogHeader>
+                                                                <AlertDialogFooter>
+                                                                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                                                    <AlertDialogAction 
+                                                                        onClick={() => handleDeleteGiftCard(card.id)}
+                                                                        className="bg-red-600 hover:bg-red-700"
+                                                                    >
+                                                                        Delete
+                                                                    </AlertDialogAction>
+                                                                </AlertDialogFooter>
+                                                            </AlertDialogContent>
+                                                        </AlertDialog>
+                                                    </div>
+                                                </TableCell>
+                                            </TableRow>
+                                        ))}
+                                    </TableBody>
+                                </Table>
+                            </div>
                         </CardContent>
                     </Card>
                 </TabsContent>

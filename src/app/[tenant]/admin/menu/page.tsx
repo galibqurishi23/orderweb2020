@@ -1,6 +1,7 @@
 'use client';
 
-import React, { useState, useMemo, useRef, useCallback, useEffect } from 'react';
+import React, { useState, useMemo, useRef } from 'react';
+import { usePathname } from 'next/navigation';
 import { getCurrencySymbol } from '@/lib/currency-utils';
 import { 
   ChefHat, 
@@ -24,9 +25,8 @@ import {
   PlusCircle,
   Utensils
 } from 'lucide-react';
-import { useAdmin } from '@/context/AdminContext';
-import type { Category, SetMenuItem as OldSetMenuItem } from '@/lib/types';
-import { MenuItem, MenuCategory, SetMenuItem } from '@/lib/menu-types';
+import { useTenantData } from '@/context/TenantDataContext';
+import type { MenuItem, MenuCategory } from '@/lib/menu-types';
 import {
   Card,
   CardContent,
@@ -70,13 +70,27 @@ import {
   AlertDialogTitle, 
   AlertDialogTrigger 
 } from '@/components/ui/alert-dialog';
-import AddonManager from '@/components/admin/SimpleAddonManager';
+import { Checkbox } from '@/components/ui/checkbox';
+import { SortableMenuItemsTable } from '@/components/admin/SortableMenuItemsTable';
+import { SortableCategoriesTable } from '@/components/admin/SortableCategoriesTable';
 
 export default function TenantMenuPage() {
-  const { tenantData } = useAdmin();
-  const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
-  const [categories, setCategories] = useState<MenuCategory[]>([]);
-  const [loading, setLoading] = useState(true);
+  const pathname = usePathname();
+  const tenantSlug = pathname.split('/')[1]; // Extract tenant from /tenant/admin/menu
+  
+  const { 
+    menuItems, 
+    categories, 
+    saveMenuItem, 
+    deleteMenuItem, 
+    saveCategory, 
+    deleteCategory, 
+    restaurantSettings,
+    isLoading,
+    refreshData,
+    updateCategoriesOrder,
+    updateMenuItemsOrder
+  } = useTenantData();
   
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
@@ -89,203 +103,118 @@ export default function TenantMenuPage() {
   const { toast } = useToast();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Restaurant settings from tenantData
-  const restaurantSettings = {
-    currency: tenantData?.currency || 'GBP',
-    timezone: tenantData?.timezone || 'Europe/London'
-  };
-
-  // Use loading state
-  const isLoading = loading;
-
-  // Fetch menu items and categories
-  useEffect(() => {
-    async function fetchMenuData() {
-      if (!tenantData?.id) return;
-      
-      try {
-        setLoading(true);
-        
-        // Fetch menu items
-        const itemsResponse = await fetch(`/api/tenant/menu/items?tenantId=${tenantData.id}`);
-        if (itemsResponse.ok) {
-          const itemsResult = await itemsResponse.json();
-          if (itemsResult.success) {
-            setMenuItems(itemsResult.data || []);
-          }
-        }
-
-        // Fetch categories
-        const categoriesResponse = await fetch(`/api/tenant/menu/categories?tenantId=${tenantData.id}`);
-        if (categoriesResponse.ok) {
-          const categoriesResult = await categoriesResponse.json();
-          if (categoriesResult.success) {
-            setCategories(categoriesResult.data || []);
-          }
-        }
-      } catch (error) {
-        console.error('Failed to fetch menu data:', error);
-        toast({
-          title: "Error",
-          description: "Failed to load menu data",
-          variant: "destructive",
-        });
-      } finally {
-        setLoading(false);
-      }
-    }
-
-    fetchMenuData();
-  }, [tenantData?.id, toast]);
-
-  // Save menu item
-  const saveMenuItem = async (item: MenuItem) => {
-    try {
-      const response = await fetch('/api/tenant/menu/items', {
-        method: item.id ? 'PUT' : 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...item, tenantId: tenantData?.id })
-      });
-      
-      if (response.ok) {
-        const result = await response.json();
-        if (result.success) {
-          if (item.id) {
-            setMenuItems(prev => prev.map(i => i.id === item.id ? result.data : i));
-          } else {
-            setMenuItems(prev => [...prev, result.data]);
-          }
-          toast({
-            title: "Success",
-            description: `Menu item ${item.id ? 'updated' : 'created'} successfully`,
-          });
-        }
-      }
-    } catch (error) {
-      console.error('Failed to save menu item:', error);
-      toast({
-        title: "Error",
-        description: "Failed to save menu item",
-        variant: "destructive",
-      });
-    }
-  };
-
-  // Delete menu item
-  const deleteMenuItem = async (itemId: string) => {
-    try {
-      const response = await fetch(`/api/tenant/menu/items/${itemId}`, {
-        method: 'DELETE'
-      });
-      
-      if (response.ok) {
-        setMenuItems(prev => prev.filter(item => item.id !== itemId));
-        toast({
-          title: "Success",
-          description: "Menu item deleted successfully",
-        });
-      }
-    } catch (error) {
-      console.error('Failed to delete menu item:', error);
-      toast({
-        title: "Error",
-        description: "Failed to delete menu item",
-        variant: "destructive",
-      });
-    }
-  };
-
-  // Save category
-  const saveCategory = async (category: MenuCategory) => {
-    try {
-      const response = await fetch('/api/tenant/menu/categories', {
-        method: category.id ? 'PUT' : 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...category, tenantId: tenantData?.id })
-      });
-      
-      if (response.ok) {
-        const result = await response.json();
-        if (result.success) {
-          if (category.id) {
-            setCategories(prev => prev.map(c => c.id === category.id ? result.data : c));
-          } else {
-            setCategories(prev => [...prev, result.data]);
-          }
-          toast({
-            title: "Success",
-            description: `Category ${category.id ? 'updated' : 'created'} successfully`,
-          });
-        }
-      }
-    } catch (error) {
-      console.error('Failed to save category:', error);
-      toast({
-        title: "Error",
-        description: "Failed to save category",
-        variant: "destructive",
-      });
-    }
-  };
-
-  // Delete category
-  const deleteCategory = async (categoryId: string) => {
-    try {
-      const response = await fetch(`/api/tenant/menu/categories/${categoryId}`, {
-        method: 'DELETE'
-      });
-      
-      if (response.ok) {
-        setCategories(prev => prev.filter(cat => cat.id !== categoryId));
-        toast({
-          title: "Success",
-          description: "Category deleted successfully",
-        });
-      }
-    } catch (error) {
-      console.error('Failed to delete category:', error);
-      toast({
-        title: "Error",
-        description: "Failed to delete category",
-        variant: "destructive",
-      });
-    }
-  };
-
   const currencySymbol = useMemo(() => {
     return getCurrencySymbol(restaurantSettings?.currency || 'GBP');
   }, [restaurantSettings?.currency]);
 
-  // Memoize the addon change handler to prevent infinite loops
-  const handleAddonsChange = useCallback((addons: any[]) => {
-    setItemForm(prev => ({...prev, addons}));
-  }, []);
-
-  const [itemForm, setItemForm] = useState<Omit<Partial<MenuItem>, 'addons'> & { preparationTime?: number; tags?: string[]; addons?: any[] }>({
+  const [itemForm, setItemForm] = useState<Partial<MenuItem>>({
     name: '',
     description: '',
     price: 0,
     image: '',
     imageHint: '',
     available: true,
-    isFeatured: false,
     categoryId: '',
-    addons: [],
     characteristics: [],
     nutrition: undefined,
-    isSetMenu: false,
-    setMenuItems: [],
-    preparationTime: 15,
-    tags: []
+    isSetMenu: false
   });
 
   const [categoryForm, setCategoryForm] = useState<Partial<MenuCategory>>({
     name: '',
     description: '',
     active: true,
-    displayOrder: 0,
     parentId: undefined
   });
+
+  // Handler functions for menu items
+  const setEditingMenuItem = (item: MenuItem | null) => {
+    if (item) {
+      setItemForm({
+        name: item.name,
+        description: item.description,
+        price: item.price,
+        image: item.image,
+        imageHint: item.imageHint,
+        available: item.available,
+        categoryId: item.categoryId,
+        addons: item.addons || [],
+        characteristics: item.characteristics || [],
+        nutrition: item.nutrition,
+        isSetMenu: item.isSetMenu,
+        setMenuItems: item.setMenuItems || []
+      });
+      setEditingItem(item);
+      setIsItemDialogOpen(true);
+    }
+  };
+
+  const setViewingMenuItem = (item: MenuItem | null) => {
+    // For now, just use the edit function
+    setEditingMenuItem(item);
+  };
+
+  const handleMenuItemReorder = async (itemIds: string[], categoryId?: string) => {
+    // Optimistic update - immediately update the UI
+    updateMenuItemsOrder(itemIds, categoryId);
+
+    try {
+      const response = await fetch(`/api/tenant/menu/items/reorder`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ itemIds, categoryId, tenantId: tenantSlug })
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to reorder items');
+      }
+
+      toast({
+        title: "Items Reordered",
+        description: "Menu items have been reordered successfully.",
+      });
+    } catch (error) {
+      console.error('Error reordering items:', error);
+      // If API fails, revert by refreshing data from server
+      await refreshData();
+      toast({
+        title: "Error",
+        description: "Failed to reorder menu items.",
+        variant: "destructive"
+      });
+    }
+  };
+
+  const reorderCategories = async (categoryIds: string[]) => {
+    // Optimistic update - immediately update the UI
+    updateCategoriesOrder(categoryIds);
+
+    try {
+      const response = await fetch(`/api/tenant/menu/categories/reorder`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ categoryIds, tenantId: tenantSlug })
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to reorder categories');
+      }
+
+      toast({
+        title: "Categories Reordered",
+        description: "Categories have been reordered successfully.",
+      });
+    } catch (error) {
+      console.error('Error reordering categories:', error);
+      // If API fails, revert by refreshing data from server
+      await refreshData();
+      toast({
+        title: "Error",
+        description: "Failed to reorder categories.",
+        variant: "destructive"
+      });
+    }
+  };
 
   const filteredAndSortedItems = useMemo(() => {
     let filtered = menuItems || [];
@@ -343,52 +272,12 @@ export default function TenantMenuPage() {
 
   // Image upload handler
   const handleImageUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
-    console.log('🔄 Image upload started');
     const file = event.target.files?.[0];
     if (file) {
-      console.log('📁 File selected:', {
-        name: file.name,
-        size: file.size,
-        type: file.type
-      });
-      
-      // Validate file
-      if (!file.type.startsWith('image/')) {
-        toast({
-          title: "Invalid File Type",
-          description: "Please select an image file (JPG, PNG, etc.)",
-          variant: "destructive"
-        });
-        return;
-      }
-      
-      if (file.size > 5 * 1024 * 1024) { // 5MB limit
-        toast({
-          title: "File Too Large", 
-          description: "Please select an image smaller than 5MB",
-          variant: "destructive"
-        });
-        return;
-      }
-      
       const reader = new FileReader();
       reader.onload = (e) => {
         const result = e.target?.result as string;
-        console.log('✅ Image converted to base64, length:', result?.length);
         setItemForm({ ...itemForm, image: result });
-        toast({
-          title: "Image Uploaded",
-          description: "Image preview loaded successfully",
-          variant: "default"
-        });
-      };
-      reader.onerror = () => {
-        console.error('❌ FileReader error');
-        toast({
-          title: "Upload Failed",
-          description: "Failed to process the image file",
-          variant: "destructive"
-        });
       };
       reader.readAsDataURL(file);
     }
@@ -402,10 +291,11 @@ export default function TenantMenuPage() {
   const addSetMenuItem = () => {
     const newSetItem: SetMenuItem = {
       id: `set_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+      menuItemId: '',
+      quantity: 1,
       name: '',
-      description: '',
-      imageUrl: '',
-      options: []
+      replaceable: false,
+      replaceableWith: []
     };
     setItemForm({
       ...itemForm,
@@ -425,6 +315,84 @@ export default function TenantMenuPage() {
       ...itemForm,
       setMenuItems: itemForm.setMenuItems?.map(item => 
         item.id === setItemId ? { ...item, ...updates } : item
+      )
+    });
+  };
+
+  // Add-on handlers
+  const addAddon = () => {
+    const newAddon: Addon = {
+      id: `addon_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+      name: '',
+      price: 0,
+      type: 'extra',
+      required: false,
+      multiple: false,
+      options: []
+    };
+    setItemForm({
+      ...itemForm,
+      addons: [...(itemForm.addons || []), newAddon]
+    });
+  };
+
+  const removeAddon = (addonId: string) => {
+    setItemForm({
+      ...itemForm,
+      addons: itemForm.addons?.filter(addon => addon.id !== addonId)
+    });
+  };
+
+  const updateAddon = (addonId: string, updates: Partial<Addon>) => {
+    setItemForm({
+      ...itemForm,
+      addons: itemForm.addons?.map(addon => 
+        addon.id === addonId ? { ...addon, ...updates } : addon
+      )
+    });
+  };
+
+  const addAddonOption = (addonId: string) => {
+    const newOption: AddonOption = {
+      id: `option_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+      name: '',
+      price: 0,
+      available: true
+    };
+    
+    setItemForm({
+      ...itemForm,
+      addons: itemForm.addons?.map(addon => 
+        addon.id === addonId 
+          ? { ...addon, options: [...(addon.options || []), newOption] }
+          : addon
+      )
+    });
+  };
+
+  const removeAddonOption = (addonId: string, optionId: string) => {
+    setItemForm({
+      ...itemForm,
+      addons: itemForm.addons?.map(addon => 
+        addon.id === addonId 
+          ? { ...addon, options: addon.options?.filter(option => option.id !== optionId) }
+          : addon
+      )
+    });
+  };
+
+  const updateAddonOption = (addonId: string, optionId: string, updates: Partial<AddonOption>) => {
+    setItemForm({
+      ...itemForm,
+      addons: itemForm.addons?.map(addon => 
+        addon.id === addonId 
+          ? { 
+              ...addon, 
+              options: addon.options?.map(option => 
+                option.id === optionId ? { ...option, ...updates } : option
+              ) 
+            }
+          : addon
       )
     });
   };
@@ -453,7 +421,6 @@ export default function TenantMenuPage() {
       name: '',
       description: '',
       active: true,
-      displayOrder: categories?.length || 0,
       parentId: undefined
     });
     setEditingCategory(null);
@@ -461,14 +428,6 @@ export default function TenantMenuPage() {
 
   // Handler functions
   const handleSaveItem = async () => {
-    console.log('💾 Save item started');
-    console.log('📋 Form data:', {
-      name: itemForm.name,
-      price: itemForm.price,
-      hasImage: !!itemForm.image,
-      imageLength: itemForm.image?.length || 0
-    });
-    
     if (!itemForm.name || itemForm.price === undefined || itemForm.price < 0) {
       toast({ 
         title: "Validation Error", 
@@ -479,41 +438,25 @@ export default function TenantMenuPage() {
     }
 
     try {
-      const itemToSave: any = {
-        ...(editingItem?.id && { id: editingItem.id }), // Only include ID if editing
+      const itemToSave: MenuItem = {
+        id: editingItem?.id || `item_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
         name: itemForm.name!,
         description: itemForm.description || '',
         price: Number(itemForm.price),
         image: itemForm.image || '',
         imageHint: itemForm.imageHint || '',
         available: itemForm.available ?? true,
-        isFeatured: itemForm.isFeatured || false,
         categoryId: itemForm.categoryId || '',
-        addons: itemForm.addons as any || [],
+        addons: itemForm.addons || [],
         characteristics: itemForm.characteristics || [],
         nutrition: itemForm.nutrition,
         isSetMenu: itemForm.isSetMenu || false,
         setMenuItems: itemForm.setMenuItems || [],
-        preparationTime: itemForm.preparationTime || 15,
-        tags: itemForm.tags || []
+        preparationTime: itemForm.preparationTime,
+        tags: itemForm.tags
       };
 
-      console.log('🔍 Admin - Saving item with addons:', {
-        itemName: itemToSave.name,
-        addonsCount: (itemToSave as any).addons?.length || 0,
-        addons: (itemToSave as any).addons
-      });
-
-      console.log('🚀 Saving item with image:', {
-        id: itemToSave.id,
-        name: itemToSave.name,
-        hasImage: !!itemToSave.image,
-        imageLength: itemToSave.image?.length || 0
-      });
-
       await saveMenuItem(itemToSave);
-      
-      console.log('✅ Item saved successfully');
       toast({ 
         title: "Success", 
         description: `Menu item ${editingItem ? 'updated' : 'created'} successfully`,
@@ -522,7 +465,7 @@ export default function TenantMenuPage() {
       setIsItemDialogOpen(false);
       resetItemForm();
     } catch (error) {
-      console.error('❌ Save error:', error);
+      console.error('Error saving menu item:', error);
       toast({ 
         title: "Error", 
         description: "Failed to save menu item. Please try again.", 
@@ -542,14 +485,13 @@ export default function TenantMenuPage() {
     }
 
     try {
-      const categoryToSave: any = {
-        ...(editingCategory?.id && { id: editingCategory.id }), // Only include ID if editing
+      const categoryToSave: Category = {
+        id: editingCategory?.id || `cat_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
         name: categoryForm.name!,
         description: categoryForm.description || '',
         active: categoryForm.active ?? true,
-        displayOrder: Number(categoryForm.displayOrder) || 0,
         parentId: categoryForm.parentId,
-        imageUrl: categoryForm.imageUrl,
+        image: categoryForm.image,
         icon: categoryForm.icon,
         color: categoryForm.color
       };
@@ -576,14 +518,13 @@ export default function TenantMenuPage() {
     setEditingItem(item);
     setItemForm({
       name: item.name,
-      description: item.description || '',
+      description: item.description,
       price: item.price,
       image: item.image,
       imageHint: item.imageHint,
       available: item.available,
-      isFeatured: item.isFeatured,
       categoryId: item.categoryId,
-      addons: (item as any).addons as any, // Type conversion needed - we'll fix this properly later
+      addons: item.addons,
       characteristics: item.characteristics,
       nutrition: item.nutrition,
       isSetMenu: item.isSetMenu,
@@ -598,9 +539,8 @@ export default function TenantMenuPage() {
     setEditingCategory(category);
     setCategoryForm({
       name: category.name,
-      description: category.description || '',
+      description: category.description,
       active: category.active,
-      displayOrder: category.displayOrder,
       parentId: category.parentId,
       imageUrl: category.imageUrl,
       icon: category.icon,
@@ -657,69 +597,71 @@ export default function TenantMenuPage() {
   }
 
   return (
-    <div className="space-y-8">
-      {/* Header */}
-      <div className="flex flex-col gap-4">
-        <div className="flex items-center gap-4">
-          <div className="w-12 h-12 bg-gradient-to-br from-orange-500 to-red-600 rounded-xl flex items-center justify-center shadow-lg">
-            <ChefHat className="w-6 h-6 text-white" />
+    <div className="space-y-6">
+      {/* Enhanced Header */}
+      <div className="relative overflow-hidden bg-gray-50 rounded-2xl p-8 shadow-sm border border-gray-200">
+        <div className="relative z-10">
+          <div className="flex items-center gap-6 mb-6">
+            <div className="w-16 h-16 bg-orange-100 rounded-2xl flex items-center justify-center shadow-sm">
+              <ChefHat className="w-8 h-8 text-orange-600" />
+            </div>
+            <div>
+              <h1 className="text-4xl font-bold text-gray-800 tracking-tight">Menu Management</h1>
+              <p className="text-gray-600 text-lg font-medium mt-1">
+                Manage your restaurant's menu items and categories with professional tools
+              </p>
+            </div>
           </div>
-          <div>
-            <h1 className="text-3xl font-bold">Menu Management</h1>
-            <p className="text-muted-foreground">
-              Manage your restaurant's menu items and categories with enhanced features
-            </p>
+          
+          {/* Enhanced Quick Stats */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div className="bg-white border border-gray-200 rounded-xl p-4 hover:bg-gray-50 transition-all duration-300">
+              <div className="flex items-center gap-3 mb-2">
+                <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center">
+                  <Package className="w-4 h-4 text-blue-600" />
+                </div>
+                <span className="text-sm text-gray-600 font-medium">Total Items</span>
+              </div>
+              <p className="text-3xl font-bold text-gray-800">{menuItems?.length || 0}</p>
+            </div>
+            <div className="bg-white border border-gray-200 rounded-xl p-4 hover:bg-gray-50 transition-all duration-300">
+              <div className="flex items-center gap-3 mb-2">
+                <div className="w-8 h-8 bg-emerald-100 rounded-lg flex items-center justify-center">
+                  <Tag className="w-4 h-4 text-emerald-600" />
+                </div>
+                <span className="text-sm text-gray-600 font-medium">Categories</span>
+              </div>
+              <p className="text-3xl font-bold text-gray-800">{categories?.length || 0}</p>
+            </div>
+            <div className="bg-white border border-gray-200 rounded-xl p-4 hover:bg-gray-50 transition-all duration-300">
+              <div className="flex items-center gap-3 mb-2">
+                <div className="w-8 h-8 bg-purple-100 rounded-lg flex items-center justify-center">
+                  <Utensils className="w-4 h-4 text-purple-600" />
+                </div>
+                <span className="text-sm text-gray-600 font-medium">Set Menus</span>
+              </div>
+              <p className="text-3xl font-bold text-gray-800">{menuItems?.filter(item => item.isSetMenu).length || 0}</p>
+            </div>
+            <div className="bg-white border border-gray-200 rounded-xl p-4 hover:bg-gray-50 transition-all duration-300">
+              <div className="flex items-center gap-3 mb-2">
+                <div className="w-8 h-8 bg-green-100 rounded-lg flex items-center justify-center">
+                  <CheckCircle className="w-4 h-4 text-green-600" />
+                </div>
+                <span className="text-sm text-gray-600 font-medium">Available</span>
+              </div>
+              <p className="text-3xl font-bold text-gray-800">{menuItems?.filter(item => item.available).length || 0}</p>
+            </div>
           </div>
-        </div>
-        
-        {/* Quick Stats */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <Card>
-            <CardContent className="p-4">
-              <div className="flex items-center gap-2">
-                <Package className="w-4 h-4 text-blue-600" />
-                <span className="text-sm text-muted-foreground">Total Items</span>
-              </div>
-              <p className="text-2xl font-bold">{menuItems?.length || 0}</p>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="p-4">
-              <div className="flex items-center gap-2">
-                <Tag className="w-4 h-4 text-green-600" />
-                <span className="text-sm text-muted-foreground">Categories</span>
-              </div>
-              <p className="text-2xl font-bold">{categories?.length || 0}</p>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="p-4">
-              <div className="flex items-center gap-2">
-                <Utensils className="w-4 h-4 text-purple-600" />
-                <span className="text-sm text-muted-foreground">Set Menus</span>
-              </div>
-              <p className="text-2xl font-bold">{menuItems?.filter(item => item.isSetMenu).length || 0}</p>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="p-4">
-              <div className="flex items-center gap-2">
-                <CheckCircle className="w-4 h-4 text-emerald-600" />
-                <span className="text-sm text-muted-foreground">Available</span>
-              </div>
-              <p className="text-2xl font-bold">{menuItems?.filter(item => item.available).length || 0}</p>
-            </CardContent>
-          </Card>
         </div>
       </div>
 
       <Tabs defaultValue="items" className="space-y-6">
-        <TabsList className="grid w-full grid-cols-2">
-          <TabsTrigger value="items" className="flex items-center gap-2">
+        <TabsList className="grid w-full grid-cols-2 bg-gray-50 border border-gray-200 rounded-lg p-1">
+          <TabsTrigger value="items" className="flex items-center gap-2 rounded-md data-[state=active]:bg-white data-[state=active]:text-gray-900 data-[state=active]:shadow-sm font-medium">
             <Package className="w-4 h-4" />
             Menu Items
           </TabsTrigger>
-          <TabsTrigger value="categories" className="flex items-center gap-2">
+          <TabsTrigger value="categories" className="flex items-center gap-2 rounded-md data-[state=active]:bg-white data-[state=active]:text-gray-900 data-[state=active]:shadow-sm font-medium">
             <Tag className="w-4 h-4" />
             Categories
           </TabsTrigger>
@@ -727,33 +669,32 @@ export default function TenantMenuPage() {
 
         {/* Menu Items Tab */}
         <TabsContent value="items" className="space-y-6">
-          <Card>
-            <CardHeader>
+          <Card className="bg-white border border-gray-200 shadow-sm rounded-lg">
+            <CardHeader className="bg-gray-50 border-b border-gray-200">
               <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
                 <div>
-                  <CardTitle>Menu Items</CardTitle>
-                  <CardDescription>Manage your food items, set menus, and add-ons</CardDescription>
+                  <CardTitle className="text-xl font-semibold text-gray-900">Menu Items</CardTitle>
+                  <CardDescription className="text-gray-600">Manage your food items, set menus, and add-ons</CardDescription>
                 </div>
                 
-                {/* Controls */}
+                {/* Search and Filter */}
                 <div className="flex flex-col sm:flex-row gap-4">
-                  {/* Search and Filter */}
-                  <div className="flex gap-2">
+                  <div className="flex gap-3">
                     <div className="relative">
-                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
                       <Input 
                         placeholder="Search items..."
-                        className="pl-9 w-64"
+                        className="pl-10 w-64 border-gray-300 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 rounded-lg"
                         value={searchQuery}
                         onChange={(e) => setSearchQuery(e.target.value)}
                       />
                     </div>
                     
                     <Select value={selectedCategory} onValueChange={setSelectedCategory}>
-                      <SelectTrigger className="w-48">
+                      <SelectTrigger className="w-52 border-gray-300 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 rounded-lg">
                         <SelectValue placeholder="Filter by category" />
                       </SelectTrigger>
-                      <SelectContent>
+                      <SelectContent className="bg-white border-gray-200 rounded-lg shadow-lg">
                         <SelectItem value="all">All Categories</SelectItem>
                         <SelectItem value="uncategorized">Uncategorized</SelectItem>
                         {getHierarchicalCategories().map(parent => (
@@ -837,7 +778,7 @@ export default function TenantMenuPage() {
                                   <img
                                     src={itemForm.image}
                                     alt="Preview"
-                                    className="w-full h-32 object-cover rounded-md border shadow-sm"
+                                    className="w-full h-32 object-cover rounded-lg border"
                                   />
                                   <Button
                                     type="button"
@@ -850,7 +791,7 @@ export default function TenantMenuPage() {
                                   </Button>
                                 </div>
                               ) : (
-                                <div className="w-full h-32 border-2 border-dashed border-gray-300 rounded-md flex items-center justify-center bg-gradient-to-br from-gray-50 to-gray-100">
+                                <div className="w-full h-32 border-2 border-dashed border-gray-300 rounded-lg flex items-center justify-center">
                                   <div className="text-center">
                                     <ImageIcon className="w-8 h-8 mx-auto text-gray-400 mb-2" />
                                     <p className="text-sm text-gray-500">No image uploaded</p>
@@ -869,7 +810,7 @@ export default function TenantMenuPage() {
                                 variant="outline"
                                 size="sm"
                                 onClick={() => fileInputRef.current?.click()}
-                                className="w-full hover:bg-primary hover:text-primary-foreground transition-colors"
+                                className="w-full"
                               >
                                 <Upload className="w-4 h-4 mr-2" />
                                 Upload Image
@@ -961,24 +902,26 @@ export default function TenantMenuPage() {
                                       />
                                     </div>
                                     <div>
-                                      <Label className="text-xs">Description</Label>
+                                      <Label className="text-xs">Quantity</Label>
                                       <Input
-                                        value={setItem.description || ''}
-                                        onChange={(e) => updateSetMenuItem(setItem.id, { description: e.target.value })}
-                                        placeholder="Item description"
+                                        type="number"
+                                        min="1"
+                                        value={setItem.quantity}
+                                        onChange={(e) => updateSetMenuItem(setItem.id, { quantity: parseInt(e.target.value) || 1 })}
                                         className="h-8"
                                       />
                                     </div>
                                   </div>
                                   
-                                  <div>
-                                    <Label className="text-xs">Image URL</Label>
-                                    <Input
-                                      value={setItem.imageUrl || ''}
-                                      onChange={(e) => updateSetMenuItem(setItem.id, { imageUrl: e.target.value })}
-                                      placeholder="Image URL (optional)"
-                                      className="h-8"
+                                  <div className="flex items-center space-x-2">
+                                    <Checkbox
+                                      id={`replaceable-${setItem.id}`}
+                                      checked={setItem.replaceable}
+                                      onCheckedChange={(checked) => updateSetMenuItem(setItem.id, { replaceable: checked as boolean })}
                                     />
+                                    <Label htmlFor={`replaceable-${setItem.id}`} className="text-xs">
+                                      Customer can replace this item
+                                    </Label>
                                   </div>
                                 </div>
                               ))}
@@ -988,11 +931,111 @@ export default function TenantMenuPage() {
                         
                         {/* Add-ons Section */}
                         <div className="space-y-4">
-                          <AddonManager
-                            addons={itemForm.addons || []}
-                            onChange={handleAddonsChange}
-                            currency={currencySymbol}
-                          />
+                          <div className="flex items-center justify-between">
+                            <Label className="text-sm font-medium">Add-ons</Label>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              onClick={addAddon}
+                            >
+                              <Plus className="w-4 h-4 mr-2" />
+                              Add Add-on
+                            </Button>
+                          </div>
+                          
+                          {itemForm.addons?.map((addon, index) => (
+                            <div key={addon.id} className="border rounded-lg p-4 space-y-3">
+                              <div className="flex items-center justify-between">
+                                <span className="text-sm font-medium">Add-on {index + 1}</span>
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => removeAddon(addon.id)}
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </Button>
+                              </div>
+                              
+                              <div className="grid grid-cols-3 gap-2">
+                                <div>
+                                  <Label className="text-xs">Name</Label>
+                                  <Input
+                                    value={addon.name}
+                                    onChange={(e) => updateAddon(addon.id, { name: e.target.value })}
+                                    placeholder="e.g., Extra Cheese"
+                                    className="h-8"
+                                  />
+                                </div>
+                                <div>
+                                  <Label className="text-xs">Price ({currencySymbol})</Label>
+                                  <Input
+                                    type="number"
+                                    step="0.01"
+                                    min="0"
+                                    value={addon.price}
+                                    onChange={(e) => updateAddon(addon.id, { price: parseFloat(e.target.value) || 0 })}
+                                    className="h-8"
+                                  />
+                                </div>
+                                <div>
+                                  <Label className="text-xs">Type</Label>
+                                  <Select
+                                    value={addon.type}
+                                    onValueChange={(value: any) => updateAddon(addon.id, { type: value })}
+                                  >
+                                    <SelectTrigger className="h-8">
+                                      <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      <SelectItem value="size">Size</SelectItem>
+                                      <SelectItem value="extra">Extra</SelectItem>
+                                      <SelectItem value="sauce">Sauce</SelectItem>
+                                      <SelectItem value="sides">Sides</SelectItem>
+                                      <SelectItem value="drink">Drink</SelectItem>
+                                      <SelectItem value="dessert">Dessert</SelectItem>
+                                    </SelectContent>
+                                  </Select>
+                                </div>
+                              </div>
+                              
+                              <div className="grid grid-cols-3 gap-2">
+                                <div className="flex items-center space-x-2">
+                                  <Checkbox
+                                    id={`required-${addon.id}`}
+                                    checked={addon.required}
+                                    onCheckedChange={(checked) => updateAddon(addon.id, { required: checked as boolean })}
+                                  />
+                                  <Label htmlFor={`required-${addon.id}`} className="text-xs">
+                                    Required
+                                  </Label>
+                                </div>
+                                <div className="flex items-center space-x-2">
+                                  <Checkbox
+                                    id={`multiple-${addon.id}`}
+                                    checked={addon.multiple}
+                                    onCheckedChange={(checked) => updateAddon(addon.id, { multiple: checked as boolean })}
+                                  />
+                                  <Label htmlFor={`multiple-${addon.id}`} className="text-xs">
+                                    Multiple selection
+                                  </Label>
+                                </div>
+                                {addon.multiple && (
+                                  <div>
+                                    <Label className="text-xs">Max selections</Label>
+                                    <Input
+                                      type="number"
+                                      min="1"
+                                      value={addon.maxSelections}
+                                      onChange={(e) => updateAddon(addon.id, { maxSelections: parseInt(e.target.value) || 1 })}
+                                      className="h-8"
+                                    />
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          ))}
                         </div>
                         
                         <div className="flex items-center space-x-2">
@@ -1023,163 +1066,42 @@ export default function TenantMenuPage() {
             
             <CardContent className="p-0">
               <div className="overflow-x-auto">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Image</TableHead>
-                      <TableHead>Name</TableHead>
-                      <TableHead>Category</TableHead>
-                      <TableHead>Price</TableHead>
-                      <TableHead>Type</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead className="text-center">Actions</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {filteredAndSortedItems.length > 0 ? (
-                      filteredAndSortedItems.map(item => {
-                        console.log('🖼️ Item image data:', { 
-                          id: item.id, 
-                          name: item.name, 
-                          hasImage: !!item.image, 
-                          imageLength: item.image?.length || 0,
-                          imagePreview: item.image?.substring(0, 50) + '...'
-                        });
-                        
-                        return (
-                        <TableRow key={item.id} className="hover:bg-muted/50">
-                          <TableCell>
-                            {item.image && item.image.length > 0 ? (
-                              <div className="relative h-12 w-12 flex-shrink-0">
-                                <img 
-                                  src={item.image} 
-                                  alt={item.name} 
-                                  className="w-full h-full object-cover rounded-md shadow-sm border" 
-                                  onLoad={() => console.log('✅ Image loaded for:', item.name)}
-                                  onError={(e) => {
-                                    console.error('❌ Image failed to load for:', item.name, e);
-                                    e.currentTarget.style.display = 'none';
-                                  }}
-                                />
-                                <div className="absolute -top-1 -right-1 w-3 h-3 bg-green-500 rounded-full border border-white" title="Has Image"></div>
-                              </div>
-                            ) : (
-                              <div className="w-12 h-12 bg-gradient-to-br from-gray-100 to-gray-200 rounded-md flex items-center justify-center border-2 border-dashed border-gray-300">
-                                <Package className="w-6 h-6 text-gray-400" />
-                              </div>
-                            )}
-                          </TableCell>
-                          <TableCell>
-                            <div>
-                              <div className="font-medium flex items-center gap-2">
-                                {item.name}
-                                {item.isSetMenu && (
-                                  <Badge variant="secondary" className="bg-purple-100 text-purple-800">
-                                    Set Menu
-                                  </Badge>
-                                )}
-                              </div>
-                              {item.description && (
-                                <div className="text-sm text-muted-foreground line-clamp-1">
-                                  {item.description}
-                                </div>
-                              )}
-                            </div>
-                          </TableCell>
-                          <TableCell>
-                            {item.categoryId ? (
-                              <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">
-                                {categories?.find(c => c.id === item.categoryId)?.name || 'Unknown'}
-                              </Badge>
-                            ) : (
-                              <Badge variant="secondary">No Category</Badge>
-                            )}
-                          </TableCell>
-                          <TableCell className="font-medium">
-                            {currencySymbol}{item.price.toFixed(2)}
-                          </TableCell>
-                          <TableCell>
-                            <div className="flex flex-col gap-1">
-                              {item.isSetMenu && (
-                                <Badge variant="outline" className="bg-purple-50 text-purple-700 border-purple-200">
-                                  Set Menu
-                                </Badge>
-                              )}
-                              {(item as any).addons && (item as any).addons.length > 0 && (
-                                <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
-                                  {(item as any).addons.length} Add-ons
-                                </Badge>
-                              )}
-                            </div>
-                          </TableCell>
-                          <TableCell>
-                            <Badge 
-                              variant={item.available ? "default" : "secondary"}
-                              className={item.available ? "bg-green-100 text-green-800 border-green-200" : ""}
-                            >
-                              {item.available ? 'Available' : 'Unavailable'}
-                            </Badge>
-                          </TableCell>
-                          <TableCell className="text-center">
-                            <div className="flex gap-1 justify-center">
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                onClick={() => handleEditItem(item)}
-                                className="h-8 w-8"
-                              >
-                                <Edit className="w-4 h-4" />
-                              </Button>
-                              <AlertDialog>
-                                <AlertDialogTrigger asChild>
-                                  <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    className="h-8 w-8 text-red-600 hover:text-white hover:bg-red-600 border border-red-300 hover:border-red-600 transition-all duration-200"
-                                  >
-                                    <Trash2 className="w-4 h-4" />
-                                  </Button>
-                                </AlertDialogTrigger>
-                                <AlertDialogContent>
-                                  <AlertDialogHeader>
-                                    <AlertDialogTitle>Delete Menu Item</AlertDialogTitle>
-                                    <AlertDialogDescription>
-                                      Are you sure you want to delete "{item.name}"? This action cannot be undone.
-                                    </AlertDialogDescription>
-                                  </AlertDialogHeader>
-                                  <AlertDialogFooter>
-                                    <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                    <AlertDialogAction 
-                                      onClick={() => handleDeleteItem(item)}
-                                      className="bg-red-600 hover:bg-red-700 text-white border-red-600 hover:border-red-700"
-                                    >
-                                      Delete Item
-                                    </AlertDialogAction>
-                                  </AlertDialogFooter>
-                                </AlertDialogContent>
-                              </AlertDialog>
-                            </div>
-                          </TableCell>
-                        </TableRow>
-                        );
-                      })
-                    ) : (
+                {filteredAndSortedItems.length > 0 ? (
+                  <SortableMenuItemsTable
+                    items={filteredAndSortedItems}
+                    categories={categories || []}
+                    currency={restaurantSettings?.currency || 'USD'}
+                    onEdit={setEditingMenuItem}
+                    onDelete={(item) => deleteMenuItem(item.id)}
+                    onView={setViewingMenuItem}
+                    onReorder={handleMenuItemReorder}
+                    selectedCategory={selectedCategory}
+                  />
+                ) : (
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Image</TableHead>
+                        <TableHead>Name</TableHead>
+                        <TableHead>Category</TableHead>
+                        <TableHead>Price</TableHead>
+                        <TableHead>Type</TableHead>
+                        <TableHead>Status</TableHead>
+                        <TableHead className="text-center">Actions</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
                       <TableRow>
                         <TableCell colSpan={7} className="h-24 text-center">
                           <div className="flex flex-col items-center gap-2 text-muted-foreground">
                             <Package className="w-12 h-12" />
-                            <div>
-                              {searchQuery || selectedCategory !== 'all' 
-                                ? "No items found matching your criteria" 
-                                : "No menu items yet. Create your first item!"
-                              }
-                            </div>
+                            <div>No menu items yet. Create your first item!</div>
                           </div>
                         </TableCell>
                       </TableRow>
-                    )}
-                  </TableBody>
-                </Table>
+                    </TableBody>
+                  </Table>
+                )}
               </div>
             </CardContent>
           </Card>
@@ -1260,17 +1182,6 @@ export default function TenantMenuPage() {
                         </SelectContent>
                       </Select>
                     </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="categoryOrder">Sort Order</Label>
-                      <Input
-                        id="categoryOrder"
-                        type="number"
-                        min="0"
-                        value={categoryForm.displayOrder}
-                        onChange={(e) => setCategoryForm({...categoryForm, displayOrder: parseInt(e.target.value) || 0})}
-                        placeholder="0"
-                      />
-                    </div>
                     <div className="flex items-center space-x-2">
                       <Switch
                         id="categoryActive"
@@ -1296,106 +1207,26 @@ export default function TenantMenuPage() {
             </CardHeader>
             <CardContent className="p-0">
               <div className="overflow-x-auto">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Name</TableHead>
-                      <TableHead>Description</TableHead>
-                      <TableHead>Items Count</TableHead>
-                      <TableHead>Sort Order</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead className="text-center">Actions</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {categories && categories.length > 0 ? (
-                      // Show hierarchical structure
-                      (() => {
-                        const renderCategory = (category: MenuCategory, isSubcategory = false) => (
-                          <TableRow key={category.id} className="hover:bg-muted/50">
-                            <TableCell className="font-medium">
-                              <div className="flex items-center gap-2">
-                                {isSubcategory ? (
-                                  <>
-                                    <span className="text-gray-400">└</span>
-                                    <Layers className="w-4 h-4 text-gray-500" />
-                                  </>
-                                ) : (
-                                  <Tag className="w-4 h-4 text-blue-600" />
-                                )}
-                                {category.name}
-                              </div>
-                            </TableCell>
-                            <TableCell>
-                              <span className="line-clamp-2">{category.description || '-'}</span>
-                            </TableCell>
-                            <TableCell>
-                              <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">
-                                {menuItems?.filter(item => item.categoryId === category.id).length || 0} items
-                              </Badge>
-                            </TableCell>
-                            <TableCell>{category.displayOrder}</TableCell>
-                            <TableCell>
-                              <Badge 
-                                variant={category.active ? "default" : "secondary"}
-                                className={category.active ? "bg-green-100 text-green-800 border-green-200" : ""}
-                              >
-                                {category.active ? 'Active' : 'Inactive'}
-                              </Badge>
-                            </TableCell>
-                            <TableCell className="text-center">
-                              <div className="flex gap-1 justify-center">
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  onClick={() => handleEditCategory(category)}
-                                  className="h-8 w-8"
-                                >
-                                  <Edit className="w-4 h-4" />
-                                </Button>
-                                <AlertDialog>
-                                  <AlertDialogTrigger asChild>
-                                    <Button
-                                      variant="ghost"
-                                      size="icon"
-                                      className="h-8 w-8 text-red-600 hover:text-white hover:bg-red-600 border border-red-300 hover:border-red-600 transition-all duration-200"
-                                    >
-                                      <Trash2 className="w-4 h-4" />
-                                    </Button>
-                                  </AlertDialogTrigger>
-                                  <AlertDialogContent>
-                                    <AlertDialogHeader>
-                                      <AlertDialogTitle>Delete Category</AlertDialogTitle>
-                                      <AlertDialogDescription>
-                                        Are you sure you want to delete "{category.name}"? Items in this category will become uncategorized. This action cannot be undone.
-                                      </AlertDialogDescription>
-                                    </AlertDialogHeader>
-                                    <AlertDialogFooter>
-                                      <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                      <AlertDialogAction 
-                                        onClick={() => handleDeleteCategory(category)}
-                                        className="bg-red-600 hover:bg-red-700 text-white border-red-600 hover:border-red-700"
-                                      >
-                                        Delete Category
-                                      </AlertDialogAction>
-                                    </AlertDialogFooter>
-                                  </AlertDialogContent>
-                                </AlertDialog>
-                              </div>
-                            </TableCell>
-                          </TableRow>
-                        );
-                        
-                        return getHierarchicalCategories()
-                          .sort((a, b) => a.displayOrder - b.displayOrder)
-                          .flatMap(parent => [
-                            renderCategory(parent, false),
-                            ...parent.subcategories
-                              .sort((a, b) => a.displayOrder - b.displayOrder)
-                              .map(sub => renderCategory(sub, true))
-                          ]);
-                      })()
-                    ) : (
+                {categories && categories.length > 0 ? (
+                  <SortableCategoriesTable
+                    categories={categories}
+                    menuItems={menuItems || []}
+                    onEdit={handleEditCategory}
+                    onDelete={handleDeleteCategory}
+                    onReorder={reorderCategories}
+                  />
+                ) : (
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Name</TableHead>
+                        <TableHead>Description</TableHead>
+                        <TableHead>Items Count</TableHead>
+                        <TableHead>Status</TableHead>
+                        <TableHead className="text-center">Actions</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
                       <TableRow>
                         <TableCell colSpan={6} className="h-24 text-center">
                           <div className="flex flex-col items-center gap-2 text-muted-foreground">
@@ -1404,9 +1235,9 @@ export default function TenantMenuPage() {
                           </div>
                         </TableCell>
                       </TableRow>
-                    )}
-                  </TableBody>
-                </Table>
+                    </TableBody>
+                  </Table>
+                )}
               </div>
             </CardContent>
           </Card>

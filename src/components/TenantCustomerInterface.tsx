@@ -63,6 +63,7 @@ import {
   Truck,
   Store,
   Package,
+  AlertTriangle,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { getCurrencySymbol } from '@/lib/currency-utils';
@@ -130,7 +131,7 @@ const MenuNav = React.memo(function MenuNav({ menuData }: { menuData: { category
     return (
         <nav className="sticky top-0 z-50 w-full bg-white/98 backdrop-blur-xl shadow-sm border-b border-gray-100/50">
             <div className="container mx-auto px-4 py-3">
-                <div className="flex items-center justify-start overflow-x-auto scrollbar-hide">
+                <div className="flex items-center justify-center overflow-x-auto scrollbar-hide">
                     <div className="flex gap-2">
                         {menuData.map(({ category }) => (
                             <a 
@@ -366,98 +367,145 @@ const MenuItem = React.memo(function MenuItem({
   return (
     <>
       <div 
-        className="flex items-start justify-between p-4 rounded-xl border transition-all hover:shadow-md hover:border-primary/30 cursor-pointer group bg-background"
+        className="relative group bg-white rounded-2xl border border-gray-100 shadow-sm hover:shadow-xl transition-all duration-300 cursor-pointer overflow-hidden hover:border-primary/20 hover:-translate-y-1"
         onClick={handleOpenDialog}
       >
-        {/* Content Area - Left Side */}
-        <div className="flex-1 pr-4">
-          <h4 className="font-bold text-base sm:text-lg leading-tight text-gray-900 mb-2">{item.name}</h4>
-          {item.description && (
-            <p className="text-sm text-gray-600 mb-3 line-clamp-2 leading-relaxed">{item.description}</p>
-          )}
-          
-          {/* Set Menu Items Display */}
-          {item.isSetMenu && item.setMenuItems && item.setMenuItems.length > 0 && (
-            <div className="mb-3 p-2 bg-primary/8 rounded-lg border border-primary/15">
-              <p className="text-xs font-bold text-primary mb-1">Set includes:</p>
-              <div className="text-xs text-gray-700">
-                {item.setMenuItems.map((setItem, index) => (
-                  <span key={setItem.id}>
-                    {setItem.quantity > 1 ? `${setItem.quantity}x ` : ''}{setItem.name}
-                    {index < item.setMenuItems!.length - 1 ? ', ' : ''}
-                  </span>
-                ))}
-              </div>
+        {/* Premium Visual Indicator */}
+        {item.isSetMenu && (
+          <div className="absolute top-3 left-3 z-10">
+            <Badge variant="secondary" className="bg-gradient-to-r from-amber-500 to-orange-500 text-white text-xs font-medium px-2 py-1 rounded-full shadow-sm">
+              Set Menu
+            </Badge>
+          </div>
+        )}
+
+        {/* Modern Layout Structure */}
+        <div className="flex items-start p-3 space-x-3">
+          {/* Content Area - Enhanced Typography */}
+          <div className="flex-1 min-w-0">
+            {/* Item Title with Professional Typography */}
+            <div className="mb-2">
+              <h4 className="font-semibold text-base text-gray-900 leading-tight mb-1 group-hover:text-primary transition-colors duration-200">
+                {item.name}
+              </h4>
+              {item.description && (
+                <p className="text-xs text-gray-600 line-clamp-2 leading-relaxed">
+                  {item.description}
+                </p>
+              )}
             </div>
-          )}
-          
-          {/* Price and Characteristics Row */}
-          <div className="flex items-center justify-between">
-            <p className="text-lg font-bold text-primary">
-              {pricePrefix}{currencySymbol}{typeof displayPrice === 'number' ? displayPrice.toFixed(2) : displayPrice}
-            </p>
             
-            {/* Characteristics Icons */}
-            {item.characteristics && item.characteristics.length > 0 && (
-              <div className="flex gap-1">
-                <TooltipProvider>
-                  {item.characteristics.slice(0, 3).map(charId => {
-                    const IconComponent = getIconComponent(charId, Utensils);
-                    return (
-                      <Tooltip key={charId}>
-                        <TooltipTrigger>
-                          <div className="transition-transform hover:scale-110">
-                            <IconComponent className="h-3 w-3 text-gray-500" />
-                          </div>
-                        </TooltipTrigger>
-                        <TooltipContent>
-                          <p>{charId}</p>
-                        </TooltipContent>
-                      </Tooltip>
-                    );
-                  })}
-                  {item.characteristics.length > 3 && (
-                    <div className="text-xs text-muted-foreground">+{item.characteristics.length - 3}</div>
-                  )}
-                </TooltipProvider>
+            {/* Enhanced Set Menu Display */}
+            {item.isSetMenu && item.setMenuItems && item.setMenuItems.length > 0 && (
+              <div className="mb-3 p-2 bg-gradient-to-r from-primary/8 to-primary/5 rounded-lg border border-primary/10">
+                <div className="flex items-center mb-1">
+                  <Package className="h-3 w-3 text-primary mr-1" />
+                  <p className="text-xs font-semibold text-primary uppercase tracking-wide">Includes</p>
+                </div>
+                <div className="text-xs text-gray-700 font-medium">
+                  {item.setMenuItems.map((setItem, index) => (
+                    <span key={setItem.id} className="inline-block">
+                      {setItem.quantity > 1 && (
+                        <span className="text-primary font-semibold">{setItem.quantity}× </span>
+                      )}
+                      {setItem.name}
+                      {index < item.setMenuItems!.length - 1 && (
+                        <span className="text-gray-400 mx-1">•</span>
+                      )}
+                    </span>
+                  ))}
+                </div>
               </div>
+            )}
+            
+            {/* Enhanced Price and Features Section */}
+            <div className="flex items-center justify-between mt-auto">
+              {/* Professional Price Display */}
+              <div className="flex items-baseline space-x-1">
+                <span className="text-lg font-bold text-primary">
+                  {currencySymbol}{typeof displayPrice === 'number' ? displayPrice.toFixed(2) : displayPrice}
+                </span>
+                {isBasePriceZero && (
+                  <span className="text-xs text-green-600 font-medium bg-green-50 px-1.5 py-0.5 rounded-full">
+                    Starting
+                  </span>
+                )}
+              </div>
+              
+              {/* Premium Characteristics Display */}
+              {item.characteristics && item.characteristics.length > 0 && (
+                <div className="flex items-center space-x-1">
+                  <TooltipProvider>
+                    {item.characteristics.slice(0, 2).map(charId => {
+                      const IconComponent = getIconComponent(charId, Utensils);
+                      return (
+                        <Tooltip key={charId}>
+                          <TooltipTrigger>
+                            <div className="p-1 bg-gray-50 rounded-full hover:bg-primary/10 transition-colors duration-200 group/icon">
+                              <IconComponent className="h-3 w-3 text-gray-600 group-hover/icon:text-primary transition-colors" />
+                            </div>
+                          </TooltipTrigger>
+                          <TooltipContent side="top" className="bg-gray-900 text-white text-xs">
+                            <p className="capitalize">{charId.replace(/([A-Z])/g, ' $1').trim()}</p>
+                          </TooltipContent>
+                        </Tooltip>
+                      );
+                    })}
+                    {item.characteristics.length > 2 && (
+                      <div className="text-xs text-gray-500 font-medium bg-gray-100 px-1.5 py-0.5 rounded-full">
+                        +{item.characteristics.length - 2}
+                      </div>
+                    )}
+                  </TooltipProvider>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Enhanced Image and Smart Action Button */}
+          <div className="relative flex-shrink-0">
+            {hasImage ? (
+              <div className="relative">
+                {/* Professional Image Container */}
+                <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-xl overflow-hidden shadow-md group-hover:shadow-lg transition-all duration-300 border-2 border-white ring-1 ring-gray-100">
+                  <img
+                    src={item.image!}
+                    alt={item.name}
+                    className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+                    loading="lazy"
+                  />
+                  {/* Subtle Overlay for Better Button Visibility */}
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+                </div>
+                
+                {/* Premium Add Button */}
+                <div className="absolute -bottom-1.5 -right-1.5">
+                  <Button
+                    size="icon"
+                    onClick={handleQuickAdd}
+                    className="h-8 w-8 rounded-full bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600 shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-110 border-2 border-white ring-1 ring-green-200 hover:ring-green-300"
+                    aria-label={`Add ${item.name} to cart`}
+                  >
+                    <Plus className="h-4 w-4 text-white font-bold" />
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              /* No-Image Add Button Only */
+              <Button
+                size="icon"
+                onClick={handleQuickAdd}
+                className="h-8 w-8 rounded-full bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600 shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-110"
+                aria-label={`Add ${item.name} to cart`}
+              >
+                <Plus className="h-4 w-4 text-white font-bold" />
+              </Button>
             )}
           </div>
         </div>
 
-        {/* Image and Smart Add Button - Right Side */}
-        <div className="relative flex-shrink-0">
-          {hasImage ? (
-            <div className="relative w-20 h-20 sm:w-24 sm:h-24 rounded-xl overflow-hidden shadow-md group-hover:shadow-lg transition-shadow border border-gray-200">
-              <img
-                src={item.image!}
-                alt={item.name}
-                className="w-full h-full object-cover border border-gray-200"
-              />
-              {/* Smart Plus Button */}
-              <div className="absolute bottom-0 right-0 transform translate-x-1 translate-y-1">
-                <Button
-                  size="icon"
-                  onClick={handleQuickAdd}
-                  className="h-10 w-10 rounded-full bg-green-500 hover:bg-green-600 shadow-lg hover:shadow-xl transition-all duration-200 hover:scale-110 border-2 border-white"
-                  aria-label={`Add ${item.name} to cart`}
-                >
-                  <Plus className="h-6 w-6 text-white" />
-                </Button>
-              </div>
-            </div>
-          ) : (
-            /* Only show the plus button when no image */
-            <Button
-              size="icon"
-              onClick={handleQuickAdd}
-              className="h-10 w-10 rounded-full bg-green-500 hover:bg-green-600 shadow-lg hover:shadow-xl transition-all duration-200 hover:scale-110 border-2 border-white"
-              aria-label={`Add ${item.name} to cart`}
-            >
-              <Plus className="h-6 w-6 text-white" />
-            </Button>
-          )}
-        </div>
+        {/* Subtle Bottom Accent */}
+        <div className="h-1 bg-gradient-to-r from-primary/20 via-primary/10 to-primary/20 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
       </div>
       
       <MenuItemDialog 
@@ -492,24 +540,35 @@ const MenuSection = React.memo(function MenuSection({
   const accordionDefaultValue = searchQuery ? menuData.map(d => d.category.name) : (menuData.length > 0 ? [menuData[0].category.name] : []);
   
   return (
-    <div className="space-y-4">
-      {/* Menu Categories */}
-      <Accordion type="multiple" defaultValue={accordionDefaultValue} className="w-full space-y-3">
+    <div className="space-y-8 px-2">
+      {/* Enhanced Menu Categories */}
+      <Accordion type="multiple" defaultValue={accordionDefaultValue} className="w-full space-y-6">{" "}
         {menuData.map(({ category, items, subCategories }) => (
-          <Card key={category.id} className="border border-gray-200 shadow-sm overflow-hidden">
+          <Card key={category.id} className="border-0 shadow-lg overflow-hidden bg-white rounded-2xl">
             <AccordionItem
               value={category.name}
               id={`cat-${category.id}`}
               className="border-none"
             >
-              <AccordionTrigger className="font-headline text-lg sm:text-xl scroll-mt-40 bg-gradient-to-r from-primary/8 to-primary/4 hover:from-primary/12 hover:to-primary/8 text-foreground px-4 py-3 font-semibold hover:no-underline transition-all duration-200 [&[data-state=open]]:bg-primary/15 rounded-lg">
-                <div className="flex items-center gap-2">
-                  {category.icon && <span className="text-lg">{category.icon}</span>}
-                  {category.name}
+              <AccordionTrigger className="font-headline text-xl sm:text-2xl scroll-mt-40 bg-gradient-to-r from-primary/10 via-primary/8 to-primary/10 hover:from-primary/15 hover:via-primary/12 hover:to-primary/15 text-foreground px-6 py-5 font-bold hover:no-underline transition-all duration-300 [&[data-state=open]]:bg-gradient-to-r [&[data-state=open]]:from-primary/20 [&[data-state=open]]:via-primary/15 [&[data-state=open]]:to-primary/20 rounded-t-2xl group">
+                <div className="flex items-center gap-3">
+                  {category.icon && (
+                    <span className="text-2xl bg-white rounded-full w-12 h-12 flex items-center justify-center shadow-md group-hover:shadow-lg transition-shadow duration-300">
+                      {category.icon}
+                    </span>
+                  )}
+                  <div className="flex flex-col items-start">
+                    <span className="text-gray-900 group-hover:text-primary transition-colors duration-200">
+                      {category.name}
+                    </span>
+                    <span className="text-sm font-normal text-gray-600 mt-1">
+                      {items.length + subCategories.reduce((acc, sub) => acc + sub.items.length, 0)} items available
+                    </span>
+                  </div>
                 </div>
               </AccordionTrigger>
-              <AccordionContent className="px-4 py-4 bg-background">
-                <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+              <AccordionContent className="px-6 py-6 bg-gradient-to-b from-gray-50/50 to-white">
+                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
                   {items.map((item) => (
                     <MenuItem
                       key={item.id}
@@ -520,11 +579,18 @@ const MenuSection = React.memo(function MenuSection({
                   ))}
                 </div>
                  {subCategories.length > 0 && (
-                  <div className="mt-4 space-y-3">
+                  <div className="mt-8 space-y-6">
                     {subCategories.map(({ category: subCat, items: subItems }) => (
                        <div key={subCat.id}>
-                         <h4 className="font-semibold text-sm sm:text-base text-muted-foreground pl-3 border-l-2 border-primary mb-3">{subCat.name}</h4>
-                         <div className="grid grid-cols-1 xl:grid-cols-2 gap-3 pl-3">
+                         <div className="flex items-center gap-3 mb-4">
+                           <div className="w-1 h-8 bg-gradient-to-b from-primary to-primary/60 rounded-full"></div>
+                           <h4 className="font-bold text-lg text-gray-800">{subCat.name}</h4>
+                           <div className="h-px bg-gradient-to-r from-primary/30 to-transparent flex-1"></div>
+                           <span className="text-sm text-gray-500 bg-gray-100 px-3 py-1 rounded-full">
+                             {subItems.length} items
+                           </span>
+                         </div>
+                         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
                            {subItems.map((item) => (
                               <MenuItem
                                 key={item.id}
@@ -544,14 +610,23 @@ const MenuSection = React.memo(function MenuSection({
         ))}
       </Accordion>
         
-        {/* No results message */}
+        {/* Enhanced No results message */}
         {menuData.length === 0 && searchQuery && (
-            <Card className="border-0 shadow-lg">
-              <CardContent className="text-center py-12">
-                  <div className="text-muted-foreground">
-                      <Search className="h-12 w-12 mx-auto mb-4 text-muted-foreground/50" />
-                      <p className="font-semibold text-lg">No items found for "{searchQuery}"</p>
-                      <p className="text-sm mt-1">Try a different search term or browse our categories.</p>
+            <Card className="border-0 shadow-xl bg-white rounded-2xl overflow-hidden">
+              <CardContent className="text-center py-16">
+                  <div className="max-w-md mx-auto">
+                      <div className="bg-gradient-to-br from-primary/10 to-primary/5 rounded-full w-24 h-24 flex items-center justify-center mx-auto mb-6">
+                        <Search className="h-12 w-12 text-primary" />
+                      </div>
+                      <h3 className="font-bold text-xl text-gray-900 mb-2">No items found</h3>
+                      <p className="text-gray-600 mb-4">
+                        We couldn't find any items matching <span className="font-semibold text-primary">"{searchQuery}"</span>
+                      </p>
+                      <div className="bg-gray-50 rounded-lg p-4">
+                        <p className="text-sm text-gray-600">
+                          <span className="font-medium">Try:</span> Different keywords, browse categories, or check spelling
+                        </p>
+                      </div>
                   </div>
               </CardContent>
             </Card>
@@ -1469,100 +1544,107 @@ const OrderSummary = React.memo(function OrderSummary({
         )}
 
         {/* Order Type Selection */}
-        <div className="space-y-3 pt-4 border-t">
-          <Label className="text-base font-semibold">How would you like your order?</Label>
+        <div className="space-y-4 pt-6 border-t border-gray-200">
+          <Label className="text-lg font-bold text-gray-900">
+            How would you like your order?
+          </Label>
           <RadioGroup value={selectedOrderType} onValueChange={(value: any) => setSelectedOrderType(value)}>
-            {availableOrderTypes.includes('delivery') && (
-              <div className="flex items-center space-x-2">
-                <RadioGroupItem value="delivery" id="delivery" />
-                <Label htmlFor="delivery">Delivery</Label>
-              </div>
-            )}
-            {availableOrderTypes.includes('collection') && (
-              <div className="flex items-center space-x-2">
-                <RadioGroupItem value="collection" id="collection" />
-                <Label htmlFor="collection">Collection</Label>
-              </div>
-            )}
-            {availableOrderTypes.includes('advance') && (
-              <div className="flex items-center space-x-2">
-                <RadioGroupItem value="advance" id="advance" />
-                <Label htmlFor="advance">Advance Order</Label>
-              </div>
-            )}
+            <div className="space-y-3">
+              {availableOrderTypes.includes('collection') && (
+                <div className="flex items-center space-x-3">
+                  <RadioGroupItem value="collection" id="collection" />
+                  <Label htmlFor="collection" className="font-medium text-gray-900 cursor-pointer">
+                    Collection
+                  </Label>
+                </div>
+              )}
+              {availableOrderTypes.includes('delivery') && (
+                <div className="flex items-center space-x-3">
+                  <RadioGroupItem value="delivery" id="delivery" />
+                  <Label htmlFor="delivery" className="font-medium text-gray-900 cursor-pointer">
+                    Delivery
+                  </Label>
+                </div>
+              )}
+              {availableOrderTypes.includes('advance') && (
+                <div className="flex items-center space-x-3">
+                  <RadioGroupItem value="advance" id="advance" />
+                  <Label htmlFor="advance" className="font-medium text-gray-900 cursor-pointer">
+                    Advance Order
+                  </Label>
+                </div>
+              )}
+            </div>
           </RadioGroup>
         </div>
 
         {/* Advance Order Configuration */}
         {selectedOrderType === 'advance' && (
-          <div className="space-y-4 p-4 border border-gray-300 bg-gray-50 rounded-lg">
-            <div className="border-b border-gray-200 pb-3">
-              <h3 className="font-semibold text-gray-900 text-lg">Schedule Your Order</h3>
-              <p className="text-gray-600 text-sm">Choose when you want your order ready</p>
-            </div>
+          <div className="space-y-4 pt-4 border-t border-gray-200">
+            <h3 className="font-bold text-gray-900">Schedule Your Order</h3>
             
             {/* Step 1: Fulfillment Method */}
             <div className="space-y-3">
               <Label className="font-medium text-gray-900">How would you like to receive your order?</Label>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-2">
                 {restaurantSettings?.orderTypeSettings?.deliveryEnabled && (
-                  <Button
-                    type="button"
-                    variant={advanceFulfillmentType === 'delivery' ? 'default' : 'outline'}
-                    className={`h-12 font-medium ${
-                      advanceFulfillmentType === 'delivery' 
-                        ? 'bg-blue-600 hover:bg-blue-700 text-white' 
-                        : 'border border-gray-300 hover:bg-gray-100'
-                    }`}
-                    onClick={() => {
-                      setAdvanceFulfillmentType('delivery');
-                      // Reset date and time when method changes
-                      setAdvanceDate(undefined);
-                      setAdvanceTime('');
-                    }}
-                  >
-                    Delivery
-                  </Button>
+                  <div className="flex items-center space-x-3">
+                    <input
+                      type="radio"
+                      id="advance-delivery"
+                      name="advance-fulfillment"
+                      checked={advanceFulfillmentType === 'delivery'}
+                      onChange={() => {
+                        setAdvanceFulfillmentType('delivery');
+                        setAdvanceDate(undefined);
+                        setAdvanceTime('');
+                      }}
+                      className="w-4 h-4"
+                    />
+                    <Label htmlFor="advance-delivery" className="font-medium text-gray-900 cursor-pointer">
+                      Delivery
+                    </Label>
+                  </div>
                 )}
                 {restaurantSettings?.orderTypeSettings?.collectionEnabled && (
-                  <Button
-                    type="button"
-                    variant={advanceFulfillmentType === 'collection' ? 'default' : 'outline'}
-                    className={`h-12 font-medium ${
-                      advanceFulfillmentType === 'collection' 
-                        ? 'bg-blue-600 hover:bg-blue-700 text-white' 
-                        : 'border border-gray-300 hover:bg-gray-100'
-                    }`}
-                    onClick={() => {
-                      setAdvanceFulfillmentType('collection');
-                      // Reset date and time when method changes
-                      setAdvanceDate(undefined);
-                      setAdvanceTime('');
-                    }}
-                  >
-                    Collection
-                  </Button>
+                  <div className="flex items-center space-x-3">
+                    <input
+                      type="radio"
+                      id="advance-collection"
+                      name="advance-fulfillment"
+                      checked={advanceFulfillmentType === 'collection'}
+                      onChange={() => {
+                        setAdvanceFulfillmentType('collection');
+                        setAdvanceDate(undefined);
+                        setAdvanceTime('');
+                      }}
+                      className="w-4 h-4"
+                    />
+                    <Label htmlFor="advance-collection" className="font-medium text-gray-900 cursor-pointer">
+                      Collection
+                    </Label>
+                  </div>
                 )}
               </div>
             </div>
 
             {/* Step 2: Date and Time Selection */}
             {advanceFulfillmentType && (
-              <div className="space-y-3">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div className="space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {/* Date Selection */}
                   <div className="space-y-2">
-                    <Label className="text-sm font-medium text-gray-700">Choose Date</Label>
+                    <Label className="font-medium text-gray-800">Choose Date</Label>
                     <Popover>
                       <PopoverTrigger asChild>
                         <Button 
                           variant="outline" 
-                          className="w-full justify-start text-left h-11 bg-white border border-gray-300"
+                          className="w-full justify-start text-left h-10 bg-white border border-gray-300"
                         >
                           {advanceDate ? (
-                            <span>{format(advanceDate, "PPP")}</span>
+                            <span>{format(advanceDate, "EEEE, MMMM do, yyyy")}</span>
                           ) : (
-                            <span className="text-gray-500">Select date</span>
+                            <span className="text-gray-500">Select a date</span>
                           )}
                         </Button>
                       </PopoverTrigger>
@@ -1572,7 +1654,7 @@ const OrderSummary = React.memo(function OrderSummary({
                           selected={advanceDate}
                           onSelect={(date) => {
                             setAdvanceDate(date);
-                            setAdvanceTime(''); // Reset time when date changes
+                            setAdvanceTime('');
                           }}
                           disabled={(date) => {
                             const today = new Date();
@@ -1590,12 +1672,12 @@ const OrderSummary = React.memo(function OrderSummary({
 
                   {/* Time Selection */}
                   <div className="space-y-2">
-                    <Label className="text-sm font-medium text-gray-700">Choose Time</Label>
+                    <Label className="font-medium text-gray-800">Choose Time</Label>
                     {advanceDate && timeSlots.length > 0 ? (
                       <Select value={advanceTime} onValueChange={setAdvanceTime}>
-                        <SelectTrigger className="h-11 bg-white border border-gray-300">
+                        <SelectTrigger className="h-10 bg-white border border-gray-300">
                           {advanceTime ? (
-                            <span>{advanceTime}</span>
+                            <span className="font-medium">{advanceTime}</span>
                           ) : (
                             <span className="text-gray-500">Select time</span>
                           )}
@@ -1612,7 +1694,7 @@ const OrderSummary = React.memo(function OrderSummary({
                       <Button 
                         variant="outline" 
                         disabled 
-                        className="h-11 w-full bg-gray-100 border border-gray-200 text-gray-400"
+                        className="h-10 w-full bg-gray-100 border border-gray-200 text-gray-400"
                       >
                         {advanceDate ? (
                           timeSlots.length === 0 ? "No slots available" : "Loading slots..."
@@ -1626,19 +1708,9 @@ const OrderSummary = React.memo(function OrderSummary({
               </div>
             )}
 
-            {/* Same-day Notice */}
-            {advanceDate && advanceDate.toDateString() === new Date().toDateString() && (
-              <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
-                <div className="text-amber-800 font-medium">Same-Day Order</div>
-                <div className="text-amber-700 text-sm">
-                  Orders for today require at least {restaurantSettings?.advanceOrderSettings?.minHoursNotice || 4} hours notice
-                </div>
-              </div>
-            )}
-
             {/* Order Summary */}
             {advanceDate && advanceTime && (
-              <div className="bg-green-50 border border-green-200 rounded-lg p-3">
+              <div className="bg-green-50 border border-green-200 rounded p-3">
                 <div className="text-green-800 font-medium">Order Scheduled</div>
                 <div className="text-green-700 text-sm">
                   {advanceFulfillmentType === 'delivery' ? 'Delivery' : 'Collection'} on {format(advanceDate, "EEEE, MMMM do")} at {advanceTime}
@@ -1650,57 +1722,68 @@ const OrderSummary = React.memo(function OrderSummary({
 
         {/* Postcode for Delivery */}
         {(selectedOrderType === 'delivery' || (selectedOrderType === 'advance' && advanceFulfillmentType === 'delivery')) && (
-          <div className="space-y-2">
-            <Label htmlFor="postcode">Postcode (for delivery fee calculation)</Label>
+          <div className="space-y-3 pt-4 border-t border-gray-200">
+            <Label htmlFor="postcode" className="font-medium text-gray-900">
+              Delivery Address
+            </Label>
             <Input
               id="postcode"
               value={postcode}
               onChange={(e) => setPostcode(e.target.value)}
-              placeholder="Enter postcode"
+              placeholder="Enter your postcode"
+              className="h-10 border border-gray-300"
             />
+            <p className="text-sm text-gray-600">We'll calculate delivery fee based on your location</p>
             {deliveryError && (
-              <p className="text-sm text-red-500">{deliveryError}</p>
+              <p className="text-sm text-red-600">{deliveryError}</p>
             )}
           </div>
         )}
 
         {/* Voucher Section */}
-        <div className="space-y-2 pt-4 border-t">
-          <Label>Voucher Code</Label>
+        <div className="space-y-3 pt-4 border-t border-gray-200">
+          <Label className="font-medium text-gray-900">
+            Promo Code
+          </Label>
           {appliedVoucher ? (
-            <div className="flex items-center justify-between p-2 bg-green-50 border border-green-200 rounded">
+            <div className="flex items-center justify-between p-3 bg-green-50 border border-green-200 rounded">
               <div>
                 <span className="text-sm font-medium text-green-700">
                   {appliedVoucher.code} applied
                 </span>
-                <div className="text-xs text-green-600">
-                  Save {currencySymbol}{voucherDiscount.toFixed(2)}
+                <div className="text-sm text-green-600">
+                  You saved {currencySymbol}{voucherDiscount.toFixed(2)}!
                 </div>
               </div>
               <Button 
                 variant="ghost" 
                 size="sm" 
                 onClick={handleRemoveVoucher}
-                className="text-red-600 hover:text-white hover:bg-red-600 transition-all duration-200"
+                className="text-red-600 hover:text-white hover:bg-red-600"
               >
                 <X className="h-4 w-4" />
               </Button>
             </div>
           ) : (
-            <div className="flex gap-2">
-              <Input
-                value={voucherInput}
-                onChange={(e) => setVoucherInput(e.target.value)}
-                placeholder="Enter voucher code"
-                className={voucherError ? 'border-destructive' : ''}
-              />
-              <Button onClick={handleApplyVoucher} variant="outline">
-                Apply
-              </Button>
+            <div className="space-y-2">
+              <div className="flex gap-2">
+                <Input
+                  value={voucherInput}
+                  onChange={(e) => setVoucherInput(e.target.value)}
+                  placeholder="Enter promo code"
+                  className="h-10 border border-gray-300"
+                />
+                <Button 
+                  onClick={handleApplyVoucher} 
+                  className="h-10 px-4 bg-green-600 hover:bg-green-700 text-white"
+                >
+                  Apply
+                </Button>
+              </div>
             </div>
           )}
           {voucherError && (
-            <p className="text-sm text-destructive">{voucherError}</p>
+            <p className="text-sm text-red-600">{voucherError}</p>
           )}
         </div>
 
@@ -3353,6 +3436,23 @@ export default function TenantCustomerInterface() {
                     </div>
                 </div>
             </div>
+
+            {/* Footer - Powered By Link */}
+            <footer className="w-full py-6 mt-12 bg-gray-50/50 border-t border-gray-100">
+                <div className="container mx-auto px-4 text-center">
+                    <p className="text-xs text-gray-400">
+                        Powered by -{' '}
+                        <a 
+                            href="https://orderweb.co.uk/" 
+                            target="_blank" 
+                            rel="noopener noreferrer"
+                            className="text-gray-500 hover:text-gray-600 transition-colors duration-200"
+                        >
+                            Order Web
+                        </a>
+                    </p>
+                </div>
+            </footer>
         </TooltipProvider>
     );
 }

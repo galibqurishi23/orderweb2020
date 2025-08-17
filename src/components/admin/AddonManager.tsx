@@ -222,8 +222,8 @@ export default function AddonManager({
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 bg-gradient-to-r from-orange-500 to-red-500 rounded-lg flex items-center justify-center">
-            <Package className="w-5 h-5 text-white" />
+          <div className="w-10 h-10 bg-gradient-to-r from-orange-100 to-red-100 rounded-lg flex items-center justify-center border border-orange-200">
+            <Package className="w-5 h-5 text-orange-600" />
           </div>
           <div>
             <h3 className="text-lg font-semibold text-gray-900">Add-on Management</h3>
@@ -239,7 +239,7 @@ export default function AddonManager({
                 Unsaved changes
               </Badge>
             )}
-            <Button onClick={createNewGroup} size="sm" className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700">
+            <Button onClick={createNewGroup} size="sm" className="bg-gradient-to-r from-blue-100 to-indigo-100 hover:from-blue-200 hover:to-indigo-200 text-blue-700 border border-blue-200 hover:border-blue-300">
               <Plus className="w-4 h-4 mr-2" />
               Add Group
             </Button>
@@ -491,7 +491,7 @@ export default function AddonManager({
               Create add-on groups to allow customers to customize this menu item with extras, sizes, or alternatives.
             </p>
             {!isReadOnly && (
-              <Button onClick={createNewGroup} className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700">
+              <Button onClick={createNewGroup} className="bg-gradient-to-r from-blue-100 to-indigo-100 hover:from-blue-200 hover:to-indigo-200 text-blue-700 border border-blue-200 hover:border-blue-300">
                 <Plus className="w-4 h-4 mr-2" />
                 Create First Group
               </Button>

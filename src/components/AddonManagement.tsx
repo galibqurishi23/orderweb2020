@@ -376,7 +376,7 @@ export default function AddonManagement({ tenantId }: AddonManagementProps) {
             <div className="flex items-center gap-2">
               <Dialog open={isGroupDialogOpen} onOpenChange={setIsGroupDialogOpen}>
                 <DialogTrigger asChild>
-                  <Button onClick={resetGroupForm} className="bg-gradient-to-r from-blue-600 to-purple-600">
+                  <Button onClick={resetGroupForm} className="bg-gradient-to-r from-blue-100 to-indigo-100 hover:from-blue-200 hover:to-indigo-200 text-blue-700 border border-blue-200 hover:border-blue-300">
                     <Plus className="mr-2 h-4 w-4" />
                     Add Group
                   </Button>

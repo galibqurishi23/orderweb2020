@@ -1009,17 +1009,9 @@ export default function AdminGiftCardsPage() {
                             </CardContent>
                         </Card>
                     </div>
+                </TabsContent>
 
-            <Tabs defaultValue="overview" className="w-full">
-                <TabsList className="grid w-full grid-cols-5">
-                    <TabsTrigger value="overview">Overview</TabsTrigger>
-                    <TabsTrigger value="shop">Shop Items</TabsTrigger>
-                    <TabsTrigger value="gift-cards">Gift Cards</TabsTrigger>
-                    <TabsTrigger value="orders">Orders</TabsTrigger>
-                    <TabsTrigger value="settings">Settings</TabsTrigger>
-                </TabsList>
-
-                <TabsContent value="overview" className="space-y-4">
+                <TabsContent value="shop" className="space-y-4">
                     <div className="grid gap-4 md:grid-cols-2">
                         <Card>
                             <CardHeader>

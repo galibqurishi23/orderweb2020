@@ -192,7 +192,7 @@ export class LicenseKeyService {
       // Calculate dates
       const activatedAt = new Date();
       const expiresAt = new Date(activatedAt.getTime() + (licenseKey.duration_days * 24 * 60 * 60 * 1000));
-      const gracePeriodEndsAt = new Date(expiresAt.getTime() + (7 * 24 * 60 * 60 * 1000)); // +7 days grace
+      const gracePeriodEndsAt = new Date(expiresAt.getTime() + (2 * 24 * 60 * 60 * 1000)); // +2 days grace
 
       const tenantLicenseId = uuidv4();
 

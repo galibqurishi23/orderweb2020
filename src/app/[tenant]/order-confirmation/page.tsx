@@ -498,6 +498,21 @@ export default function OrderConfirmationPage() {
           ))}
         </AnimatePresence>
       </div>
+
+      {/* Footer - Developed By Link */}
+      <footer className="hidden lg:block fixed bottom-4 right-4 z-50">
+        <p className="text-xs text-gray-500">
+          Developed By -{' '}
+          <a 
+            href="https://orderweb.co.uk/" 
+            target="_blank" 
+            rel="noopener noreferrer"
+            className="text-gray-600 hover:text-primary transition-colors duration-200"
+          >
+            Order Web
+          </a>
+        </p>
+      </footer>
     </div>
   );
 }

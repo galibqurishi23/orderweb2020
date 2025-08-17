@@ -85,10 +85,11 @@ export function OrderCard({ order, onStatusUpdate, theme }: OrderCardProps) {
             size="sm"
             onClick={() => handleStatusUpdate('preparing')}
             disabled={updating}
-            className="w-full bg-blue-600 hover:bg-blue-700"
+            className="w-full bg-blue-600 hover:bg-blue-700 text-xs sm:text-sm h-8 sm:h-9"
           >
-            <Play className="h-4 w-4 mr-1" />
-            Start Preparing
+            <Play className="h-3 w-3 sm:h-4 sm:w-4 mr-1" />
+            <span className="hidden sm:inline">Start Preparing</span>
+            <span className="sm:hidden">Start</span>
           </Button>
         );
       case 'preparing':
@@ -97,10 +98,11 @@ export function OrderCard({ order, onStatusUpdate, theme }: OrderCardProps) {
             size="sm"
             onClick={() => handleStatusUpdate('ready')}
             disabled={updating}
-            className="w-full bg-green-600 hover:bg-green-700"
+            className="w-full bg-green-600 hover:bg-green-700 text-xs sm:text-sm h-8 sm:h-9"
           >
-            <CheckCircle className="h-4 w-4 mr-1" />
-            Mark Ready
+            <CheckCircle className="h-3 w-3 sm:h-4 sm:w-4 mr-1" />
+            <span className="hidden sm:inline">Mark Ready</span>
+            <span className="sm:hidden">Ready</span>
           </Button>
         );
       case 'ready':
@@ -109,10 +111,11 @@ export function OrderCard({ order, onStatusUpdate, theme }: OrderCardProps) {
             size="sm"
             onClick={() => handleStatusUpdate('completed')}
             disabled={updating}
-            className="w-full bg-gray-600 hover:bg-gray-700"
+            className="w-full bg-gray-600 hover:bg-gray-700 text-xs sm:text-sm h-8 sm:h-9"
           >
-            <Package className="h-4 w-4 mr-1" />
-            Completed
+            <Package className="h-3 w-3 sm:h-4 sm:w-4 mr-1" />
+            <span className="hidden sm:inline">Completed</span>
+            <span className="sm:hidden">Done</span>
           </Button>
         );
       default:
@@ -161,33 +164,33 @@ export function OrderCard({ order, onStatusUpdate, theme }: OrderCardProps) {
 
   return (
     <Card className={getCardClassName()}>
-      <CardHeader className="pb-2">
+      <CardHeader className="pb-1 sm:pb-2 px-3 sm:px-6 py-2 sm:py-4">
         <div className="flex items-center justify-between">
-          <div className="flex items-center space-x-2">
-            <Badge variant="outline" className="font-mono">
+          <div className="flex items-center space-x-1 sm:space-x-2">
+            <Badge variant="outline" className="font-mono text-xs sm:text-sm">
               #{order.orderNumber}
             </Badge>
             {getPriorityBadge()}
           </div>
-          <div className={`text-lg font-bold ${timeInfo.color}`}>
-            <Clock className="h-4 w-4 inline mr-1" />
+          <div className={`text-sm sm:text-lg font-bold ${timeInfo.color}`}>
+            <Clock className="h-3 w-3 sm:h-4 sm:w-4 inline mr-1" />
             {timeInfo.minutes}m
           </div>
         </div>
       </CardHeader>
 
-      <CardContent className="space-y-3">
+      <CardContent className="space-y-2 sm:space-y-3 px-3 sm:px-6 pb-3 sm:pb-6">
         {/* Customer Info */}
         <div className="space-y-1">
-          <div className="flex items-center text-sm">
-            <User className="h-4 w-4 mr-2 text-gray-500" />
-            <span className="font-medium">{order.customerName}</span>
+          <div className="flex items-center text-xs sm:text-sm">
+            <User className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2 text-gray-500 flex-shrink-0" />
+            <span className="font-medium truncate">{order.customerName}</span>
           </div>
-          <div className="flex items-center text-sm text-gray-600">
-            <MapPin className="h-4 w-4 mr-2 text-gray-500" />
-            <span>{order.orderType}</span>
-            <Badge variant="outline" className="ml-2 text-xs">
-              <DollarSign className="h-3 w-3 mr-1" />
+          <div className="flex items-center text-xs sm:text-sm text-gray-600">
+            <MapPin className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2 text-gray-500 flex-shrink-0" />
+            <span className="truncate flex-1">{order.orderType}</span>
+            <Badge variant="outline" className="ml-1 sm:ml-2 text-xs flex-shrink-0">
+              <DollarSign className="h-2 w-2 sm:h-3 sm:w-3 mr-0.5 sm:mr-1" />
               {order.totalAmount.toFixed(2)}
             </Badge>
           </div>
@@ -195,22 +198,22 @@ export function OrderCard({ order, onStatusUpdate, theme }: OrderCardProps) {
 
         {/* Items */}
         <div className="space-y-1">
-          <div className="text-sm font-medium text-gray-700">Items:</div>
-          <div className="space-y-1 max-h-32 overflow-y-auto">
+          <div className="text-xs sm:text-sm font-medium text-gray-700">Items:</div>
+          <div className="space-y-1 max-h-24 sm:max-h-32 overflow-y-auto">
             {order.items?.map((item, index) => (
-              <div key={index} className="text-sm bg-white p-2 rounded border">
+              <div key={index} className="text-xs sm:text-sm bg-white p-1.5 sm:p-2 rounded border">
                 <div className="flex justify-between">
-                  <span className="font-medium">
+                  <span className="font-medium truncate">
                     {item.quantity}x {item.menuItem?.name || item.name}
                   </span>
                 </div>
                 {item.selectedAddons?.length > 0 && (
-                  <div className="text-xs text-gray-600 mt-1">
+                  <div className="text-xs text-gray-600 mt-1 truncate">
                     + {item.selectedAddons.map((addon: any) => addon.name).join(', ')}
                   </div>
                 )}
                 {item.specialInstructions && (
-                  <div className="text-xs text-orange-600 mt-1 italic">
+                  <div className="text-xs text-orange-600 mt-1 italic line-clamp-2">
                     Note: {item.specialInstructions}
                   </div>
                 )}
@@ -221,30 +224,30 @@ export function OrderCard({ order, onStatusUpdate, theme }: OrderCardProps) {
 
         {/* Special Instructions */}
         {order.specialInstructions && (
-          <div className="bg-yellow-100 border border-yellow-300 rounded p-2">
-            <div className="flex items-start space-x-2">
-              <AlertTriangle className="h-4 w-4 text-yellow-600 mt-0.5" />
-              <div>
-                <div className="text-sm font-medium text-yellow-800">Special Instructions:</div>
-                <div className="text-sm text-yellow-700">{order.specialInstructions}</div>
+          <div className="bg-yellow-100 border border-yellow-300 rounded p-1.5 sm:p-2">
+            <div className="flex items-start space-x-1 sm:space-x-2">
+              <AlertTriangle className="h-3 w-3 sm:h-4 sm:w-4 text-yellow-600 mt-0.5 flex-shrink-0" />
+              <div className="min-w-0 flex-1">
+                <div className="text-xs sm:text-sm font-medium text-yellow-800">Special Instructions:</div>
+                <div className="text-xs sm:text-sm text-yellow-700 line-clamp-2">{order.specialInstructions}</div>
               </div>
             </div>
           </div>
         )}
 
         {/* Status Action Button */}
-        <div className="pt-2">
+        <div className="pt-1 sm:pt-2">
           {getStatusButtons()}
         </div>
 
         {/* Order Timestamps */}
-        <div className="text-xs text-gray-500 space-y-1 border-t pt-2">
-          <div>Created: {new Date(order.createdAt).toLocaleTimeString()}</div>
+        <div className="text-xs text-gray-500 space-y-0.5 sm:space-y-1 border-t pt-1 sm:pt-2">
+          <div className="truncate">Created: {new Date(order.createdAt).toLocaleTimeString()}</div>
           {order.acknowledgedAt && (
-            <div>Started: {new Date(order.acknowledgedAt).toLocaleTimeString()}</div>
+            <div className="truncate">Started: {new Date(order.acknowledgedAt).toLocaleTimeString()}</div>
           )}
           {order.estimatedReadyTime && (
-            <div>Est. Ready: {new Date(order.estimatedReadyTime).toLocaleTimeString()}</div>
+            <div className="truncate">Est. Ready: {new Date(order.estimatedReadyTime).toLocaleTimeString()}</div>
           )}
         </div>
       </CardContent>

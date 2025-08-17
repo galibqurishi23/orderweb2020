@@ -287,10 +287,10 @@ export async function getMenuItems(tenantId: string): Promise<MenuItem[]> {
             `SELECT 
                 id, tenant_id, category_id, name, description, price, image_url, 
                 image_hint, available, is_featured, is_set_menu, preparation_time,
-                characteristics, nutrition, set_menu_items, tags, created_at, updated_at
+                display_order, characteristics, nutrition, set_menu_items, tags, created_at, updated_at
             FROM menu_items 
             WHERE tenant_id = ? 
-            ORDER BY name ASC`,
+            ORDER BY display_order ASC, name ASC`,
             [tenantId]
         );
 
@@ -312,6 +312,7 @@ export async function getMenuItems(tenantId: string): Promise<MenuItem[]> {
                 isFeatured: Boolean(row.is_featured),
                 isSetMenu: Boolean(row.is_set_menu),
                 preparationTime: row.preparation_time || 15,
+                displayOrder: row.display_order || 0,
                 characteristics: Array.isArray(parsedCharacteristics) ? parsedCharacteristics : [],
                 nutrition: parseJsonField(row.nutrition) || undefined,
                 setMenuItems: Array.isArray(parsedSetMenuItems) ? parsedSetMenuItems : [],
@@ -341,7 +342,7 @@ export async function getMenuItemById(tenantId: string, itemId: string): Promise
             `SELECT 
                 id, tenant_id, category_id, name, description, price, image_url, 
                 image_hint, available, is_featured, is_set_menu, preparation_time,
-                characteristics, nutrition, set_menu_items, tags, created_at, updated_at
+                display_order, characteristics, nutrition, set_menu_items, tags, created_at, updated_at
             FROM menu_items 
             WHERE tenant_id = ? AND id = ?`,
             [tenantId, itemId]
@@ -365,6 +366,7 @@ export async function getMenuItemById(tenantId: string, itemId: string): Promise
             isFeatured: Boolean(row.is_featured),
             isSetMenu: Boolean(row.is_set_menu),
             preparationTime: row.preparation_time || 15,
+            displayOrder: row.display_order || 0,
             characteristics: parseJsonField(row.characteristics) || [],
             nutrition: parseJsonField(row.nutrition) || undefined,
             setMenuItems: parseJsonField(row.set_menu_items) || [],
@@ -741,39 +743,44 @@ async function saveAddonGroupsForMenuItem(tenantId: string, menuItemId: string, 
     try {
         // Clear existing addon groups for this menu item
         await db.execute(
-            'DELETE FROM menu_item_addon_groups WHERE menu_item_id = ?',
+            'DELETE FROM menu_item_addons WHERE menu_item_id = ?',
             [menuItemId]
         );
 
         // Save each addon group
         for (const group of addonGroups) {
-            // Insert the group
+            // Insert the group using the correct table name 'addons'
             await db.execute(
-                `INSERT INTO addon_groups (
-                    id, tenant_id, name, type, required, multiple, max_selections, display_order, created_at, updated_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())`,
+                `INSERT INTO addons (
+                    id, tenant_id, name, type, required, max_selections, display_order, active, created_at, updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())
+                ON DUPLICATE KEY UPDATE
+                    name = VALUES(name),
+                    type = VALUES(type),
+                    required = VALUES(required),
+                    max_selections = VALUES(max_selections),
+                    updated_at = NOW()`,
                 [
                     group.id,
                     tenantId,
                     group.name,
-                    group.type === 'multiple' ? 'checkbox' : 'radio',
+                    group.type === 'multiple' ? 'multiple' : 'single',
                     group.required,
-                    group.type === 'multiple',
                     group.maxSelections,
-                    0
+                    0,
+                    true
                 ]
             );
 
-            // Create the relationship in junction table
+            // Create the relationship in junction table using correct table name 'menu_item_addons'
             await db.execute(
-                `INSERT INTO menu_item_addon_groups (
-                    id, menu_item_id, addon_group_id, display_order, created_at
-                ) VALUES (?, ?, ?, ?, NOW())`,
+                `INSERT INTO menu_item_addons (
+                    id, menu_item_id, addon_id, created_at
+                ) VALUES (?, ?, ?, NOW())`,
                 [
                     generateId(),
                     menuItemId,
-                    group.id,
-                    0
+                    group.id
                 ]
             );
 
@@ -782,8 +789,14 @@ async function saveAddonGroupsForMenuItem(tenantId: string, menuItemId: string, 
                 const option = group.options[i];
                 await db.execute(
                     `INSERT INTO addon_options (
-                        id, addon_group_id, name, price, available, display_order, created_at, updated_at
-                    ) VALUES (?, ?, ?, ?, ?, ?, NOW(), NOW())`,
+                        id, addon_id, name, price, available, display_order, created_at, updated_at
+                    ) VALUES (?, ?, ?, ?, ?, ?, NOW(), NOW())
+                    ON DUPLICATE KEY UPDATE
+                        name = VALUES(name),
+                        price = VALUES(price),
+                        available = VALUES(available),
+                        display_order = VALUES(display_order),
+                        updated_at = NOW()`,
                     [
                         option.id,
                         group.id,
@@ -798,5 +811,64 @@ async function saveAddonGroupsForMenuItem(tenantId: string, menuItemId: string, 
     } catch (error) {
         console.error('Error saving addon groups:', error);
         throw new Error('Failed to save addon groups');
+    }
+}
+
+// ==================== REORDER OPERATIONS ====================
+
+export async function reorderCategories(tenantId: string, categoryIds: string[]): Promise<void> {
+    validateTenantId(tenantId);
+    
+    if (!categoryIds || !Array.isArray(categoryIds)) {
+        throw new Error('Category IDs array is required');
+    }
+
+    try {
+        // Update display order for each category
+        const updatePromises = categoryIds.map((categoryId, index) => 
+            db.execute(
+                `UPDATE categories SET display_order = ?, updated_at = NOW() 
+                 WHERE tenant_id = ? AND id = ?`,
+                [index, tenantId, categoryId]
+            )
+        );
+
+        await Promise.all(updatePromises);
+        console.log(`Successfully reordered ${categoryIds.length} categories for tenant ${tenantId}`);
+    } catch (error) {
+        console.error('Error reordering categories:', error);
+        throw new Error('Failed to reorder categories');
+    }
+}
+
+export async function reorderMenuItems(tenantId: string, itemIds: string[], categoryId?: string): Promise<void> {
+    validateTenantId(tenantId);
+    
+    if (!itemIds || !Array.isArray(itemIds)) {
+        throw new Error('Item IDs array is required');
+    }
+
+    try {
+        // Update display order for each menu item
+        const updatePromises = itemIds.map((itemId, index) => {
+            let query = `UPDATE menu_items SET display_order = ?, updated_at = NOW() 
+                         WHERE tenant_id = ? AND id = ?`;
+            let params = [index, tenantId, itemId];
+
+            // If categoryId is provided, filter by category as well
+            if (categoryId) {
+                query += ` AND category_id = ?`;
+                params.push(categoryId);
+            }
+
+            return db.execute(query, params);
+        });
+
+        await Promise.all(updatePromises);
+        console.log(`Successfully reordered ${itemIds.length} menu items for tenant ${tenantId}`, 
+                   categoryId ? `in category ${categoryId}` : '');
+    } catch (error) {
+        console.error('Error reordering menu items:', error);
+        throw new Error('Failed to reorder menu items');
     }
 }

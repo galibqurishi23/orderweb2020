@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { Save, Upload, Mail, Phone, MapPin, Settings as SettingsIcon, Image as ImageIcon, KeyRound, Palette } from 'lucide-react';
 import { useAdmin } from '@/context/AdminContext';
 import { useTenant } from '@/context/TenantContext';
+import { useTheme } from '@/context/ThemeContext';
 import type { RestaurantSettings, OpeningHoursPerDay, ThemeSettings } from '@/lib/types';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -162,6 +163,7 @@ const ColorPickerInput = ({
 
 export default function SettingsPage() {
     const { tenantData, refreshTenantData } = useAdmin();
+    const { updateTheme, applyTheme } = useTheme();
     const [loading, setLoading] = useState(true);
     const [restaurantSettings, setRestaurantSettings] = useState<RestaurantSettings | null>(null);
     const { toast } = useToast();
@@ -393,13 +395,19 @@ export default function SettingsPage() {
     };
 
     const handleThemeChange = (field: keyof ThemeSettings, value: string) => {
+        const newThemeValue = { [field]: value };
+        
+        // Update local state
         setSettings(prev => ({
             ...prev,
             theme: {
                 ...prev.theme,
                 [field]: value,
-            },
+            }
         }));
+        
+        // Apply theme immediately for real-time preview
+        updateTheme(newThemeValue);
     };
     
     const handlePasswordInputChange = (field: string, value: string) => {
@@ -714,7 +722,7 @@ export default function SettingsPage() {
                                                   }}
                                                 />
                                                 <Button variant="outline" onClick={() => document.getElementById('logo-upload')?.click()}><Upload className="w-4 h-4 mr-2" />Change Logo</Button>
-                                                {settings.logo && <Button variant="outline" onClick={() => handleInputChange('logo', '')} className="text-red-600 hover:text-white hover:bg-red-600 border-red-300 hover:border-red-600 transition-all duration-200">Remove</Button>}
+                                                {settings.logo && <Button variant="outline" onClick={() => handleInputChange('logo', '')} className="text-rose-600 hover:text-rose-700 hover:bg-rose-50 border-rose-200 hover:border-rose-300 transition-all duration-200">Remove</Button>}
                                             </div>
                                         </div>
                                     </CardContent>
@@ -750,7 +758,7 @@ export default function SettingsPage() {
                                                   }}
                                                 />
                                                 <Button variant="outline" onClick={() => document.getElementById('cover-upload')?.click()}><Upload className="w-4 h-4 mr-2" />Change Cover</Button>
-                                                {settings.coverImage && <Button variant="outline" onClick={() => handleInputChange('coverImage', '')} className="text-red-600 hover:text-white hover:bg-red-600 border-red-300 hover:border-red-600 transition-all duration-200">Remove</Button>}
+                                                {settings.coverImage && <Button variant="outline" onClick={() => handleInputChange('coverImage', '')} className="text-rose-600 hover:text-rose-700 hover:bg-rose-50 border-rose-200 hover:border-rose-300 transition-all duration-200">Remove</Button>}
                                             </div>
                                         </div>
                                     </CardContent>
@@ -767,6 +775,23 @@ export default function SettingsPage() {
                             <CardDescription>Adjust the colors of your app. Changes will apply globally.</CardDescription>
                         </CardHeader>
                         <CardContent className="space-y-6">
+                            {/* Live Preview Section */}
+                            <div className="p-4 border rounded-lg bg-background">
+                                <Label className="text-sm font-medium mb-3 block">Live Preview</Label>
+                                <div className="space-y-3">
+                                    <Button className="w-full">Primary Button Preview</Button>
+                                    <Button variant="outline" className="w-full">Outline Button Preview</Button>
+                                    <div className="p-3 bg-accent rounded">
+                                        <p className="text-accent-foreground text-sm">This is how accent backgrounds will look</p>
+                                    </div>
+                                    <div className="p-3 bg-card border rounded">
+                                        <p className="text-card-foreground text-sm">Card content with current theme colors</p>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <Separator />
+                            
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                 <ColorPickerInput
                                     label="Primary Color"
@@ -795,7 +820,32 @@ export default function SettingsPage() {
                             </div>
                             <Separator />
                             <div className="space-y-2">
-                                <Label>Color Palettes</Label>
+                                <div className="flex items-center justify-between">
+                                    <Label>Color Palettes</Label>
+                                    <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        onClick={() => {
+                                            const defaultTheme = {
+                                                primary: '224 82% 57%',
+                                                primaryForeground: '210 40% 98%',
+                                                background: '210 40% 98%',
+                                                accent: '210 40% 94%',
+                                            };
+                                            
+                                            setSettings(prev => ({
+                                                ...prev,
+                                                theme: defaultTheme
+                                            }));
+                                            
+                                            applyTheme(defaultTheme);
+                                            
+                                            toast({ title: 'Theme Reset', description: 'Colors have been reset to default values.' });
+                                        }}
+                                    >
+                                        Reset to Default
+                                    </Button>
+                                </div>
                                 <p className="text-sm text-muted-foreground">Select a preset palette to get started.</p>
                                 <div className="flex flex-wrap gap-2 pt-2">
                                     {colorPalettes.map(palette => (
@@ -803,10 +853,23 @@ export default function SettingsPage() {
                                             key={palette.name}
                                             variant="outline"
                                             onClick={() => {
-                                                handleThemeChange('primary', palette.colors.primary);
-                                                handleThemeChange('primaryForeground', palette.colors.primaryForeground);
-                                                handleThemeChange('background', palette.colors.background);
-                                                handleThemeChange('accent', palette.colors.accent);
+                                                // Update all theme colors at once
+                                                const newTheme = {
+                                                    primary: palette.colors.primary,
+                                                    primaryForeground: palette.colors.primaryForeground,
+                                                    background: palette.colors.background,
+                                                    accent: palette.colors.accent,
+                                                };
+                                                
+                                                // Update local state
+                                                setSettings(prev => ({
+                                                    ...prev,
+                                                    theme: newTheme
+                                                }));
+                                                
+                                                // Apply theme immediately
+                                                applyTheme(newTheme);
+                                                
                                                 toast({ title: 'Palette Applied', description: `${palette.name} colors have been set.` });
                                             }}
                                         >

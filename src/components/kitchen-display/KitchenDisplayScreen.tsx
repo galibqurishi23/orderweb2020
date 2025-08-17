@@ -259,17 +259,20 @@ export function KitchenDisplayScreen({ display, tenantId, onBack }: KitchenDispl
       {/* Stats */}
       <DisplayStats orders={orders} />
 
-      {/* Orders Grid */}
-      <div className="p-6">
-        <div className="grid grid-cols-3 gap-6 h-[calc(100vh-200px)]">
+      {/* Mobile-Responsive Orders Grid */}
+      <div className="p-2 sm:p-4 lg:p-6">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 lg:gap-6 h-[calc(100vh-180px)] sm:h-[calc(100vh-200px)]">
           {/* New Orders */}
-          <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <h2 className="text-xl font-semibold text-red-600">
-                🔴 New Orders ({ordersByStatus.new.length})
+          <div className="space-y-2 sm:space-y-4">
+            <div className="flex items-center justify-between sticky top-0 bg-white dark:bg-gray-900 z-10 pb-2">
+              <h2 className="text-base sm:text-lg lg:text-xl font-semibold text-red-600 flex items-center">
+                <span className="mr-1 text-sm sm:text-base">🔴</span>
+                <span className="hidden sm:inline">New Orders</span>
+                <span className="sm:hidden">New</span>
+                <span className="ml-1 sm:ml-2">({ordersByStatus.new.length})</span>
               </h2>
             </div>
-            <div className="space-y-3 overflow-y-auto max-h-full">
+            <div className="space-y-2 sm:space-y-3 overflow-y-auto max-h-full lg:max-h-[calc(100vh-280px)]">
               {ordersByStatus.new.map(order => (
                 <OrderCard
                   key={order.id}
@@ -279,7 +282,7 @@ export function KitchenDisplayScreen({ display, tenantId, onBack }: KitchenDispl
                 />
               ))}
               {ordersByStatus.new.length === 0 && (
-                <div className="text-center py-8 text-gray-500">
+                <div className="text-center py-4 sm:py-8 text-gray-500 text-sm sm:text-base">
                   No new orders
                 </div>
               )}
@@ -287,13 +290,16 @@ export function KitchenDisplayScreen({ display, tenantId, onBack }: KitchenDispl
           </div>
 
           {/* Preparing Orders */}
-          <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <h2 className="text-xl font-semibold text-yellow-600">
-                🟡 Preparing ({ordersByStatus.preparing.length})
+          <div className="space-y-2 sm:space-y-4">
+            <div className="flex items-center justify-between sticky top-0 bg-white dark:bg-gray-900 z-10 pb-2">
+              <h2 className="text-base sm:text-lg lg:text-xl font-semibold text-yellow-600 flex items-center">
+                <span className="mr-1 text-sm sm:text-base">🟡</span>
+                <span className="hidden sm:inline">Preparing</span>
+                <span className="sm:hidden">Prep</span>
+                <span className="ml-1 sm:ml-2">({ordersByStatus.preparing.length})</span>
               </h2>
             </div>
-            <div className="space-y-3 overflow-y-auto max-h-full">
+            <div className="space-y-2 sm:space-y-3 overflow-y-auto max-h-full lg:max-h-[calc(100vh-280px)]">
               {ordersByStatus.preparing.map(order => (
                 <OrderCard
                   key={order.id}
@@ -303,7 +309,7 @@ export function KitchenDisplayScreen({ display, tenantId, onBack }: KitchenDispl
                 />
               ))}
               {ordersByStatus.preparing.length === 0 && (
-                <div className="text-center py-8 text-gray-500">
+                <div className="text-center py-4 sm:py-8 text-gray-500 text-sm sm:text-base">
                   No orders in preparation
                 </div>
               )}
@@ -311,13 +317,16 @@ export function KitchenDisplayScreen({ display, tenantId, onBack }: KitchenDispl
           </div>
 
           {/* Ready Orders */}
-          <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <h2 className="text-xl font-semibold text-green-600">
-                🟢 Ready ({ordersByStatus.ready.length})
+          <div className="space-y-2 sm:space-y-4">
+            <div className="flex items-center justify-between sticky top-0 bg-white dark:bg-gray-900 z-10 pb-2">
+              <h2 className="text-base sm:text-lg lg:text-xl font-semibold text-green-600 flex items-center">
+                <span className="mr-1 text-sm sm:text-base">🟢</span>
+                <span className="hidden sm:inline">Ready</span>
+                <span className="sm:hidden">Ready</span>
+                <span className="ml-1 sm:ml-2">({ordersByStatus.ready.length})</span>
               </h2>
             </div>
-            <div className="space-y-3 overflow-y-auto max-h-full">
+            <div className="space-y-2 sm:space-y-3 overflow-y-auto max-h-full lg:max-h-[calc(100vh-280px)]">
               {ordersByStatus.ready.map(order => (
                 <OrderCard
                   key={order.id}
@@ -327,7 +336,7 @@ export function KitchenDisplayScreen({ display, tenantId, onBack }: KitchenDispl
                 />
               ))}
               {ordersByStatus.ready.length === 0 && (
-                <div className="text-center py-8 text-gray-500">
+                <div className="text-center py-4 sm:py-8 text-gray-500 text-sm sm:text-base">
                   No orders ready
                 </div>
               )}
@@ -335,6 +344,21 @@ export function KitchenDisplayScreen({ display, tenantId, onBack }: KitchenDispl
           </div>
         </div>
       </div>
+
+      {/* Footer - Powered By Link */}
+      <footer className="hidden lg:block fixed bottom-4 right-4 z-50">
+        <p className="text-xs text-gray-500">
+          Powered by -{' '}
+          <a 
+            href="https://orderweb.co.uk/" 
+            target="_blank" 
+            rel="noopener noreferrer"
+            className="text-gray-600 hover:text-blue-600 transition-colors duration-200"
+          >
+            Order Web
+          </a>
+        </p>
+      </footer>
     </div>
   );
 }

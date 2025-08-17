@@ -35,21 +35,24 @@ import {
     Settings,
     X,
     GripVertical,
-    ImagePlus
+    ImagePlus,
+    Printer
 } from 'lucide-react';
 
 interface ShopSettings {
     tenant_id: string;
     cover_image_url?: string;
+    logo_url?: string;
     display_name?: string;
-    primary_color: string;
-    secondary_color: string;
-    accent_color: string;
-    text_color: string;
-    background_color: string;
+    description?: string;
+    front_color: string;
     card_background: string;
     border_color: string;
     color_theme: string;
+    gift_card_background_color?: string;
+    gift_card_border_color?: string;
+    gift_card_button_color?: string;
+    gift_card_text_color?: string;
 }
 
 interface GiftCardSettings {
@@ -66,7 +69,6 @@ interface ShopItem {
     tenant_id: string;
     name: string;
     description: string;
-    short_description: string;
     price: number;
     image_url?: string;
     gallery_images?: string[];
@@ -93,13 +95,24 @@ interface GiftCard {
 interface GiftCardOrder {
     id: string;
     tenant_id: string;
+    gift_card_id: string;
     order_number: string;
     customer_name: string;
     customer_email: string;
-    card_type: 'digital' | 'physical';
+    customer_phone?: string;
+    recipient_name?: string;
+    recipient_email?: string;
+    recipient_address?: string;
+    personal_message?: string;
     order_amount: number;
-    payment_status: 'pending' | 'completed' | 'failed';
+    payment_status: 'pending' | 'completed' | 'failed' | 'refunded';
+    payment_method?: string;
+    payment_transaction_id?: string;
     delivery_status: 'pending' | 'sent' | 'delivered';
+    order_date: string;
+    sent_date?: string;
+    delivered_date?: string;
+    card_type: 'digital' | 'physical';
     created_at: string;
 }
 
@@ -135,14 +148,14 @@ export default function ShopAdminPage() {
     
     const [shopSettings, setShopSettings] = useState<ShopSettings>({
         tenant_id: tenant,
-        primary_color: '#3b82f6',
-        secondary_color: '#1e40af',
-        accent_color: '#60a5fa',
-        text_color: '#1f2937',
-        background_color: '#f8fafc',
+        front_color: '#3b82f6',
         card_background: '#ffffff',
         border_color: '#e5e7eb',
-        color_theme: 'blue'
+        color_theme: 'blue',
+        gift_card_background_color: '#dbeafe',
+        gift_card_border_color: '#3b82f6',
+        gift_card_button_color: '#1d4ed8',
+        gift_card_text_color: '#1f2937'
     });
 
     const [giftCardSettings, setGiftCardSettings] = useState<GiftCardSettings>({
@@ -169,6 +182,8 @@ export default function ShopAdminPage() {
     const [saving, setSaving] = useState(false);
     const [coverImageFile, setCoverImageFile] = useState<File | null>(null);
     const [previewImage, setPreviewImage] = useState<string | null>(null);
+    const [logoImageFile, setLogoImageFile] = useState<File | null>(null);
+    const [logoPreviewImage, setLogoPreviewImage] = useState<string | null>(null);
     
     // Item image upload states
     const [itemImageFile, setItemImageFile] = useState<File | null>(null);
@@ -187,18 +202,19 @@ export default function ShopAdminPage() {
     // Dialog states
     const [itemDialogOpen, setItemDialogOpen] = useState(false);
     const [redeemDialogOpen, setRedeemDialogOpen] = useState(false);
+    const [orderDetailsDialogOpen, setOrderDetailsDialogOpen] = useState(false);
     const [selectedItem, setSelectedItem] = useState<ShopItem | null>(null);
+    const [selectedOrder, setSelectedOrder] = useState<GiftCardOrder | null>(null);
     
     // Form states
     const [itemForm, setItemForm] = useState({
         name: '',
         description: '',
-        short_description: '',
         price: 0,
         image_url: '',
         gallery_images: [] as string[],
         type: 'physical' as 'physical' | 'digital' | 'gift_card',
-        stock_quantity: 0,
+        stock_quantity: 10, // Default to 10 instead of 0 to prevent auto-deactivation
         track_inventory: true,
         is_active: true
     });
@@ -228,6 +244,13 @@ export default function ShopAdminPage() {
             if (shopRes.ok) {
                 const shopData = await shopRes.json();
                 setShopSettings(prev => ({ ...prev, ...shopData }));
+                
+                // Update delivery settings from shop settings
+                setDeliverySettings(prev => ({
+                    ...prev,
+                    delivery_normal_fee: parseFloat(shopData.delivery_normal_fee) || 2.50,
+                    delivery_express_fee: parseFloat(shopData.delivery_express_fee) || 4.50
+                }));
             }
 
             if (giftCardRes.ok) {
@@ -250,7 +273,7 @@ export default function ShopAdminPage() {
                 setGiftCardOrders(ordersData);
             }
 
-            // Load payment and delivery settings from tenant data
+            // Load payment settings from tenant data
             if (tenantRes.ok) {
                 const tenantData = await tenantRes.json();
                 
@@ -258,13 +281,6 @@ export default function ShopAdminPage() {
                 setPaymentSettings(prev => ({
                     ...prev,
                     stripe_connect_account_id: tenantData.stripe_connect_account_id || ''
-                }));
-
-                // Update delivery settings
-                setDeliverySettings(prev => ({
-                    ...prev,
-                    delivery_normal_fee: parseFloat(tenantData.delivery_normal_fee) || 5.00,
-                    delivery_express_fee: parseFloat(tenantData.delivery_express_fee) || 9.00
                 }));
             }
         } catch (error) {
@@ -290,6 +306,18 @@ export default function ShopAdminPage() {
         }
     };
 
+    const handleLogoImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (file) {
+            setLogoImageFile(file);
+            const reader = new FileReader();
+            reader.onload = () => {
+                setLogoPreviewImage(reader.result as string);
+            };
+            reader.readAsDataURL(file);
+        }
+    };
+
     const handleItemImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (file) {
@@ -299,52 +327,6 @@ export default function ShopAdminPage() {
                 setItemPreviewImage(reader.result as string);
             };
             reader.readAsDataURL(file);
-        }
-    };
-
-    const saveShopSettings = async () => {
-        setSaving(true);
-        try {
-            const formData = new FormData();
-            
-            formData.append('display_name', shopSettings.display_name || '');
-            formData.append('primary_color', shopSettings.primary_color);
-            formData.append('secondary_color', shopSettings.secondary_color);
-            formData.append('accent_color', shopSettings.accent_color);
-            formData.append('text_color', shopSettings.text_color);
-            formData.append('background_color', shopSettings.background_color);
-            formData.append('card_background', shopSettings.card_background);
-            formData.append('border_color', shopSettings.border_color);
-            formData.append('color_theme', shopSettings.color_theme);
-
-            if (coverImageFile) {
-                formData.append('cover_image', coverImageFile);
-            }
-
-            const response = await fetch(`/api/tenant/${tenant}/admin/shop/settings`, {
-                method: 'PUT',
-                body: formData
-            });
-
-            if (response.ok) {
-                toast({
-                    title: "Success",
-                    description: "Shop settings saved successfully"
-                });
-                await fetchSettings();
-            } else {
-                const errorData = await response.json().catch(() => ({}));
-                throw new Error(errorData.error || `Failed to save settings (${response.status})`);
-            }
-        } catch (error) {
-            console.error('Error saving shop settings:', error);
-            toast({
-                title: "Error",
-                description: error instanceof Error ? error.message : "Failed to save shop settings",
-                variant: "destructive"
-            });
-        } finally {
-            setSaving(false);
         }
     };
 
@@ -417,8 +399,8 @@ export default function ShopAdminPage() {
     const saveDeliverySettings = async () => {
         setSaving(true);
         try {
-            const response = await fetch(`/api/tenant/${tenant}`, {
-                method: 'PATCH',
+            const response = await fetch(`/api/tenant/${tenant}/admin/shop/settings`, {
+                method: 'PUT',
                 headers: {
                     'Content-Type': 'application/json',
                 },
@@ -443,6 +425,98 @@ export default function ShopAdminPage() {
             toast({
                 title: "Error",
                 description: error instanceof Error ? error.message : "Failed to save delivery settings",
+                variant: "destructive"
+            });
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    const saveShopSettings = async () => {
+        setSaving(true);
+        try {
+            // Use FormData if we have any image files or need to remove logo
+            if (coverImageFile || logoImageFile || shopSettings.logo_url === '') {
+                const formData = new FormData();
+                if (coverImageFile) {
+                    formData.append('cover_image', coverImageFile);
+                }
+                if (logoImageFile) {
+                    formData.append('logo_image', logoImageFile);
+                }
+                // Handle logo removal
+                if (shopSettings.logo_url === '') {
+                    formData.append('remove_logo', 'true');
+                }
+                formData.append('display_name', shopSettings.display_name || '');
+                formData.append('description', shopSettings.description || '');
+                formData.append('front_color', shopSettings.front_color || '#3b82f6');
+                formData.append('card_background', shopSettings.card_background || '#ffffff');
+                formData.append('border_color', shopSettings.border_color || '#e5e7eb');
+                formData.append('color_theme', shopSettings.color_theme || 'blue');
+                formData.append('gift_card_background_color', shopSettings.gift_card_background_color || '#dbeafe');
+                formData.append('gift_card_border_color', shopSettings.gift_card_border_color || '#3b82f6');
+                formData.append('gift_card_button_color', shopSettings.gift_card_button_color || '#1d4ed8');
+                formData.append('gift_card_text_color', shopSettings.gift_card_text_color || '#1f2937');
+
+                const response = await fetch(`/api/tenant/${tenant}/admin/shop/settings`, {
+                    method: 'PUT',
+                    body: formData
+                });
+
+                if (response.ok) {
+                    toast({
+                        title: "Success",
+                        description: "Shop settings saved successfully"
+                    });
+                    // Clear the preview images after successful save
+                    setPreviewImage(null);
+                    setCoverImageFile(null);
+                    setLogoPreviewImage(null);
+                    setLogoImageFile(null);
+                    // Refresh the settings to get the updated image URLs
+                    await fetchSettings();
+                } else {
+                    const errorData = await response.json();
+                    throw new Error(errorData.error || 'Failed to save shop settings');
+                }
+            } else {
+                // Use JSON for settings without file upload
+                const response = await fetch(`/api/tenant/${tenant}/admin/shop/settings`, {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        display_name: shopSettings.display_name,
+                        description: shopSettings.description,
+                        logo_url: shopSettings.logo_url,
+                        front_color: shopSettings.front_color,
+                        card_background: shopSettings.card_background,
+                        border_color: shopSettings.border_color,
+                        color_theme: shopSettings.color_theme,
+                        gift_card_background_color: shopSettings.gift_card_background_color,
+                        gift_card_border_color: shopSettings.gift_card_border_color,
+                        gift_card_button_color: shopSettings.gift_card_button_color,
+                        gift_card_text_color: shopSettings.gift_card_text_color
+                    })
+                });
+
+                if (response.ok) {
+                    toast({
+                        title: "Success",
+                        description: "Shop settings saved successfully"
+                    });
+                } else {
+                    const errorData = await response.json();
+                    throw new Error(errorData.error || 'Failed to save shop settings');
+                }
+            }
+        } catch (error) {
+            console.error('Error saving shop settings:', error);
+            toast({
+                title: "Error",
+                description: error instanceof Error ? error.message : "Failed to save shop settings",
                 variant: "destructive"
             });
         } finally {
@@ -533,8 +607,19 @@ export default function ShopAdminPage() {
                 setItemImageFile(null);
                 setItemPreviewImage(null);
                 setGalleryFiles([]);
-                // Reset form to clear preview images
-                setItemForm(prev => ({ ...prev, gallery_images: [] }));
+                // Reset form to default values
+                setItemForm({
+                    name: '',
+                    description: '',
+                    price: 0,
+                    image_url: '',
+                    gallery_images: [],
+                    type: 'physical',
+                    stock_quantity: 10, // Reset to default stock quantity
+                    track_inventory: true,
+                    is_active: true
+                });
+                setSelectedItem(null);
                 fetchSettings();
             } else {
                 const errorData = await response.json().catch(() => ({}));
@@ -646,8 +731,131 @@ export default function ShopAdminPage() {
         }
     };
 
+    const deleteGiftCard = async (cardId: string, forceDelete: boolean = false) => {
+        console.log('Delete gift card called with ID:', cardId, 'Force:', forceDelete);
+        try {
+            const url = `/api/tenant/${tenant}/admin/gift-cards/${cardId}${forceDelete ? '?force=true' : ''}`;
+            const response = await fetch(url, {
+                method: 'DELETE'
+            });
+
+            console.log('Delete response status:', response.status);
+            console.log('Delete response ok:', response.ok);
+
+            if (response.ok) {
+                toast({
+                    title: "Success",
+                    description: "Gift card deleted successfully"
+                });
+                fetchSettings(); // Refresh the data
+            } else {
+                const error = await response.json();
+                console.log('Delete error response:', error);
+                toast({
+                    title: "Error",
+                    description: error.error || "Failed to delete gift card",
+                    variant: "destructive"
+                });
+            }
+        } catch (error) {
+            console.log('Delete catch error:', error);
+            toast({
+                title: "Error",
+                description: "Failed to delete gift card",
+                variant: "destructive"
+            });
+        }
+    };
+
     const openShopPreview = () => {
         window.open(`/${tenant}/shop`, '_blank');
+    };
+
+    // Print Order Details (Receipt)
+    const printOrderDetails = () => {
+        if (!selectedOrder) return;
+        const shopName = shopSettings?.display_name || 'Gift Card Order Receipt';
+        const order = selectedOrder;
+        const html = `<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>${shopName} - Receipt</title>
+  <style>
+    body { font-family: -apple-system, system-ui, Segoe UI, Roboto, Helvetica, Arial, sans-serif; color: #111827; margin: 24px; }
+    .header { text-align: center; margin-bottom: 16px; }
+    .title { font-size: 20px; font-weight: 700; }
+    .muted { color: #6b7280; font-size: 12px; }
+    .section { border: 1px solid #e5e7eb; border-radius: 8px; padding: 12px 16px; margin-top: 12px; }
+    .section h3 { margin: 0 0 8px; font-size: 14px; }
+    .row { display: flex; justify-content: space-between; gap: 16px; }
+    .col { flex: 1; }
+    .label { color: #6b7280; font-size: 12px; }
+    .value { font-weight: 600; font-size: 14px; }
+    .total { font-size: 18px; font-weight: 700; color: #065f46; }
+    .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace; }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div class="title">${shopName}</div>
+    <div class="muted">Gift Card Order Receipt</div>
+  </div>
+
+  <div class="section">
+    <h3>Order Summary</h3>
+    <div class="row">
+      <div class="col"><div class="label">Order Number</div><div class="value mono">${order.order_number}</div></div>
+      <div class="col"><div class="label">Order Date</div><div class="value">${new Date(order.created_at).toLocaleDateString()}</div></div>
+    </div>
+    <div class="row" style="margin-top:8px;">
+      <div class="col"><div class="label">Type</div><div class="value">${order.card_type}</div></div>
+      <div class="col"><div class="label">Amount</div><div class="total">£${Number(order.order_amount || 0).toFixed(2)}</div></div>
+    </div>
+  </div>
+
+  <div class="section">
+    <h3>Customer</h3>
+    <div class="row">
+      <div class="col"><div class="label">Name</div><div class="value">${order.customer_name}</div></div>
+      <div class="col"><div class="label">Email</div><div class="value">${order.customer_email}</div></div>
+    </div>
+  </div>
+
+  ${order.recipient_name || order.recipient_email || order.recipient_address ? `
+  <div class="section">
+    <h3>Gift Recipient</h3>
+    ${order.recipient_name ? `<div class="label">Name</div><div class="value">${order.recipient_name}</div>` : ''}
+    ${order.recipient_email ? `<div class="label" style="margin-top:6px;">Email</div><div class="value">${order.recipient_email}</div>` : ''}
+    ${order.recipient_address ? `<div class="label" style="margin-top:6px;">Address</div><div class="value">${order.recipient_address}</div>` : ''}
+  </div>` : ''}
+
+  <div class="section">
+    <h3>Payment</h3>
+    <div class="label">Method</div>
+    <div class="value">${order.payment_method || 'Card Payment'}</div>
+    ${order.payment_transaction_id ? `<div class="label" style="margin-top:6px;">Transaction ID</div><div class="value mono">${order.payment_transaction_id}</div>` : ''}
+  </div>
+
+  <div class="section">
+    <h3>Delivery</h3>
+    <div class="row">
+      <div class="col"><div class="label">Order Date</div><div class="value">${new Date(order.created_at).toLocaleDateString()}</div></div>
+      ${order.sent_date ? `<div class="col"><div class="label">Sent</div><div class="value">${new Date(order.sent_date).toLocaleDateString()}</div></div>` : ''}
+      ${order.delivered_date ? `<div class="col"><div class="label">Delivered</div><div class="value">${new Date(order.delivered_date).toLocaleDateString()}</div></div>` : ''}
+    </div>
+  </div>
+
+  ${order.personal_message ? `<div class="section"><h3>Message</h3><div class="value" style="font-style:italic;">"${order.personal_message}"</div></div>` : ''}
+
+  <script>window.print(); setTimeout(() => window.close(), 300);</script>
+</body>
+</html>`;
+        const w = window.open('', '_blank', 'width=800,height=900');
+        if (!w) return;
+        w.document.open();
+        w.document.write(html);
+        w.document.close();
     };
 
     if (loading) {
@@ -714,7 +922,7 @@ export default function ShopAdminPage() {
                     <Card>
                         <CardHeader>
                             <CardTitle className="flex items-center space-x-2">
-                                <Palette className="h-5 w-5 text-blue-600" />
+                                <Palette className="h-4 w-4 text-blue-600" />
                                 <span>Shop Appearance</span>
                             </CardTitle>
                             <CardDescription>
@@ -746,6 +954,47 @@ export default function ShopAdminPage() {
                                 </div>
                             </div>
 
+                            {/* Logo Image */}
+                            <div className="space-y-3">
+                                <Label>Shop Logo</Label>
+                                <div className="flex items-center space-x-4">
+                                    {(logoPreviewImage || shopSettings.logo_url) && (
+                                        <div className="relative w-20 h-20 bg-gray-100 rounded-lg overflow-hidden">
+                                            <img
+                                                src={logoPreviewImage || shopSettings.logo_url}
+                                                alt="Logo preview"
+                                                className="w-full h-full object-contain"
+                                            />
+                                        </div>
+                                    )}
+                                    <div className="flex-1 space-y-2">
+                                        <Input
+                                            type="file"
+                                            accept="image/*"
+                                            onChange={handleLogoImageChange}
+                                            className="cursor-pointer"
+                                        />
+                                        <p className="text-xs text-gray-500">Recommended: Square image (1:1 ratio) for best results</p>
+                                        {(logoPreviewImage || shopSettings.logo_url) && (
+                                            <Button
+                                                type="button"
+                                                variant="outline"
+                                                size="sm"
+                                                onClick={() => {
+                                                    setLogoPreviewImage(null);
+                                                    setLogoImageFile(null);
+                                                    setShopSettings(prev => ({ ...prev, logo_url: '' }));
+                                                }}
+                                                className="text-red-600 hover:text-red-700 hover:bg-red-50 border-red-200 hover:border-red-300"
+                                            >
+                                                <X className="w-4 h-4 mr-2" />
+                                                Remove Logo
+                                            </Button>
+                                        )}
+                                    </div>
+                                </div>
+                            </div>
+
                             {/* Display Name */}
                             <div className="space-y-2">
                                 <Label htmlFor="display_name">Shop Display Name</Label>
@@ -757,44 +1006,72 @@ export default function ShopAdminPage() {
                                 />
                             </div>
 
-                            {/* Color Scheme */}
+                            {/* Description */}
+                            <div className="space-y-2">
+                                <Label htmlFor="description">Shop Description</Label>
+                                <Textarea
+                                    id="description"
+                                    value={shopSettings.description || ''}
+                                    onChange={(e) => setShopSettings(prev => ({ ...prev, description: e.target.value }))}
+                                    placeholder="Enter shop description"
+                                    rows={3}
+                                    className="resize-none"
+                                />
+                                <p className="text-xs text-gray-500">This description will appear in your shop page header</p>
+                            </div>
+
+                            {/* Gift Card Color Controls */}
                             <div className="space-y-4">
-                                <Label>Color Scheme</Label>
-                                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                                <Label className="text-base font-semibold text-gray-900 flex items-center space-x-2 mb-4">
+                                    <Gift className="h-4 w-4 text-purple-600" />
+                                    <span>Gift Card Color Scheme</span>
+                                </Label>
+                                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                                     <div className="space-y-2">
-                                        <Label htmlFor="primary_color">Primary Color</Label>
+                                        <Label htmlFor="front_color">Front Color Scheme</Label>
                                         <Input
-                                            id="primary_color"
+                                            id="front_color"
                                             type="color"
-                                            value={shopSettings.primary_color || '#000000'}
-                                            onChange={(e) => setShopSettings(prev => ({ ...prev, primary_color: e.target.value }))}
+                                            value={shopSettings.front_color || '#3b82f6'}
+                                            onChange={(e) => setShopSettings(prev => ({ ...prev, front_color: e.target.value }))}
                                         />
                                     </div>
                                     <div className="space-y-2">
-                                        <Label htmlFor="secondary_color">Secondary Color</Label>
+                                        <Label htmlFor="gift_card_background_color">Gift Card Background</Label>
                                         <Input
-                                            id="secondary_color"
+                                            id="gift_card_background_color"
                                             type="color"
-                                            value={shopSettings.secondary_color || '#000000'}
-                                            onChange={(e) => setShopSettings(prev => ({ ...prev, secondary_color: e.target.value }))}
+                                            value={shopSettings.gift_card_background_color || '#dbeafe'}
+                                            onChange={(e) => setShopSettings(prev => ({ ...prev, gift_card_background_color: e.target.value }))}
                                         />
                                     </div>
                                     <div className="space-y-2">
-                                        <Label htmlFor="accent_color">Accent Color</Label>
+                                        <Label htmlFor="gift_card_border_color">Gift Card Border</Label>
                                         <Input
-                                            id="accent_color"
+                                            id="gift_card_border_color"
                                             type="color"
-                                            value={shopSettings.accent_color || '#000000'}
-                                            onChange={(e) => setShopSettings(prev => ({ ...prev, accent_color: e.target.value }))}
+                                            value={shopSettings.gift_card_border_color || '#e5e7eb'}
+                                            onChange={(e) => setShopSettings(prev => ({ ...prev, gift_card_border_color: e.target.value }))}
                                         />
                                     </div>
                                     <div className="space-y-2">
-                                        <Label htmlFor="text_color">Text Color</Label>
+                                        <Label htmlFor="gift_card_button_color">Gift Card Button</Label>
                                         <Input
-                                            id="text_color"
+                                            id="gift_card_button_color"
                                             type="color"
-                                            value={shopSettings.text_color || '#000000'}
-                                            onChange={(e) => setShopSettings(prev => ({ ...prev, text_color: e.target.value }))}
+                                            value={shopSettings.gift_card_button_color || '#1d4ed8'}
+                                            onChange={(e) => setShopSettings(prev => ({ ...prev, gift_card_button_color: e.target.value }))}
+                                        />
+                                    </div>
+                                </div>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+                                    <div className="space-y-2">
+                                        <Label htmlFor="gift_card_text_color">Gift Card Text Color</Label>
+                                        <Input
+                                            id="gift_card_text_color"
+                                            type="color"
+                                            value={shopSettings.gift_card_text_color || '#1f2937'}
+                                            onChange={(e) => setShopSettings(prev => ({ ...prev, gift_card_text_color: e.target.value }))}
                                         />
                                     </div>
                                 </div>
@@ -830,12 +1107,11 @@ export default function ShopAdminPage() {
                                 setItemForm({
                                     name: '',
                                     description: '',
-                                    short_description: '',
                                     price: 0,
                                     image_url: '',
                                     gallery_images: [],
                                     type: 'physical',
-                                    stock_quantity: 0,
+                                    stock_quantity: 10, // Default to 10 to prevent auto-deactivation
                                     track_inventory: true,
                                     is_active: true
                                 });
@@ -875,12 +1151,11 @@ export default function ShopAdminPage() {
                                         setItemForm({
                                             name: '',
                                             description: '',
-                                            short_description: '',
                                             price: 0,
                                             image_url: '',
                                             gallery_images: [],
                                             type: 'physical',
-                                            stock_quantity: 0,
+                                            stock_quantity: 10,
                                             track_inventory: true,
                                             is_active: true
                                         });
@@ -945,7 +1220,6 @@ export default function ShopAdminPage() {
                                                                 setItemForm({
                                                                     name: item.name || '',
                                                                     description: item.description || '',
-                                                                    short_description: item.short_description || '',
                                                                     price: Number(item.price || 0),
                                                                     image_url: item.image_url || '',
                                                                     gallery_images: item.gallery_images || [],
@@ -1089,6 +1363,7 @@ export default function ShopAdminPage() {
                                             <TableHead>Customer</TableHead>
                                             <TableHead>Status</TableHead>
                                             <TableHead>Created</TableHead>
+                                            <TableHead>Actions</TableHead>
                                         </TableRow>
                                     </TableHeader>
                                     <TableBody>
@@ -1104,6 +1379,46 @@ export default function ShopAdminPage() {
                                                     </Badge>
                                                 </TableCell>
                                                 <TableCell>{new Date(card.created_at).toLocaleDateString()}</TableCell>
+                                                <TableCell>
+                                                    <AlertDialog>
+                                                        <AlertDialogTrigger asChild>
+                                                            <Button 
+                                                                variant="ghost" 
+                                                                size="sm" 
+                                                                className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                                                            >
+                                                                <Trash2 className="h-4 w-4" />
+                                                            </Button>
+                                                        </AlertDialogTrigger>
+                                                        <AlertDialogContent>
+                                                            <AlertDialogHeader>
+                                                                <AlertDialogTitle>Delete Gift Card</AlertDialogTitle>
+                                                                <AlertDialogDescription>
+                                                                    Are you sure you want to delete gift card {card.card_number}?
+                                                                    <br /><br />
+                                                                    <strong>Normal Delete:</strong> Only works if gift card has no remaining balance and no recent transactions.
+                                                                    <br />
+                                                                    <strong>Force Delete:</strong> Deletes the gift card regardless of balance or transactions (Admin override).
+                                                                </AlertDialogDescription>
+                                                            </AlertDialogHeader>
+                                                            <AlertDialogFooter>
+                                                                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                                                <AlertDialogAction 
+                                                                    onClick={() => deleteGiftCard(card.id, false)}
+                                                                    className="bg-yellow-600 hover:bg-yellow-700"
+                                                                >
+                                                                    Normal Delete
+                                                                </AlertDialogAction>
+                                                                <AlertDialogAction 
+                                                                    onClick={() => deleteGiftCard(card.id, true)}
+                                                                    className="bg-red-600 hover:bg-red-700"
+                                                                >
+                                                                    Force Delete
+                                                                </AlertDialogAction>
+                                                            </AlertDialogFooter>
+                                                        </AlertDialogContent>
+                                                    </AlertDialog>
+                                                </TableCell>
                                             </TableRow>
                                         ))}
                                     </TableBody>
@@ -1139,15 +1454,16 @@ export default function ShopAdminPage() {
                                             <TableHead>Customer</TableHead>
                                             <TableHead>Amount</TableHead>
                                             <TableHead>Type</TableHead>
-                                            <TableHead>Payment Status</TableHead>
-                                            <TableHead>Delivery Status</TableHead>
                                             <TableHead>Date</TableHead>
+                                            <TableHead>Actions</TableHead>
                                         </TableRow>
                                     </TableHeader>
                                     <TableBody>
                                         {giftCardOrders.map((order) => (
                                             <TableRow key={order.id}>
-                                                <TableCell className="font-mono">{order.order_number}</TableCell>
+                                                <TableCell className="font-mono">
+                                                    {order.order_number || `GC-${order.id.slice(-8).toUpperCase()}`}
+                                                </TableCell>
                                                 <TableCell>
                                                     <div>
                                                         <div className="font-medium">{order.customer_name}</div>
@@ -1159,16 +1475,28 @@ export default function ShopAdminPage() {
                                                     <Badge variant="outline">{order.card_type}</Badge>
                                                 </TableCell>
                                                 <TableCell>
-                                                    <Badge variant={order.payment_status === 'completed' ? 'default' : 'secondary'}>
-                                                        {order.payment_status}
-                                                    </Badge>
+                                                    {(() => {
+                                                        const orderDate = order.order_date || order.created_at;
+                                                        try {
+                                                            return new Date(orderDate).toLocaleDateString('en-GB');
+                                                        } catch (e) {
+                                                            return new Date().toLocaleDateString('en-GB');
+                                                        }
+                                                    })()}
                                                 </TableCell>
                                                 <TableCell>
-                                                    <Badge variant={order.delivery_status === 'delivered' ? 'default' : 'secondary'}>
-                                                        {order.delivery_status}
-                                                    </Badge>
+                                                    <Button
+                                                        variant="ghost"
+                                                        size="sm"
+                                                        onClick={() => {
+                                                            setSelectedOrder(order);
+                                                            setOrderDetailsDialogOpen(true);
+                                                        }}
+                                                        className="text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+                                                    >
+                                                        <Eye className="h-4 w-4" />
+                                                    </Button>
                                                 </TableCell>
-                                                <TableCell>{new Date(order.created_at).toLocaleDateString()}</TableCell>
                                             </TableRow>
                                         ))}
                                     </TableBody>
@@ -1233,76 +1561,6 @@ export default function ShopAdminPage() {
                     </Card>
                 </TabsContent>
 
-                {/* Payment Settings Tab */}
-                <TabsContent value="payment" className="space-y-6">
-                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between space-y-4 sm:space-y-0">
-                        <div>
-                            <h2 className="text-xl font-semibold">Payment Settings</h2>
-                            <p className="text-gray-600">Configure Stripe Connect for payment processing</p>
-                        </div>
-                    </div>
-
-                    <Card>
-                        <CardHeader>
-                            <CardTitle className="flex items-center space-x-2">
-                                <CreditCard className="h-5 w-5 text-blue-600" />
-                                <span>Stripe Connect Account</span>
-                            </CardTitle>
-                            <CardDescription>
-                                Connect your Stripe account to receive payments
-                            </CardDescription>
-                        </CardHeader>
-                        <CardContent className="space-y-6">
-                            <div className="space-y-4">
-                                <div className="space-y-2">
-                                    <Label htmlFor="stripe_connect_account_id">Stripe Connect Account ID</Label>
-                                    <Input
-                                        id="stripe_connect_account_id"
-                                        value={paymentSettings.stripe_connect_account_id || ''}
-                                        onChange={(e) => setPaymentSettings(prev => ({ 
-                                            ...prev, 
-                                            stripe_connect_account_id: e.target.value 
-                                        }))}
-                                        placeholder="acct_1234567890abcdef"
-                                    />
-                                    <p className="text-sm text-gray-500">
-                                        Enter your Stripe Connect account ID. This is required to receive payments.
-                                    </p>
-                                </div>
-
-                                <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
-                                    <div className="flex items-start space-x-3">
-                                        <Settings className="h-5 w-5 text-blue-600 mt-0.5" />
-                                        <div>
-                                            <h4 className="font-medium text-blue-900 mb-1">Setup Instructions</h4>
-                                            <ol className="text-sm text-blue-800 space-y-1 list-decimal list-inside">
-                                                <li>Create a Stripe Connect account at stripe.com</li>
-                                                <li>Complete your account verification</li>
-                                                <li>Get your Connect Account ID from your Stripe dashboard</li>
-                                                <li>Paste the Account ID in the field above</li>
-                                            </ol>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <Button onClick={savePaymentSettings} disabled={saving} className="w-full">
-                                {saving ? (
-                                    <>
-                                        <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
-                                        Saving...
-                                    </>
-                                ) : (
-                                    <>
-                                        <Save className="mr-2 h-4 w-4" />
-                                        Save Payment Settings
-                                    </>
-                                )}
-                            </Button>
-                        </CardContent>
-                    </Card>
-                </TabsContent>
-
                 {/* Delivery Settings Tab */}
                 <TabsContent value="delivery" className="space-y-6">
                     <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between space-y-4 sm:space-y-0">
@@ -1315,7 +1573,7 @@ export default function ShopAdminPage() {
                     <Card>
                         <CardHeader>
                             <CardTitle className="flex items-center space-x-2">
-                                <TrendingUp className="h-5 w-5 text-green-600" />
+                                <TrendingUp className="h-4 w-4 text-green-600" />
                                 <span>Delivery Options & Pricing</span>
                             </CardTitle>
                             <CardDescription>
@@ -1387,25 +1645,10 @@ export default function ShopAdminPage() {
                                 </div>
 
                                 <div className="space-y-4">
-                                    <h3 className="text-lg font-semibold">Delivery Information</h3>
+                                    <h3 className="text-lg font-semibold">Current Settings Preview</h3>
                                     
-                                    <div className="bg-yellow-50 p-4 rounded-lg border border-yellow-200">
-                                        <div className="flex items-start space-x-3">
-                                            <Settings className="h-5 w-5 text-yellow-600 mt-0.5" />
-                                            <div>
-                                                <h4 className="font-medium text-yellow-900 mb-2">Delivery Options</h4>
-                                                <ul className="text-sm text-yellow-800 space-y-1">
-                                                    <li><strong>Collection:</strong> Free pickup from your location</li>
-                                                    <li><strong>Email:</strong> Free for digital products (gift cards, etc.)</li>
-                                                    <li><strong>Normal:</strong> Standard delivery service</li>
-                                                    <li><strong>Express:</strong> Priority/faster delivery</li>
-                                                </ul>
-                                            </div>
-                                        </div>
-                                    </div>
-
                                     <div className="bg-gray-50 p-4 rounded-lg border">
-                                        <h4 className="font-medium text-gray-900 mb-2">Current Settings Preview</h4>
+                                        <h4 className="font-medium text-gray-900 mb-2">Delivery Pricing</h4>
                                         <div className="space-y-2 text-sm">
                                             <div className="flex justify-between">
                                                 <span>Collection:</span>
@@ -1417,11 +1660,11 @@ export default function ShopAdminPage() {
                                             </div>
                                             <div className="flex justify-between">
                                                 <span>Normal Delivery:</span>
-                                                <span className="font-medium">£{deliverySettings.delivery_normal_fee.toFixed(2)}</span>
+                                                <span className="font-medium">£{(parseFloat(deliverySettings.delivery_normal_fee) || 0).toFixed(2)}</span>
                                             </div>
                                             <div className="flex justify-between">
                                                 <span>Express Delivery:</span>
-                                                <span className="font-medium">£{deliverySettings.delivery_express_fee.toFixed(2)}</span>
+                                                <span className="font-medium">£{(parseFloat(deliverySettings.delivery_express_fee) || 0).toFixed(2)}</span>
                                             </div>
                                         </div>
                                     </div>
@@ -1438,6 +1681,61 @@ export default function ShopAdminPage() {
                                     <>
                                         <Save className="mr-2 h-4 w-4" />
                                         Save Delivery Settings
+                                    </>
+                                )}
+                            </Button>
+                        </CardContent>
+                    </Card>
+                </TabsContent>
+
+                {/* Payment Settings Tab */}
+                <TabsContent value="payment" className="space-y-6">
+                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between space-y-4 sm:space-y-0">
+                        <div>
+                            <h2 className="text-xl font-semibold">Payment Settings</h2>
+                            <p className="text-gray-600">Configure your Connect Account for payment processing</p>
+                        </div>
+                    </div>
+
+                    <Card>
+                        <CardHeader>
+                            <CardTitle className="flex items-center space-x-2">
+                                <CreditCard className="h-4 w-4 text-blue-600" />
+                                <span>Connect Account</span>
+                            </CardTitle>
+                            <CardDescription>
+                                Connect your account to receive payments
+                            </CardDescription>
+                        </CardHeader>
+                        <CardContent className="space-y-6">
+                            <div className="space-y-4">
+                                <div className="space-y-2">
+                                    <Label htmlFor="stripe_connect_account_id">Connect Account ID</Label>
+                                    <Input
+                                        id="stripe_connect_account_id"
+                                        value={paymentSettings.stripe_connect_account_id || ''}
+                                        onChange={(e) => setPaymentSettings(prev => ({ 
+                                            ...prev, 
+                                            stripe_connect_account_id: e.target.value 
+                                        }))}
+                                        placeholder="acct_1234567890abcdef"
+                                    />
+                                    <p className="text-sm text-gray-500">
+                                        Enter your Connect account ID. This is required to receive payments. More information please call order web
+                                    </p>
+                                </div>
+                            </div>
+
+                            <Button onClick={savePaymentSettings} disabled={saving} className="w-full">
+                                {saving ? (
+                                    <>
+                                        <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
+                                        Saving...
+                                    </>
+                                ) : (
+                                    <>
+                                        <Save className="mr-2 h-4 w-4" />
+                                        Save Payment Settings
                                     </>
                                 )}
                             </Button>
@@ -1486,15 +1784,6 @@ export default function ShopAdminPage() {
                         </div>
 
                         <div className="space-y-2">
-                            <Label>Short Description</Label>
-                            <Input
-                                value={itemForm.short_description}
-                                onChange={(e) => setItemForm(prev => ({ ...prev, short_description: e.target.value }))}
-                                placeholder="Brief description"
-                            />
-                        </div>
-
-                        <div className="space-y-2">
                             <Label>Description</Label>
                             <Textarea
                                 value={itemForm.description}
@@ -1527,7 +1816,24 @@ export default function ShopAdminPage() {
                             </div>
 
                             <div className="space-y-2 col-span-2">
-                                <Label>Gallery Images (Max 5 images)</Label>
+                                <div className="flex items-center space-x-2">
+                                    <Label>Gallery Images (Max 5 images)</Label>
+                                    <div className="group relative">
+                                        <div className="w-4 h-4 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center text-xs font-medium cursor-help">
+                                            ?
+                                        </div>
+                                        <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none">
+                                            <div className="bg-gray-900 text-white text-xs rounded-lg py-2 px-3 whitespace-nowrap">
+                                                <div className="space-y-1">
+                                                    <div>📏 Best: 1200x1200px (square)</div>
+                                                    <div>📱 Mobile-friendly format</div>
+                                                    <div>💡 First = main image</div>
+                                                </div>
+                                                <div className="absolute top-full left-1/2 transform -translate-x-1/2 border-4 border-transparent border-t-gray-900"></div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
                                 <div className="space-y-4">
                                     {/* Current Images Display */}
                                     {Array.isArray(itemForm.gallery_images) && itemForm.gallery_images.length > 0 && (
@@ -1626,11 +1932,40 @@ export default function ShopAdminPage() {
                                                         });
                                                     }
 
-                                                    // Create preview URLs for new images
+                                                    // Create preview URLs for new images and validate dimensions
                                                     filesToProcess.forEach(file => {
                                                         const reader = new FileReader();
                                                         reader.onload = (event) => {
                                                             const imageUrl = event.target?.result as string;
+                                                            
+                                                            // Create an image element to check dimensions
+                                                            const img = document.createElement('img');
+                                                            img.onload = () => {
+                                                                const { width, height } = img;
+                                                                
+                                                                // Show size recommendations
+                                                                if (width < 600 || height < 600) {
+                                                                    toast({
+                                                                        title: "Image size notice",
+                                                                        description: `Image is ${width}x${height}px. For best quality, use 1200x1200px or larger.`,
+                                                                        variant: "default"
+                                                                    });
+                                                                } else if (width !== height) {
+                                                                    toast({
+                                                                        title: "Image format tip",
+                                                                        description: `Image is ${width}x${height}px. Square images (1:1 ratio) display better in product grids.`,
+                                                                        variant: "default"
+                                                                    });
+                                                                } else if (width >= 1000 && height >= 1000) {
+                                                                    toast({
+                                                                        title: "Great image quality! ✨",
+                                                                        description: `Perfect ${width}x${height}px size for high-quality display.`,
+                                                                        variant: "default"
+                                                                    });
+                                                                }
+                                                            };
+                                                            img.src = imageUrl;
+                                                            
                                                             // Add preview URL temporarily for display
                                                             setItemForm(prev => ({ 
                                                                 ...prev, 
@@ -1652,13 +1987,15 @@ export default function ShopAdminPage() {
                                                     <ImagePlus className="h-8 w-8 text-gray-400" />
                                                     <div className="text-sm text-gray-600">
                                                         <span className="font-medium text-blue-600 hover:text-blue-500">
-                                                            Click to add images
+                                                            Click to upload product images
                                                         </span>{" "}
                                                         or drag and drop
                                                     </div>
-                                                    <p className="text-xs text-gray-500">
-                                                        PNG, JPG up to 10MB each. Add {5 - (Array.isArray(itemForm.gallery_images) ? itemForm.gallery_images.length : 0)} more image(s).
-                                                    </p>
+                                                    <div className="text-xs text-gray-500 text-center">
+                                                        <p className="font-medium">Recommended: 1200x1200px (square format)</p>
+                                                        <p>PNG, JPG up to 10MB max • Add {5 - (Array.isArray(itemForm.gallery_images) ? itemForm.gallery_images.length : 0)} more image(s)</p>
+                                                        <p className="text-gray-400 mt-1">High-quality images improve sales</p>
+                                                    </div>
                                                 </div>
                                             </label>
                                         </div>
@@ -1675,9 +2012,12 @@ export default function ShopAdminPage() {
                                         </div>
                                     )}
 
-                                    <p className="text-xs text-gray-500">
-                                        💡 <strong>Tip:</strong> First image will be the main product image. Use hover controls to reorder, or delete images.
-                                    </p>
+                                    <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 space-y-2">
+                                        <p className="text-sm text-blue-800 font-medium">📸 Image Guidelines</p>
+                                        <div className="text-xs text-blue-700 space-y-1">
+                                            <p>• <strong>Best Size:</strong> 1200x1200px (square) for consistent display</p>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -1689,8 +2029,8 @@ export default function ShopAdminPage() {
                                     type="number"
                                     min="0"
                                     value={itemForm.stock_quantity}
-                                    onChange={(e) => setItemForm(prev => ({ ...prev, stock_quantity: parseInt(e.target.value) || 0 }))}
-                                    placeholder="0"
+                                    onChange={(e) => setItemForm(prev => ({ ...prev, stock_quantity: parseInt(e.target.value) || 10 }))}
+                                    placeholder="10"
                                 />
                                 <p className="text-xs text-gray-500">
                                     Current stock quantity for this item
@@ -1784,6 +2124,156 @@ export default function ShopAdminPage() {
                         </Button>
                         <Button onClick={redeemGiftCard}>
                             Redeem Gift Card
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            {/* Order Details Dialog */}
+            <Dialog open={orderDetailsDialogOpen} onOpenChange={setOrderDetailsDialogOpen}>
+                <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+                    <DialogHeader>
+                        <DialogTitle className="flex items-center space-x-2">
+                            <Eye className="h-5 w-5 text-blue-600" />
+                            <span>Order Details</span>
+                        </DialogTitle>
+                        <DialogDescription>
+                            Complete information for gift card order
+                        </DialogDescription>
+                    </DialogHeader>
+                    
+                    {selectedOrder && (
+                        <div className="space-y-4">
+                            {/* Order Summary */}
+                            <div className="border border-gray-200 p-4 rounded-lg">
+                                <h3 className="font-semibold text-lg mb-3 text-gray-900">Order Summary</h3>
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div>
+                                        <span className="text-sm font-medium text-gray-500">Order Number</span>
+                                        <p className="font-mono font-medium text-gray-900">{selectedOrder.order_number || `GC-${selectedOrder.id.slice(-8).toUpperCase()}`}</p>
+                                    </div>
+                                    <div>
+                                        <span className="text-sm font-medium text-gray-500">Order Date</span>
+                                        <p className="font-medium text-gray-900">{new Date(selectedOrder.created_at).toLocaleDateString('en-GB')}</p>
+                                    </div>
+                                    <div>
+                                        <span className="text-sm font-medium text-gray-500">Gift Card Type</span>
+                                        <Badge variant="outline" className="mt-1">{selectedOrder.card_type}</Badge>
+                                    </div>
+                                    <div>
+                                        <span className="text-sm font-medium text-gray-500">Amount</span>
+                                        <p className="font-bold text-lg text-gray-900">£{Number(selectedOrder.order_amount || 0).toFixed(2)}</p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Customer Information */}
+                            <div className="border border-gray-200 p-4 rounded-lg">
+                                <h3 className="font-semibold text-lg mb-3 text-gray-900">Customer Information</h3>
+                                <div className="space-y-3">
+                                    <div>
+                                        <span className="text-sm font-medium text-gray-500">Name</span>
+                                        <p className="font-medium text-gray-900">{selectedOrder.customer_name}</p>
+                                    </div>
+                                    <div>
+                                        <span className="text-sm font-medium text-gray-500">Email</span>
+                                        <p className="font-medium text-gray-900">{selectedOrder.customer_email}</p>
+                                    </div>
+                                    {selectedOrder.customer_phone && (
+                                        <div>
+                                            <span className="text-sm font-medium text-gray-500">Phone</span>
+                                            <p className="font-medium text-gray-900">{selectedOrder.customer_phone}</p>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+
+                            {/* Recipient Information (if different) */}
+                            {(selectedOrder.recipient_name || selectedOrder.recipient_email) && (
+                                <div className="border border-gray-200 p-4 rounded-lg">
+                                    <h3 className="font-semibold text-lg mb-3 text-gray-900">Gift Recipient</h3>
+                                    <div className="space-y-3">
+                                        {selectedOrder.recipient_name && (
+                                            <div>
+                                                <span className="text-sm font-medium text-gray-500">Name</span>
+                                                <p className="font-medium text-gray-900">{selectedOrder.recipient_name}</p>
+                                            </div>
+                                        )}
+                                        {selectedOrder.recipient_email && (
+                                            <div>
+                                                <span className="text-sm font-medium text-gray-500">Email</span>
+                                                <p className="font-medium text-gray-900">{selectedOrder.recipient_email}</p>
+                                            </div>
+                                        )}
+                                        {selectedOrder.recipient_address && (
+                                            <div>
+                                                <span className="text-sm font-medium text-gray-500">Address</span>
+                                                <p className="font-medium text-gray-900">{selectedOrder.recipient_address}</p>
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Personal Message */}
+                            {selectedOrder.personal_message && (
+                                <div className="border border-gray-200 p-4 rounded-lg">
+                                    <h3 className="font-semibold text-lg mb-3 text-gray-900">Personal Message</h3>
+                                    <div className="bg-gray-50 p-3 rounded border-l-4 border-gray-300">
+                                        <p className="italic text-gray-700">"{selectedOrder.personal_message}"</p>
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Payment Information */}
+                            <div className="border border-gray-200 p-4 rounded-lg">
+                                <h3 className="font-semibold text-lg mb-3 text-gray-900">Payment Information</h3>
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div>
+                                        <span className="text-sm font-medium text-gray-500">Payment Method</span>
+                                        <p className="font-medium text-gray-900">{selectedOrder.payment_method || 'Card Payment'}</p>
+                                    </div>
+                                    {selectedOrder.payment_transaction_id && (
+                                        <div>
+                                            <span className="text-sm font-medium text-gray-500">Transaction ID</span>
+                                            <p className="font-mono text-sm bg-gray-50 p-2 rounded border mt-1 text-gray-900">{selectedOrder.payment_transaction_id}</p>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+
+                            {/* Delivery Information */}
+                            <div className="border border-gray-200 p-4 rounded-lg">
+                                <h3 className="font-semibold text-lg mb-3 text-gray-900">Delivery Information</h3>
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div>
+                                        <span className="text-sm font-medium text-gray-500">Order Date</span>
+                                        <p className="font-medium text-gray-900">{new Date(selectedOrder.order_date || selectedOrder.created_at).toLocaleDateString('en-GB')}</p>
+                                    </div>
+                                    {selectedOrder.sent_date && (
+                                        <div>
+                                            <span className="text-sm font-medium text-gray-500">Sent Date</span>
+                                            <p className="font-medium text-gray-900">{new Date(selectedOrder.sent_date).toLocaleDateString('en-GB')}</p>
+                                        </div>
+                                    )}
+                                    {selectedOrder.delivered_date && (
+                                        <div>
+                                            <span className="text-sm font-medium text-gray-500">Delivered Date</span>
+                                            <p className="font-medium text-gray-900">{new Date(selectedOrder.delivered_date).toLocaleDateString('en-GB')}</p>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+                    )}
+                    
+                    <DialogFooter>
+                        <Button onClick={printOrderDetails} className="flex items-center space-x-2">
+                            <Printer className="h-4 w-4" />
+                            <span>Print Receipt</span>
+                        </Button>
+                        <Button variant="outline" onClick={() => setOrderDetailsDialogOpen(false)}>
+                            Close
                         </Button>
                     </DialogFooter>
                 </DialogContent>

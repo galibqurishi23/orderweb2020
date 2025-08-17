@@ -131,9 +131,9 @@ export default function LicenseRequiredPage() {
 
           <div className="text-center text-sm text-gray-600">
             {status === 'trial' ? (
-              <p>Your 3-day free trial is ending soon. Activate a license key to continue using the service.</p>
+              <p>Your 3-day free trial is ending soon. Please talk with <strong>OrderWeb Ltd</strong> and get new License to continue using the service.</p>
             ) : (
-              <p>Your 3-day free trial has expired. Please activate a license key to continue using the service.</p>
+              <p>Your 3-day free trial has expired. Please talk with <strong>OrderWeb Ltd</strong> and get new License to continue using the service.</p>
             )}
           </div>
 
@@ -169,7 +169,7 @@ export default function LicenseRequiredPage() {
 
           <div className="text-center text-xs text-gray-500">
             <p>Need a license key?</p>
-            <p>Contact support: <span className="font-medium">support@owltd.com</span></p>
+            <p>Contact OrderWeb Ltd: <span className="font-medium">license@orderweb.ltd</span></p>
           </div>
         </CardFooter>
       </Card>

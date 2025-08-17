@@ -19,7 +19,6 @@ export interface ShopItem {
     category_id: string;
     name: string;
     description?: string;
-    short_description?: string;
     price: number;
     compare_price?: number;
     sku?: string;
@@ -192,14 +191,14 @@ export async function createShopItem(tenantId: string, data: Partial<ShopItem>):
     
     await db.query(
         `INSERT INTO shop_items (
-            id, tenant_id, category_id, name, description, short_description, 
+            id, tenant_id, category_id, name, description, 
             price, compare_price, sku, type, stock_quantity, track_inventory,
             weight, dimensions, image_url, gallery_images, is_featured, 
             is_active, sort_order, tags, meta_title, meta_description
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
             id, tenantId, data.category_id, data.name, data.description || null,
-            data.short_description || null, data.price, data.compare_price || null,
+            data.price, data.compare_price || null,
             data.sku || null, data.type || 'physical', data.stock_quantity || 0,
             data.track_inventory !== false, data.weight || null, data.dimensions || null,
             data.image_url || null, JSON.stringify(data.gallery_images || []),
@@ -218,7 +217,6 @@ export async function updateShopItem(id: string, data: Partial<ShopItem>): Promi
     if (data.category_id !== undefined) { fields.push('category_id = ?'); values.push(data.category_id); }
     if (data.name !== undefined) { fields.push('name = ?'); values.push(data.name); }
     if (data.description !== undefined) { fields.push('description = ?'); values.push(data.description); }
-    if (data.short_description !== undefined) { fields.push('short_description = ?'); values.push(data.short_description); }
     if (data.price !== undefined) { fields.push('price = ?'); values.push(data.price); }
     if (data.compare_price !== undefined) { fields.push('compare_price = ?'); values.push(data.compare_price); }
     if (data.sku !== undefined) { fields.push('sku = ?'); values.push(data.sku); }

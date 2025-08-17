@@ -4,6 +4,37 @@ import { LicenseKeyService } from '@/lib/license-key-service';
 export class LicenseMiddleware {
   private static licenseService = new LicenseKeyService();
 
+  // Routes that require license validation (only food order page)
+  private static protectedRoutes = [
+    '/', // Main food order page
+    '/kitchen', // Kitchen display (if exists)
+    '/customer', // Customer interface (if exists)
+  ];
+
+  // Check if the route should be protected by license
+  static shouldCheckLicense(pathname: string, tenantId: string): boolean {
+    // Extract the path after tenant
+    const tenantPath = pathname.replace(`/${tenantId}`, '') || '/';
+    
+    // Admin routes are never protected
+    if (tenantPath.startsWith('/admin')) {
+      return false;
+    }
+    
+    // Shop routes are never protected  
+    if (tenantPath.startsWith('/shop')) {
+      return false;
+    }
+    
+    // License routes are never protected
+    if (tenantPath.startsWith('/license')) {
+      return false;
+    }
+    
+    // Only protect food order routes
+    return this.protectedRoutes.includes(tenantPath);
+  }
+
   static async checkTenantLicense(tenantId: string): Promise<{
     isValid: boolean;
     status?: string;
@@ -17,8 +48,8 @@ export class LicenseMiddleware {
         return {
           isValid: false,
           status: 'no_license',
-          redirectPath: `/${tenantId}/license`,
-          message: 'No active license found. Please activate a license key.'
+          redirectPath: `/${tenantId}/license-required`,
+          message: 'Please talk with OrderWeb Ltd and get new License'
         };
       }
 
@@ -26,8 +57,8 @@ export class LicenseMiddleware {
         return {
           isValid: false,
           status: 'expired',
-          redirectPath: `/${tenantId}/license`,
-          message: 'License has expired and grace period ended. Service suspended.'
+          redirectPath: `/${tenantId}/license-required`,
+          message: 'License has expired. Please talk with OrderWeb Ltd and get new License'
         };
       }
 
@@ -40,7 +71,7 @@ export class LicenseMiddleware {
         };
       }
 
-      if (licenseStatus.status === 'active' && licenseStatus.daysRemaining !== undefined && licenseStatus.daysRemaining <= 7) {
+      if (licenseStatus.status === 'active' && licenseStatus.daysRemaining !== undefined && licenseStatus.daysRemaining <= 2) {
         // Allow access but with warning
         return {
           isValid: true,

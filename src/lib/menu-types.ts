@@ -27,6 +27,7 @@ export interface MenuItem {
     isFeatured: boolean;
     isSetMenu: boolean;
     preparationTime: number;
+    displayOrder?: number;
     characteristics?: ItemCharacteristic[];
     nutrition?: NutritionInfo;
     setMenuItems?: SetMenuItem[];

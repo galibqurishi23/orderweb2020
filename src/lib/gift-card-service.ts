@@ -289,3 +289,65 @@ export async function cleanupZeroBalanceCards(tenantId: string): Promise<number>
     
     return result.affectedRows;
 }
+
+export async function deleteGiftCard(tenantId: string, cardId: string, forceDelete: boolean = false): Promise<{ success: boolean; message: string }> {
+    try {
+        // First check if the card exists and belongs to this tenant
+        const [cards] = await db.execute(
+            'SELECT id, card_number, remaining_balance, status FROM gift_cards WHERE id = ? AND tenant_id = ?',
+            [cardId, tenantId]
+        ) as any[];
+
+        if (cards.length === 0) {
+            return { success: false, message: 'Gift card not found' };
+        }
+
+        const card = cards[0];
+
+        // Only check restrictions if not force deleting
+        if (!forceDelete) {
+            // Check if card has remaining balance
+            if (parseFloat(card.remaining_balance) > 0) {
+                return { success: false, message: 'Cannot delete gift card with remaining balance' };
+            }
+
+            // Check for any recent transactions (within last 30 days)
+            const [recentTransactions] = await db.execute(
+                `SELECT COUNT(*) as count FROM gift_card_transactions 
+                 WHERE gift_card_id = ? AND created_at > DATE_SUB(NOW(), INTERVAL 30 DAY)`,
+                [cardId]
+            ) as any[];
+
+            if (recentTransactions[0].count > 0) {
+                return { success: false, message: 'Cannot delete gift card with recent transactions' };
+            }
+        }
+
+        // Delete associated transactions first
+        await db.execute(
+            'DELETE FROM gift_card_transactions WHERE gift_card_id = ?',
+            [cardId]
+        );
+
+        // Delete associated orders
+        await db.execute(
+            'DELETE FROM gift_card_orders WHERE gift_card_id = ?',
+            [cardId]
+        );
+
+        // Delete the gift card
+        const [result] = await db.execute(
+            'DELETE FROM gift_cards WHERE id = ? AND tenant_id = ?',
+            [cardId, tenantId]
+        ) as any[];
+
+        if (result.affectedRows > 0) {
+            return { success: true, message: 'Gift card deleted successfully' };
+        } else {
+            return { success: false, message: 'Failed to delete gift card' };
+        }
+    } catch (error) {
+        console.error('Error deleting gift card:', error);
+        return { success: false, message: 'An error occurred while deleting the gift card' };
+    }
+}

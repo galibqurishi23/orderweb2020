@@ -54,7 +54,7 @@ export default function KitchenDisplayPage() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-screen bg-gray-100">
+      <div className="flex items-center justify-center min-h-screen bg-gray-100 p-4">
         <LoadingSpinner size="lg" />
       </div>
     );
@@ -63,8 +63,8 @@ export default function KitchenDisplayPage() {
   if (error) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-gray-100 p-4">
-        <Alert className="max-w-md">
-          <AlertDescription>{error}</AlertDescription>
+        <Alert className="max-w-md w-full">
+          <AlertDescription className="text-center">{error}</AlertDescription>
         </Alert>
       </div>
     );
@@ -73,8 +73,8 @@ export default function KitchenDisplayPage() {
   if (displays.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen bg-gray-100 p-4">
-        <Alert className="max-w-md">
-          <AlertDescription>
+        <Alert className="max-w-md w-full">
+          <AlertDescription className="text-center">
             No kitchen displays configured. Please contact your administrator to set up kitchen displays.
           </AlertDescription>
         </Alert>
@@ -85,10 +85,12 @@ export default function KitchenDisplayPage() {
   if (!selectedDisplay) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-gray-100 p-4">
-        <DisplaySelector 
-          displays={displays}
-          onSelect={setSelectedDisplay}
-        />
+        <div className="w-full max-w-md">
+          <DisplaySelector 
+            displays={displays}
+            onSelect={setSelectedDisplay}
+          />
+        </div>
       </div>
     );
   }

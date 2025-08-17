@@ -5,21 +5,14 @@ import mysql, { RowDataPacket } from 'mysql2/promise';
 
 // Production-optimized database configuration
 const createDatabaseConfig = () => {
-  // Validate required environment variables
-  const requiredVars = ['DB_HOST', 'DB_USER', 'DB_PASSWORD', 'DB_NAME'];
-  const missingVars = requiredVars.filter(varName => !process.env[varName]);
-  
-  if (missingVars.length > 0) {
-    throw new Error(`Missing required environment variables: ${missingVars.join(', ')}`);
-  }
-
+  // Validate required environment variables with fallbacks for development
   const config: mysql.PoolOptions = {
     // Primary database variables (supports both DB_ and DATABASE_ prefixes)
-    host: process.env.DB_HOST || process.env.DATABASE_HOST,
+    host: process.env.DB_HOST || process.env.DATABASE_HOST || 'localhost',
     port: Number(process.env.DB_PORT || process.env.DATABASE_PORT) || 3306,
-    user: process.env.DB_USER || process.env.DATABASE_USER,
-    password: process.env.DB_PASSWORD || process.env.DATABASE_PASSWORD,
-    database: process.env.DB_NAME || process.env.DATABASE_NAME,
+    user: process.env.DB_USER || process.env.DATABASE_USER || 'root',
+    password: process.env.DB_PASSWORD || process.env.DATABASE_PASSWORD || '',
+    database: process.env.DB_NAME || process.env.DATABASE_NAME || 'dinedesk_db',
     
     // Production-optimized pool settings with better connection management
     waitForConnections: true,

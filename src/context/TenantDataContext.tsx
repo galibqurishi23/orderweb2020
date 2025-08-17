@@ -88,6 +88,9 @@ interface TenantDataContextType {
     deleteAddress: (addressId: string) => Promise<void>;
     getMenuWithCategories: () => { category: MenuCategory; items: MenuItem[] }[];
     getMenuWithCategoriesForCustomer: () => { category: any; items: any[] }[];
+    refreshData: () => Promise<void>;
+    updateCategoriesOrder: (categoryIds: string[]) => void;
+    updateMenuItemsOrder: (itemIds: string[], categoryId?: string) => void;
 }
 
 // Create the context
@@ -421,6 +424,33 @@ export const TenantDataProvider = ({ children }: { children: ReactNode }) => {
         }
         
         await refreshData();
+    };
+
+    // Optimistic update functions for drag and drop
+    const updateCategoriesOrder = (categoryIds: string[]) => {
+        setCategories(prevCategories => {
+            const categoryMap = new Map(prevCategories.map(cat => [cat.id, cat]));
+            return categoryIds.map((id, index) => ({
+                ...categoryMap.get(id)!,
+                displayOrder: index + 1
+            })).filter(Boolean);
+        });
+    };
+
+    const updateMenuItemsOrder = (itemIds: string[], categoryId?: string) => {
+        setMenuItems(prevItems => {
+            return prevItems.map(item => {
+                const newIndex = itemIds.indexOf(item.id);
+                if (newIndex !== -1) {
+                    // If item is in the reordered list, update its display order
+                    return {
+                        ...item,
+                        displayOrder: newIndex + 1
+                    };
+                }
+                return item;
+            });
+        });
     };
 
     const updateOrderStatus = async (orderId: string, status: OrderStatus) => {
@@ -844,6 +874,9 @@ export const TenantDataProvider = ({ children }: { children: ReactNode }) => {
         savePrinter,
         deletePrinter,
         togglePrinterStatus,
+        refreshData,
+        updateCategoriesOrder,
+        updateMenuItemsOrder,
     };
 
     return (

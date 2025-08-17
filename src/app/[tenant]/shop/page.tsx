@@ -2,40 +2,44 @@
 
 import { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { Search, ShoppingCart, Star, Heart, Filter, Grid, List, Plus, Minus, Eye, Package, Gift, CreditCard, Loader2, CheckCircle, Truck, Mail, Clock, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
-import { loadStripe } from '@stripe/stripe-js';
-import { Elements, PaymentElement, useStripe, useElements } from '@stripe/react-stripe-js';
+import StripePaymentProvider from '@/components/payments/StripePaymentProvider';
+import { 
+    ShoppingCart, 
+    Plus, 
+    Minus, 
+    X, 
+    Package, 
+    Star, 
+    User, 
+    Truck, 
+    Store,
+    Mail,
+    ChevronLeft,
+    ChevronRight,
+    Gift,
+    Clock,
+    Zap
+} from 'lucide-react';
 
-interface ShopCategory {
-    id: string;
-    name: string;
-    description: string;
-    is_active: boolean;
-}
-
+// Types
 interface ShopItem {
     id: string;
-    category_id: string;
-    category_name: string;
     name: string;
     description: string;
-    short_description: string;
     price: number;
-    type: 'physical' | 'digital' | 'gift_card';
-    is_featured: boolean;
-    is_active: boolean;
-    stock_quantity: number;
-    track_inventory: boolean;
     image_url?: string;
     gallery_images?: string[];
+    category_id?: string;
+    category?: string;
+    is_featured?: boolean;
 }
 
 interface CartItem extends ShopItem {
@@ -43,768 +47,575 @@ interface CartItem extends ShopItem {
 }
 
 interface TenantInfo {
+    id: string;
     name: string;
     description?: string;
     logo_url?: string;
-    address?: string;
     phone?: string;
-    email?: string;
 }
 
 interface ShopSettings {
-    tenant_id: string;
-    cover_image_url?: string;
-    display_name?: string;
     primary_color?: string;
     secondary_color?: string;
     accent_color?: string;
     text_color?: string;
-    background_color?: string;
     card_background?: string;
     border_color?: string;
-    color_theme?: string;
+    cover_image_url?: string;
+    display_name?: string;
+    description?: string;
+    logo_url?: string;
+    // Gift Card Color Scheme
+    gift_card_background_color?: string;
+    gift_card_border_color?: string;
+    gift_card_button_color?: string;
+    gift_card_text_color?: string;
+    // Delivery Settings
+    delivery_normal_fee?: number;
+    delivery_express_fee?: number;
 }
 
-interface GiftCardSettings {
-    tenant_id: string;
-    fixed_amounts?: number[];
-    allow_custom_amount: boolean;
-    min_custom_amount: number;
-    max_custom_amount: number;
-    terms_and_conditions?: string;
+interface Category {
+    id: string;
+    name: string;
 }
 
 export default function ShopPage() {
     const params = useParams();
-    const tenant = params.tenant as string;
     const { toast } = useToast();
+    const tenant = params.tenant as string;
 
+    // Utility functions for unified color styling - defined inside component
+    const getUnifiedButtonColorLocal = (): string => {
+        return shopSettings?.gift_card_button_color || shopSettings?.primary_color || '#dc2626';
+    };
+
+    const getUnifiedBorderColorLocal = (): string => {
+        return shopSettings?.gift_card_border_color || shopSettings?.gift_card_button_color || shopSettings?.primary_color || '#dc2626';
+    };
+
+    const getButtonStyleLocal = () => ({
+        backgroundColor: getUnifiedButtonColorLocal(),
+        borderColor: getUnifiedBorderColorLocal()
+    });
+
+    // Core state
     const [tenantInfo, setTenantInfo] = useState<TenantInfo | null>(null);
     const [shopSettings, setShopSettings] = useState<ShopSettings | null>(null);
-    const [giftCardSettings, setGiftCardSettings] = useState<GiftCardSettings | null>(null);
-    const [categories, setCategories] = useState<ShopCategory[]>([]);
     const [items, setItems] = useState<ShopItem[]>([]);
+    const [categories, setCategories] = useState<Category[]>([]);
     const [cart, setCart] = useState<CartItem[]>([]);
     const [loading, setLoading] = useState(true);
-    
-    // Gift card states
-    const [giftCardDialogOpen, setGiftCardDialogOpen] = useState(false);
-    const [giftCardAmount, setGiftCardAmount] = useState<string>('');
-    const [selectedGiftCardAmount, setSelectedGiftCardAmount] = useState<number | null>(null);
-    
-    // Gift card balance checker states
-    const [balanceDialogOpen, setBalanceDialogOpen] = useState(false);
-    const [balanceCheckCode, setBalanceCheckCode] = useState('');
-    const [balanceResult, setBalanceResult] = useState<{ balance: number; code: string } | null>(null);
-    const [balanceLoading, setBalanceLoading] = useState(false);
-    
-    // Filters and search
+    const [error, setError] = useState<string | null>(null);
+
+    // UI state
+    const [showCart, setShowCart] = useState(false);
+    const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
     const [searchTerm, setSearchTerm] = useState('');
-    const [selectedCategory, setSelectedCategory] = useState<string>('all');
-    const [priceRange, setPriceRange] = useState<string>('all');
-    const [sortBy, setSortBy] = useState<string>('featured');
-    const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
-    
+    const [currentStep, setCurrentStep] = useState<'cart' | 'customer-info' | 'delivery' | 'payment'>('cart');
+
     // Dialog states
     const [selectedItem, setSelectedItem] = useState<ShopItem | null>(null);
-    const [itemDetailOpen, setItemDetailOpen] = useState(false);
-    const [cartOpen, setCartOpen] = useState(false);
-    
-    // Payment states
     const [checkoutOpen, setCheckoutOpen] = useState(false);
-    const [stripePromise, setStripePromise] = useState<any>(null);
-    const [clientSecret, setClientSecret] = useState<string>('');
-    const [paymentLoading, setPaymentLoading] = useState(false);
-    const [paymentSuccess, setPaymentSuccess] = useState(false);
-    const [orderType, setOrderType] = useState<'email' | 'collection' | 'delivery'>('email');
-    const [deliveryType, setDeliveryType] = useState<'normal' | 'express'>('normal');
-    const [deliveryFees, setDeliveryFees] = useState({ normal: 5.00, express: 9.00 });
+
+    // Order states
+    const [orderSuccess, setOrderSuccess] = useState(false);
+    const [orderDetails, setOrderDetails] = useState<any>(null);
+
+    // Header scroll animation state
+    const [headerScrolled, setHeaderScrolled] = useState(false);
+
+    // Gift card states
+    const [customGiftCardAmount, setCustomGiftCardAmount] = useState<string>('');
+    const [selectedGiftCard, setSelectedGiftCard] = useState<number | null>(null);
+    const [showBalanceCheck, setShowBalanceCheck] = useState(false);
+    const [giftCardCode, setGiftCardCode] = useState<string>('');
+    const [giftCardInfo, setGiftCardInfo] = useState<{
+        balance: number;
+        expiryDate: string;
+        cardNumber: string;
+        status: string;
+    } | null>(null);
+    const [checkingBalance, setCheckingBalance] = useState(false);
+    const [balanceError, setBalanceError] = useState<string | null>(null);
+
+    // Personal message states
+    const [showPersonalMessage, setShowPersonalMessage] = useState(false);
+    const [personalMessage, setPersonalMessage] = useState({
+        to: '',
+        from: '',
+        message: ''
+    });
+
+    // Customer info and delivery states
     const [customerInfo, setCustomerInfo] = useState({
         name: '',
         email: '',
         phone: '',
-        address: '',
+        houseNumber: '',
+        roadName: '',
         city: '',
-        postcode: ''
+        postcode: '',
+        deliveryInstructions: '',
+        recipientName: '',
+        recipientEmail: '',
+        recipientPhone: '',
+        doorName: '',
+        flatNumber: ''
     });
+    const [deliveryType, setDeliveryType] = useState<'collection' | 'delivery' | 'email'>('collection');
+    const [deliverySpeed, setDeliverySpeed] = useState<'normal' | 'express' | null>(null);
 
-    // Enhanced posh styling utility functions with shadows and elegance
-    const getButtonStyle = (): React.CSSProperties => {
-        if (!shopSettings) return {};
-        const primaryColor = shopSettings.primary_color || '#3b82f6';
-        const textColor = shopSettings.card_background || '#ffffff';
-        
-        return { 
-            backgroundColor: primaryColor,
-            color: textColor,
-            boxShadow: `0 4px 14px 0 ${primaryColor}33, 0 2px 4px 0 ${primaryColor}1a`,
-            border: `1px solid ${primaryColor}`,
-            backgroundImage: `linear-gradient(135deg, ${primaryColor} 0%, ${primaryColor}dd 100%)`,
-            transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-            borderRadius: '8px',
-            position: 'relative' as const,
-            overflow: 'hidden'
-        };
-    };
+    // Payment states
+    const [paymentLoading, setPaymentLoading] = useState(false);
+    const [paymentSuccess, setPaymentSuccess] = useState(false);
+    const [showStripePayment, setShowStripePayment] = useState(false);
+    const [paymentError, setPaymentError] = useState<string | null>(null);
 
-    const getButtonHoverStyle = (): React.CSSProperties => {
-        if (!shopSettings) return {};
-        const primaryColor = shopSettings.primary_color || '#3b82f6';
-        const textColor = shopSettings.card_background || '#ffffff';
-        
-        return {
-            transform: 'translateY(-2px) scale(1.02)',
-            boxShadow: `0 8px 25px 0 ${primaryColor}40, 0 4px 10px 0 ${primaryColor}25, 0 0 0 1px ${primaryColor}`,
-            backgroundImage: `linear-gradient(135deg, ${primaryColor} 0%, ${primaryColor}ee 100%)`,
-            filter: 'brightness(1.05) saturate(1.1)'
-        };
-    };
-
-    const getButtonOutlineStyle = (): React.CSSProperties => {
-        if (!shopSettings) return {};
-        const primaryColor = shopSettings.primary_color || '#3b82f6';
-        
-        return { 
-            borderColor: primaryColor,
-            color: primaryColor,
-            backgroundColor: 'rgba(255, 255, 255, 0.9)',
-            boxShadow: `0 2px 8px 0 ${primaryColor}20, 0 1px 3px 0 ${primaryColor}15`,
-            backdropFilter: 'blur(8px)',
-            transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-            borderWidth: '1.5px',
-            borderRadius: '8px',
-            position: 'relative' as const,
-            overflow: 'hidden'
-        };
-    };
-
-    const getButtonOutlineHoverStyle = (): React.CSSProperties => {
-        if (!shopSettings) return {};
-        const primaryColor = shopSettings.primary_color || '#3b82f6';
-        const textColor = shopSettings.card_background || '#ffffff';
-        
-        return {
-            transform: 'translateY(-1px) scale(1.02)',
-            backgroundColor: primaryColor,
-            color: textColor,
-            boxShadow: `0 6px 20px 0 ${primaryColor}35, 0 3px 8px 0 ${primaryColor}20`,
-            borderColor: primaryColor,
-            filter: 'brightness(1.05)'
-        };
-    };
-
-    const getBorderStyle = (): React.CSSProperties => {
-        if (!shopSettings) return {};
-        const borderColor = shopSettings.border_color || '#e5e7eb';
-        
-        return { 
-            borderColor: borderColor,
-            boxShadow: `0 1px 3px 0 ${borderColor}40, 0 1px 2px 0 ${borderColor}25`,
-            borderRadius: '8px'
-        };
-    };
-
-    const getBackgroundStyle = () => {
-        if (!shopSettings) return {};
-        const backgroundColor = shopSettings.background_color || '#f8fafc';
-        
-        return { 
-            backgroundColor: backgroundColor,
-            backgroundImage: `radial-gradient(circle at 50% 50%, ${backgroundColor}00 0%, ${backgroundColor}08 100%)`
-        };
-    };
-
-    const getCardStyle = () => {
-        if (!shopSettings) return {};
-        const borderColor = shopSettings.border_color || '#e5e7eb';
-        const cardBackground = shopSettings.card_background || '#ffffff';
-        
-        return { 
-            backgroundColor: cardBackground,
-            borderColor: borderColor,
-            boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06), 0 0 0 1px rgba(255, 255, 255, 0.8)',
-            backdropFilter: 'blur(12px)',
-            borderRadius: '12px',
-            border: `1px solid ${borderColor}`
-        };
-    };
-
+    // Load tenant data
     useEffect(() => {
-        fetchData();
+        const loadTenantData = async () => {
+            try {
+                // Load tenant info
+                const tenantResponse = await fetch(`/api/tenant/${tenant}/info`);
+                if (tenantResponse.ok) {
+                    const tenantResponseData = await tenantResponse.json();
+                    setTenantInfo(tenantResponseData.data || tenantResponseData);
+                }
+
+                // Load shop settings
+                const settingsResponse = await fetch(`/api/tenant/${tenant}/admin/shop/settings`);
+                if (settingsResponse.ok) {
+                    const settingsData = await settingsResponse.json();
+                    setShopSettings(settingsData);
+                }
+
+                // Load items
+                const itemsResponse = await fetch(`/api/tenant/${tenant}/admin/shop/items`);
+                if (itemsResponse.ok) {
+                    const itemsData = await itemsResponse.json();
+                    setItems(itemsData);
+                }
+
+                // Load categories
+                const categoriesResponse = await fetch(`/api/tenant/${tenant}/admin/shop/categories`);
+                if (categoriesResponse.ok) {
+                    const categoriesData = await categoriesResponse.json();
+                    setCategories(categoriesData);
+                }
+
+                setLoading(false);
+            } catch (error) {
+                console.error('Error loading tenant data:', error);
+                setError('Failed to load shop data');
+                setLoading(false);
+            }
+        };
+
+        if (tenant) {
+            loadTenantData();
+        }
     }, [tenant]);
 
-    const fetchData = async () => {
-        setLoading(true);
-        try {
-            const [tenantRes, categoriesRes, itemsRes, shopSettingsRes, giftCardSettingsRes] = await Promise.all([
-                fetch(`/api/tenant/${tenant}/info`),
-                fetch(`/api/tenant/${tenant}/shop/categories`),
-                fetch(`/api/tenant/${tenant}/shop/items`),
-                fetch(`/api/tenant/${tenant}/admin/shop/settings`),
-                fetch(`/api/tenant/${tenant}/gift-cards/settings`)
-            ]);
-
-            if (tenantRes.ok) {
-                const tenantData = await tenantRes.json();
-                setTenantInfo(tenantData);
+    // Header scroll animation effect
+    useEffect(() => {
+        const handleScroll = () => {
+            const scrollTop = window.scrollY;
+            const shouldShowScrolled = scrollTop > 50;
+            
+            if (shouldShowScrolled !== headerScrolled) {
+                setHeaderScrolled(shouldShowScrolled);
             }
-
-            if (categoriesRes.ok) {
-                const categoriesData = await categoriesRes.json();
-                setCategories(categoriesData.filter((cat: ShopCategory) => cat.is_active));
-            }
-
-            if (itemsRes.ok) {
-                const itemsData = await itemsRes.json();
-                setItems(itemsData.filter((item: ShopItem) => item.is_active));
-            }
-
-            if (shopSettingsRes.ok) {
-                const shopSettingsData = await shopSettingsRes.json();
-                setShopSettings(shopSettingsData);
-            }
-
-            if (giftCardSettingsRes.ok) {
-                const giftCardSettingsData = await giftCardSettingsRes.json();
-                setGiftCardSettings(giftCardSettingsData);
-            }
-        } catch (error) {
-            console.error('Error fetching shop data:', error);
-            toast({
-                title: "Error",
-                description: "Failed to load shop data",
-                variant: "destructive"
-            });
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    const checkGiftCardBalance = async () => {
-        if (!balanceCheckCode.trim()) {
-            toast({
-                title: "Error",
-                description: "Please enter a gift card code",
-                variant: "destructive"
-            });
-            return;
-        }
-
-        setBalanceLoading(true);
-        try {
-            const response = await fetch(`/api/${tenant}/gift-cards/balance`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({ 
-                    code: balanceCheckCode.trim() 
-                }),
-            });
-
-            if (response.ok) {
-                const data = await response.json();
-                setBalanceResult(data);
-                
-                if (data.balance <= 0) {
-                    toast({
-                        title: "Gift Card Used",
-                        description: "This gift card has been fully used and will be removed from our system.",
-                        variant: "destructive"
-                    });
-                }
-            } else {
-                const error = await response.json();
-                toast({
-                    title: "Gift Card Not Found",
-                    description: error.error || "Invalid gift card code",
-                    variant: "destructive"
-                });
-                setBalanceResult(null);
-            }
-        } catch (error) {
-            console.error('Balance check error:', error);
-            toast({
-                title: "Error",
-                description: "Failed to check gift card balance",
-                variant: "destructive"
-            });
-            setBalanceResult(null);
-        }
-        setBalanceLoading(false);
-    };
-
-    const getTotalPrice = () => {
-        const subtotal = cart.reduce((total, item) => total + (item.price * item.quantity), 0);
-        let deliveryFee = 0;
-        
-        if (orderType === 'delivery') {
-            deliveryFee = deliveryType === 'express' ? (deliveryFees.express || 9.00) : (deliveryFees.normal || 5.00);
-        }
-        
-        return Number((subtotal + deliveryFee).toFixed(2));
-    };
-
-    const getDeliveryFee = () => {
-        if (orderType === 'delivery') {
-            return deliveryType === 'express' ? (deliveryFees.express || 9.00) : (deliveryFees.normal || 5.00);
-        }
-        return 0;
-    };
-
-    const getSubtotal = () => {
-        return cart.reduce((total, item) => total + (item.price * item.quantity), 0);
-    };
-
-    // Cart functions
-    const addToCart = (item: ShopItem) => {
-        // Check if item tracking inventory and is out of stock
-        if (item.track_inventory && item.stock_quantity <= 0) {
-            toast({
-                title: "Out of Stock",
-                description: `${item.name} is currently out of stock`,
-                variant: "destructive"
-            });
-            return;
-        }
-
-        setCart(prevCart => {
-            const existingItem = prevCart.find(cartItem => cartItem.id === item.id);
-            if (existingItem) {
-                // Check if adding one more would exceed stock
-                if (item.track_inventory && existingItem.quantity >= item.stock_quantity) {
-                    toast({
-                        title: "Stock Limit Reached",
-                        description: `Only ${item.stock_quantity} of ${item.name} available`,
-                        variant: "destructive"
-                    });
-                    return prevCart; // Return unchanged cart
-                }
-                
-                return prevCart.map(cartItem =>
-                    cartItem.id === item.id
-                        ? { ...cartItem, quantity: cartItem.quantity + 1 }
-                        : cartItem
-                );
-            } else {
-                return [...prevCart, { ...item, quantity: 1 }];
-            }
-        });
-        
-        toast({
-            title: "Added to cart",
-            description: `${item.name} has been added to your cart`,
-        });
-    };
-
-    const removeFromCart = (itemId: string) => {
-        setCart(prevCart => prevCart.filter(item => item.id !== itemId));
-        toast({
-            title: "Removed from cart",
-            description: "Item has been removed from your cart",
-        });
-    };
-
-    const updateCartQuantity = (itemId: string, newQuantity: number) => {
-        if (newQuantity <= 0) {
-            removeFromCart(itemId);
-            return;
-        }
-
-        // Find the cart item and original item data
-        const cartItem = cart.find(item => item.id === itemId);
-        if (!cartItem) return;
-
-        // Find the original item data to check stock
-        const originalItem = items.find(item => item.id === itemId);
-        if (!originalItem) {
-            // For gift cards or items not in the items list, allow any quantity
-            setCart(prevCart => 
-                prevCart.map(item =>
-                    item.id === itemId ? { ...item, quantity: newQuantity } : item
-                )
-            );
-            return;
-        }
-
-        // Check stock limits only if increasing quantity and tracking inventory
-        if (newQuantity > cartItem.quantity && originalItem.track_inventory && newQuantity > originalItem.stock_quantity) {
-            toast({
-                title: "Stock Limit Reached",
-                description: `Only ${originalItem.stock_quantity} of ${originalItem.name} available`,
-                variant: "destructive"
-            });
-            return;
-        }
-
-        setCart(prevCart => 
-            prevCart.map(item =>
-                item.id === itemId ? { ...item, quantity: newQuantity } : item
-            )
-        );
-    };
-
-    const addGiftCardToCart = (amount: number) => {
-        const giftCardItem: CartItem = {
-            id: `gift-card-${Date.now()}`,
-            category_id: 'gift-card',
-            category_name: 'Gift Cards',
-            name: 'Digital Gift Card',
-            description: `Digital gift card worth £${amount.toFixed(2)}`,
-            short_description: `£${amount.toFixed(2)} Gift Card`,
-            price: amount,
-            type: 'gift_card',
-            is_featured: false,
-            is_active: true,
-            stock_quantity: 1,
-            track_inventory: false,
-            quantity: 1
         };
 
-        setCart(prevCart => [...prevCart, giftCardItem]);
-        setGiftCardDialogOpen(false);
-        setGiftCardAmount('');
-        setSelectedGiftCardAmount(null);
+        window.addEventListener('scroll', handleScroll, { passive: true });
         
-        toast({
-            title: "Gift card added to cart",
-            description: `£${amount.toFixed(2)} gift card has been added to your cart`,
-        });
+        // Check initial scroll position
+        handleScroll();
+
+        return () => {
+            window.removeEventListener('scroll', handleScroll);
+        };
+    }, [headerScrolled]);
+
+    // Helper functions
+    const getBackgroundStyle = (): React.CSSProperties => {
+        const primaryColor = shopSettings?.primary_color || '#f3f4f6';
+        const secondaryColor = shopSettings?.secondary_color || '#e5e7eb';
+        
+        return {
+            background: `linear-gradient(135deg, ${primaryColor}10 0%, ${secondaryColor}05 100%)`,
+            minHeight: '100vh'
+        };
     };
 
-    const proceedToCheckout = async () => {
-        if (cart.length === 0) {
-            toast({
-                title: "Empty Cart",
-                description: "Please add items to your cart before checkout",
-                variant: "destructive"
-            });
-            return;
-        }
-
-        try {
-            // Initialize Stripe and get delivery fees
-            const configResponse = await fetch(`/api/tenant/${tenant}/payments/stripe`);
-            if (!configResponse.ok) {
-                throw new Error('Failed to load payment configuration');
-            }
-            const config = await configResponse.json();
-            
-            if (!config.enabled) {
-                toast({
-                    title: "Payment Unavailable",
-                    description: "Payment processing is currently disabled",
-                    variant: "destructive"
-                });
-                return;
-            }
-
-            // Update delivery fees from config
-            if (config.deliveryFees) {
-                setDeliveryFees({
-                    normal: parseFloat(config.deliveryFees.normal) || 5.00,
-                    express: parseFloat(config.deliveryFees.express) || 9.00
-                });
-            }
-            
-            const stripe = loadStripe(config.publishableKey);
-            setStripePromise(stripe);
-            
-            // Open checkout dialog
-            setCheckoutOpen(true);
-        } catch (error) {
-            console.error('Error initializing checkout:', error);
-            toast({
-                title: "Checkout Error",
-                description: "Unable to initialize checkout. Please try again.",
-                variant: "destructive"
-            });
-        }
+    const getButtonStyle = (): React.CSSProperties => {
+        // Use gift_card_button_color as the primary button color for all buttons
+        const primaryColor = shopSettings?.gift_card_button_color || shopSettings?.primary_color || '#661c0a';
+        const secondaryColor = shopSettings?.gift_card_border_color || shopSettings?.secondary_color || '#812d09';
+        
+        return { 
+            background: `linear-gradient(135deg, ${primaryColor} 0%, ${secondaryColor} 100%)`,
+            color: 'white',
+            boxShadow: `${primaryColor}4d 0px 20px 40px, ${secondaryColor}33 0px 8px 16px`,
+            border: 'none',
+            transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+            borderRadius: '12px',
+        };
     };
 
-    const createPaymentIntent = async () => {
-        try {
-            const subtotal = getSubtotal();
-            const deliveryFee = getDeliveryFee();
-            const total = subtotal + deliveryFee;
-            const orderId = `shop_order_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-            
-            const response = await fetch(`/api/tenant/${tenant}/payments/stripe`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    action: 'create_payment_intent',
-                    amount: subtotal,
-                    currency: 'gbp',
-                    orderId: orderId,
-                    customerEmail: customerInfo.email,
-                    customerName: customerInfo.name,
-                    description: `Shop Order - ${cart.length} items`,
-                    orderType: orderType,
-                    deliveryType: orderType === 'delivery' ? deliveryType : undefined,
-                    cartItems: cart,
-                    metadata: {
-                        orderType: orderType,
-                        deliveryType: orderType === 'delivery' ? deliveryType : undefined,
-                        source: 'shop',
-                        customerPhone: customerInfo.phone,
-                        ...(orderType === 'delivery' && {
-                            address: customerInfo.address,
-                            city: customerInfo.city,
-                            postcode: customerInfo.postcode
-                        })
-                    }
-                })
-            });
+    // Header animation styles
+    const getHeaderStyle = (): React.CSSProperties => {
+        const baseStyle = {
+            backgroundColor: shopSettings?.card_background || '#ffffff',
+            borderColor: shopSettings?.border_color || '#e5e7eb',
+            transition: 'all 0.4s cubic-bezier(0.4, 0, 0.2, 1)',
+            position: 'sticky' as const,
+            top: 0,
+            zIndex: 50,
+        };
 
-            if (!response.ok) {
-                throw new Error('Failed to create payment intent');
-            }
-
-            const data = await response.json();
-            setClientSecret(data.clientSecret);
-            return data.clientSecret;
-        } catch (error) {
-            console.error('Error creating payment intent:', error);
-            throw error;
+        if (headerScrolled) {
+            // Use gift card button color for header shadow
+            const shadowColor = shopSettings?.gift_card_button_color || shopSettings?.primary_color || '#000000';
+            return {
+                ...baseStyle,
+                backgroundColor: `${shopSettings?.card_background || '#ffffff'}f0`,
+                backdropFilter: 'blur(10px)',
+                borderColor: shopSettings?.border_color || '#e5e7eb',
+                boxShadow: `0 4px 20px ${shadowColor}15`,
+                transform: 'translateY(0)',
+            };
         }
+
+        return baseStyle;
+    };
+
+    // Centralized button color function - ALL buttons use gift card button color
+    const getUnifiedButtonColor = (): string => {
+        return shopSettings?.gift_card_button_color || shopSettings?.primary_color || '#dc2626';
+    };
+
+    const getUnifiedBorderColor = (): string => {
+        return shopSettings?.gift_card_border_color || shopSettings?.gift_card_button_color || shopSettings?.primary_color || '#dc2626';
+    };
+
+    const getHeaderContentStyle = (): React.CSSProperties => {
+        return {
+            transition: 'all 0.4s cubic-bezier(0.4, 0, 0.2, 1)',
+            transform: headerScrolled ? 'scale(0.95)' : 'scale(1)',
+            height: headerScrolled ? '84px' : '96px', // Smart size: 1.5x from original 56px/64px
+        };
+    };
+
+    const getLogoStyle = (): React.CSSProperties => {
+        return {
+            transition: 'all 0.4s cubic-bezier(0.4, 0, 0.2, 1)',
+            transform: headerScrolled ? 'scale(0.85)' : 'scale(1)',
+            height: headerScrolled ? '60px' : '72px', // Smart size: 1.5x from original 40px/48px
+            width: headerScrolled ? '60px' : '72px', // Smart size: 1.5x from original 40px/48px
+        };
+    };
+
+    const getTitleStyle = (): React.CSSProperties => {
+        return {
+            color: shopSettings?.text_color || '#1f2937',
+            transition: 'all 0.4s cubic-bezier(0.4, 0, 0.2, 1)',
+            fontSize: headerScrolled ? '1.65rem' : '1.875rem', // Smart size: 1.5x from original 1.1rem/1.25rem
+            opacity: headerScrolled ? 0.9 : 1,
+        };
     };
 
     const handleCustomerInfoChange = (field: string, value: string) => {
-        setCustomerInfo(prev => ({
+        setCustomerInfo(prev => ({ ...prev, [field]: value }));
+    };
+
+    const handlePersonalMessageChange = (field: string, value: string) => {
+        setPersonalMessage(prev => ({
             ...prev,
             [field]: value
         }));
     };
 
-    const validateCustomerInfo = () => {
-        const { name, email, phone, address, city, postcode } = customerInfo;
-        
-        if (!name.trim()) {
-            toast({
-                title: "Missing Information",
-                description: "Please enter your name",
-                variant: "destructive"
-            });
-            return false;
-        }
-        
-        if (!email.trim() || !email.includes('@')) {
-            toast({
-                title: "Invalid Email",
-                description: "Please enter a valid email address",
-                variant: "destructive"
-            });
-            return false;
-        }
-        
-        // Phone is optional for email orders
-        if (orderType !== 'email' && !phone.trim()) {
-            toast({
-                title: "Missing Information",
-                description: "Please enter your phone number",
-                variant: "destructive"
-            });
-            return false;
-        }
-        
-        if (orderType === 'delivery') {
-            if (!address.trim()) {
-                toast({
-                    title: "Missing Information",
-                    description: "Please enter your delivery address",
-                    variant: "destructive"
-                });
-                return false;
+    const addToCart = (item: ShopItem) => {
+        setCart(prev => {
+            const existingItem = prev.find(cartItem => cartItem.id === item.id);
+            if (existingItem) {
+                return prev.map(cartItem =>
+                    cartItem.id === item.id
+                        ? { ...cartItem, quantity: cartItem.quantity + 1 }
+                        : cartItem
+                );
             }
-            
-            if (!city.trim()) {
-                toast({
-                    title: "Missing Information",
-                    description: "Please enter your city",
-                    variant: "destructive"
-                });
-                return false;
-            }
-            
-            if (!postcode.trim()) {
-                toast({
-                    title: "Missing Information",
-                    description: "Please enter your postcode",
-                    variant: "destructive"
-                });
-                return false;
-            }
-        }
+            return [...prev, { ...item, quantity: 1 }];
+        });
         
-        return true;
+        toast({
+            title: "Added to cart",
+            description: `${item.name} added to your cart`,
+        });
     };
 
-    // Payment functions
-    const initializeStripe = async () => {
-        try {
-            const response = await fetch(`/api/tenant/${tenant}/payments/stripe`);
-            const data = await response.json();
-            
-            if (data.enabled && data.configured) {
-                const stripe = await loadStripe(data.publishableKey);
-                setStripePromise(stripe);
-                return true;
+    const addGiftCardToCart = (amount: number) => {
+        const giftCardItem: ShopItem = {
+            id: `gift-card-${amount}`,
+            name: `Gift Card - £${amount}`,
+            description: `Digital gift card worth £${amount}`,
+            price: amount,
+            image_url: '',
+            is_featured: false
+        };
+
+        setCart(prev => {
+            const existingGiftCard = prev.find(cartItem => cartItem.id === giftCardItem.id);
+            if (existingGiftCard) {
+                return prev.map(cartItem =>
+                    cartItem.id === giftCardItem.id
+                        ? { ...cartItem, quantity: cartItem.quantity + 1 }
+                        : cartItem
+                );
             }
-            return false;
-        } catch (error) {
-            console.error('Failed to initialize Stripe:', error);
-            return false;
+            return [...prev, { ...giftCardItem, quantity: 1 }];
+        });
+
+        // Visual feedback
+        setSelectedGiftCard(amount);
+        setTimeout(() => setSelectedGiftCard(null), 800);
+
+        toast({
+            title: "Gift Card Added!",
+            description: `£${amount} gift card added to your cart`,
+        });
+    };
+
+    const addCustomGiftCardToCart = () => {
+        const amount = parseFloat(customGiftCardAmount);
+        if (amount >= 5 && amount <= 500) {
+            addGiftCardToCart(amount);
+            setCustomGiftCardAmount('');
         }
     };
 
-    const handleCheckout = async () => {
-        if (cart.length === 0) {
-            toast({
-                title: "Cart is empty",
-                description: "Please add items to your cart before checkout",
-                variant: "destructive"
-            });
+    const checkGiftCardBalance = async () => {
+        if (!giftCardCode.trim()) {
+            setBalanceError('Please enter a gift card code');
             return;
         }
 
-        setCartOpen(false);
-        setCheckoutOpen(true);
+        setCheckingBalance(true);
+        setBalanceError(null);
+        setGiftCardInfo(null);
+
+        try {
+            const response = await fetch(`/api/tenant/${tenant}/gift-cards/balance`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    code: giftCardCode.trim()
+                })
+            });
+
+            const data = await response.json();
+
+            if (response.ok) {
+                setGiftCardInfo({
+                    balance: data.balance,
+                    expiryDate: data.expiryDate || 'No expiry',
+                    cardNumber: data.cardNumber || giftCardCode.trim(),
+                    status: data.status || 'Active'
+                });
+                toast({
+                    title: "Gift Card Found",
+                    description: `Balance: £${data.balance.toFixed(2)}`,
+                });
+            } else {
+                setBalanceError(data.error || 'Gift card not found');
+                toast({
+                    title: "Error",
+                    description: data.error || 'Gift card not found',
+                    variant: "destructive"
+                });
+            }
+        } catch (error) {
+            setBalanceError('Unable to check balance. Please try again.');
+            toast({
+                title: "Error",
+                description: 'Unable to check balance. Please try again.',
+                variant: "destructive"
+            });
+        } finally {
+            setCheckingBalance(false);
+        }
     };
 
-    const openItemDetails = (item: ShopItem) => {
-        setSelectedItem(item);
-        setItemDetailOpen(true);
+    const handleBalanceCheckClose = () => {
+        setShowBalanceCheck(false);
+        setGiftCardCode('');
+        setGiftCardInfo(null);
+        setBalanceError(null);
     };
 
-    const getFilteredItems = () => {
-        let filtered = items.filter(item => {
-            // Search filter
-            if (searchTerm && !item.name.toLowerCase().includes(searchTerm.toLowerCase()) &&
-                !item.description.toLowerCase().includes(searchTerm.toLowerCase())) {
-                return false;
-            }
-            
-            // Category filter
-            if (selectedCategory !== 'all' && item.category_id !== selectedCategory) {
-                return false;
-            }
-            
-            // Price filter
-            if (priceRange !== 'all') {
-                const price = item.price;
-                switch (priceRange) {
-                    case 'under-10':
-                        if (price >= 10) return false;
-                        break;
-                    case '10-25':
-                        if (price < 10 || price >= 25) return false;
-                        break;
-                    case '25-50':
-                        if (price < 25 || price >= 50) return false;
-                        break;
-                    case 'over-50':
-                        if (price < 50) return false;
-                        break;
-                }
-            }
-            
-            return true;
+    // Payment handler functions
+    const handlePaymentSuccess = (paymentIntentId: string) => {
+        setPaymentSuccess(true);
+        setShowStripePayment(false);
+        setPaymentLoading(false);
+        setOrderSuccess(true);
+        setCheckoutOpen(false);
+        
+        // Store order details for confirmation
+        setOrderDetails({
+            paymentIntentId,
+            orderNumber: `ORD-${Date.now()}`,
+            total: getTotalPrice(),
+            items: cart,
+            customerInfo,
+            deliveryType,
+            deliverySpeed
         });
+        
+        // Clear cart
+        setCart([]);
+        
+        toast({
+            title: "Payment Successful!",
+            description: "Your order has been placed successfully.",
+        });
+    };
 
-        // Sort items
-        switch (sortBy) {
-            case 'name':
-                filtered.sort((a, b) => a.name.localeCompare(b.name));
-                break;
-            case 'price-low':
-                filtered.sort((a, b) => a.price - b.price);
-                break;
-            case 'price-high':
-                filtered.sort((a, b) => b.price - a.price);
-                break;
-            case 'featured':
-                filtered.sort((a, b) => (b.is_featured ? 1 : 0) - (a.is_featured ? 1 : 0));
-                break;
+    const handlePaymentError = (error: string) => {
+        setPaymentError(error);
+        setPaymentLoading(false);
+        toast({
+            title: "Payment Failed",
+            description: error,
+            variant: "destructive"
+        });
+    };
+
+    const handlePaymentCancel = () => {
+        setShowStripePayment(false);
+        setPaymentLoading(false);
+        setPaymentError(null);
+    };
+
+    const startPayment = async () => {
+        setPaymentLoading(true);
+        setPaymentError(null);
+        
+        try {
+            // Check if Stripe is configured before proceeding
+            const configResponse = await fetch(`/api/tenant/${tenant}/payments/stripe`);
+            if (!configResponse.ok) {
+                throw new Error('Failed to load payment configuration');
+            }
+            
+            const config = await configResponse.json();
+            if (!config.configured || !config.publishableKey) {
+                throw new Error('Payment system not configured. Please contact the restaurant administrator.');
+            }
+            
+            setShowStripePayment(true);
+        } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : 'Payment system error';
+            setPaymentError(errorMessage);
+            setPaymentLoading(false);
+            toast({
+                title: "Payment Unavailable",
+                description: errorMessage,
+                variant: "destructive"
+            });
+        }
+    };
+
+    const removeFromCart = (itemId: string) => {
+        setCart(prev => prev.filter(item => item.id !== itemId));
+    };
+
+    const updateCartQuantity = (itemId: string, quantity: number) => {
+        if (quantity <= 0) {
+            removeFromCart(itemId);
+            return;
         }
 
-        return filtered;
+        setCart(prev => 
+            prev.map(item => 
+                item.id === itemId ? { ...item, quantity } : item
+            )
+        );
     };
 
-    // Image Gallery Component for displaying multiple images
-    const ImageGallery = ({ images, className = "" }: { images?: string[] | null, className?: string }) => {
+    // Helper function to safely parse delivery fees
+    const getDeliveryFee = (feeValue: string | number | undefined, defaultValue: number): number => {
+        if (typeof feeValue === 'string') {
+            return parseFloat(feeValue) || defaultValue;
+        }
+        return feeValue || defaultValue;
+    };
+
+    const getTotalPrice = () => {
+        const itemsTotal = cart.reduce((total, item) => total + (item.price * item.quantity), 0);
+        let deliveryFee = 0;
+        
+        if (deliveryType === 'delivery' && deliverySpeed) {
+            if (deliverySpeed === 'normal') {
+                deliveryFee = getDeliveryFee(shopSettings?.delivery_normal_fee, 2.50);
+            } else if (deliverySpeed === 'express') {
+                deliveryFee = getDeliveryFee(shopSettings?.delivery_express_fee, 4.50);
+            }
+        }
+        
+        return itemsTotal + deliveryFee;
+    };
+
+    // Get filtered items
+    const filteredItems = items.filter(item => {
+        const matchesCategory = !selectedCategory || item.category_id === selectedCategory;
+        const matchesSearch = !searchTerm || 
+            item.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            item.description?.toLowerCase().includes(searchTerm.toLowerCase());
+        return matchesCategory && matchesSearch;
+    });
+
+    // Simple image gallery component for product images
+    const ProductImageGallery = ({ images, className }: { images: string[], className?: string }) => {
         const [currentIndex, setCurrentIndex] = useState(0);
         
-        // Ensure images is an array and filter out any invalid entries
-        const validImages = Array.isArray(images) ? images.filter(img => img && typeof img === 'string') : [];
-        
-        if (!validImages || validImages.length === 0) {
-            // Fallback to gradient placeholder when no images
+        if (!images || images.length === 0) {
             return (
-                <div 
-                    className={`w-full h-full flex items-center justify-center relative overflow-hidden ${className}`}
-                    style={{
-                        background: `linear-gradient(135deg, rgb(63, 75, 248) 0%, rgb(139, 92, 246) 100%)`,
-                    }}
-                >
-                    <Package className="w-12 h-12 text-white z-10" />
-                    <div className="absolute inset-0 bg-gradient-to-br from-white/20 to-transparent"></div>
-                    <div className="absolute -inset-1 bg-gradient-to-r from-blue-400 to-purple-400 opacity-30 blur-sm"></div>
+                <div className={`bg-gray-200 flex items-center justify-center ${className}`}>
+                    <Package className="w-16 h-16 text-gray-400" />
                 </div>
             );
         }
 
         return (
-            <div className={`w-full h-full relative overflow-hidden ${className}`}>
-                {/* Main Image */}
+            <div className={`relative ${className}`}>
                 <img 
-                    src={validImages[currentIndex]} 
-                    alt="Product Image"
-                    className="w-full h-full object-cover transition-opacity duration-300"
+                    src={images[currentIndex]} 
+                    alt="Product" 
+                    className="w-full h-full object-cover"
                 />
-                
-                {/* Navigation Arrows (only show if multiple images) */}
-                {validImages.length > 1 && (
+                {images.length > 1 && (
                     <>
                         <button
-                            onClick={() => setCurrentIndex(prev => prev === 0 ? validImages.length - 1 : prev - 1)}
-                            className="absolute left-2 top-1/2 transform -translate-y-1/2 bg-white/90 backdrop-blur-sm hover:bg-white/95 text-gray-700 rounded-full p-2 shadow-lg transition-all duration-200 hover:scale-110"
+                            onClick={() => setCurrentIndex(prev => prev > 0 ? prev - 1 : images.length - 1)}
+                            className="absolute left-2 top-1/2 transform -translate-y-1/2 bg-black/50 text-white p-1 rounded-full hover:bg-black/70"
                         >
                             <ChevronLeft className="w-4 h-4" />
                         </button>
                         <button
-                            onClick={() => setCurrentIndex(prev => prev === validImages.length - 1 ? 0 : prev + 1)}
-                            className="absolute right-2 top-1/2 transform -translate-y-1/2 bg-white/90 backdrop-blur-sm hover:bg-white/95 text-gray-700 rounded-full p-2 shadow-lg transition-all duration-200 hover:scale-110"
+                            onClick={() => setCurrentIndex(prev => prev < images.length - 1 ? prev + 1 : 0)}
+                            className="absolute right-2 top-1/2 transform -translate-y-1/2 bg-black/50 text-white p-1 rounded-full hover:bg-black/70"
                         >
                             <ChevronRight className="w-4 h-4" />
                         </button>
+                        <div className="absolute top-2 right-2 bg-black/60 text-white px-2 py-1 rounded-full text-xs">
+                            {currentIndex + 1} / {images.length}
+                        </div>
                     </>
-                )}
-
-                {/* Image Dots Indicator (only show if multiple images) */}
-                {validImages.length > 1 && (
-                    <div className="absolute bottom-2 left-1/2 transform -translate-x-1/2 flex space-x-1">
-                        {validImages.map((_, index) => (
-                            <button
-                                key={index}
-                                onClick={() => setCurrentIndex(index)}
-                                className={`w-2 h-2 rounded-full transition-all duration-200 ${
-                                    index === currentIndex 
-                                        ? 'bg-white shadow-lg scale-125' 
-                                        : 'bg-white/60 hover:bg-white/80'
-                                }`}
-                            />
-                        ))}
-                    </div>
-                )}
-
-                {/* Image Counter (only show if multiple images) */}
-                {validImages.length > 1 && (
-                    <div className="absolute top-2 right-2 bg-black/60 backdrop-blur-sm text-white px-2 py-1 rounded-full text-xs font-medium">
-                        {currentIndex + 1} / {validImages.length}
-                    </div>
                 )}
             </div>
         );
@@ -813,969 +624,692 @@ export default function ShopPage() {
     if (loading) {
         return (
             <div className="min-h-screen flex items-center justify-center">
-                <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-primary"></div>
+                <div className="text-center">
+                    <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-gray-900"></div>
+                    <p className="mt-4 text-gray-600">Loading shop...</p>
+                </div>
+            </div>
+        );
+    }
+
+    if (error) {
+        return (
+            <div className="min-h-screen flex items-center justify-center">
+                <div className="text-center">
+                    <p className="text-red-600 text-xl">{error}</p>
+                </div>
             </div>
         );
     }
 
     return (
-        <div className="min-h-screen" style={getBackgroundStyle()}>
-            {/* Cover Image */}
+        <>
+            {/* CSS Animations */}
+            <style jsx>{`
+                @keyframes pulse {
+                    0%, 100% {
+                        opacity: 1;
+                    }
+                    50% {
+                        opacity: 0.5;
+                    }
+                }
+                
+                @keyframes bounce {
+                    0%, 20%, 53%, 80%, 100% {
+                        transform: translate3d(0,0,0);
+                    }
+                    40%, 43% {
+                        transform: translate3d(0,-15px,0);
+                    }
+                    70% {
+                        transform: translate3d(0,-7px,0);
+                    }
+                    90% {
+                        transform: translate3d(0,-2px,0);
+                    }
+                }
+                
+                @keyframes fadeInUp {
+                    from {
+                        opacity: 0;
+                        transform: translateY(30px);
+                    }
+                    to {
+                        opacity: 1;
+                        transform: translateY(0);
+                    }
+                }
+
+                .fade-in-up {
+                    animation: fadeInUp 0.6s ease-out;
+                }
+            `}</style>
+            
+            <div className="min-h-screen" style={getBackgroundStyle()}>
+            {/* Animated Header */}
+            <header 
+                className="border-b" 
+                style={getHeaderStyle()}
+            >
+                <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                    <div 
+                        className="flex items-center"
+                        style={getHeaderContentStyle()}
+                    >
+                        {/* Dynamic Layout based on available content - ONLY from shopSettings */}
+                        {/* If both logo and name exist in shopSettings, use 3-column layout */}
+                        {shopSettings?.logo_url && shopSettings?.display_name ? (
+                            <>
+                                {/* Left: Restaurant Name */}
+                                <div className="flex-1">
+                                    <h1 
+                                        className="font-bold" 
+                                        style={getTitleStyle()}
+                                    >
+                                        {shopSettings.display_name}
+                                    </h1>
+                                    {shopSettings?.description && (
+                                        <p 
+                                            className="text-sm text-gray-600"
+                                            style={{
+                                                transition: 'all 0.4s cubic-bezier(0.4, 0, 0.2, 1)',
+                                                opacity: headerScrolled ? 0.7 : 1,
+                                                fontSize: headerScrolled ? '1.2rem' : '1.3125rem' // Smart size: 1.5x from original 0.8rem/0.875rem
+                                            }}
+                                        >
+                                            {shopSettings.description}
+                                        </p>
+                                    )}
+                                </div>
+
+                                {/* Center: Logo */}
+                                <div className="flex-shrink-0 mx-8">
+                                    <div className="relative overflow-hidden rounded-full">
+                                        <img 
+                                            src={shopSettings.logo_url} 
+                                            alt={`${shopSettings.display_name} logo`}
+                                            className="object-contain"
+                                            style={getLogoStyle()}
+                                        />
+                                        {headerScrolled && (
+                                            <div 
+                                                className="absolute inset-0 rounded-full"
+                                                style={{
+                                                    background: `radial-gradient(circle, ${shopSettings?.primary_color || '#3b82f6'}20 0%, transparent 70%)`,
+                                                    animation: 'pulse 2s infinite'
+                                                }}
+                                            />
+                                        )}
+                                    </div>
+                                </div>
+
+                                {/* Right: Cart Button */}
+                                <div className="flex-1 flex justify-end">
+                                    <Button 
+                                        variant="outline" 
+                                        onClick={() => setShowCart(true)}
+                                        className="relative"
+                                        style={{
+                                            ...getButtonStyleLocal(),
+                                            transform: headerScrolled ? 'scale(0.95)' : 'scale(1)',
+                                            transition: 'all 0.4s cubic-bezier(0.4, 0, 0.2, 1)'
+                                        }}
+                                    >
+                                        <ShoppingCart className="w-4 h-4 mr-2" style={{ color: 'white' }} />
+                                        <span style={{
+                                            transition: 'all 0.4s ease',
+                                            fontSize: headerScrolled ? '0.875rem' : '1rem', // Smaller: reduced from 1.275rem/1.5rem
+                                            color: 'white' // White text color
+                                        }}>
+                                            {cart.length} • £{getTotalPrice().toFixed(2)}
+                                        </span>
+                                        {cart.length > 0 && (
+                                            <Badge 
+                                                className="absolute -top-2 -right-2 h-5 w-5 flex items-center justify-center text-xs"
+                                                style={{ 
+                                                    backgroundColor: shopSettings?.accent_color || '#f97316',
+                                                    transform: headerScrolled ? 'scale(0.9)' : 'scale(1)',
+                                                    transition: 'all 0.4s cubic-bezier(0.4, 0, 0.2, 1)',
+                                                    animation: cart.length > 0 ? 'bounce 1s' : 'none'
+                                                }}
+                                            >
+                                                {cart.reduce((total, item) => total + item.quantity, 0)}
+                                            </Badge>
+                                        )}
+                                    </Button>
+                                </div>
+                            </>
+                        ) : (shopSettings?.logo_url || shopSettings?.display_name) ? (
+                            /* If only name or only logo exists in shopSettings, use 2-column layout */
+                            <>
+                                {/* Left: Name or Logo */}
+                                <div className="flex-1 flex items-center">
+                                    {shopSettings?.logo_url && (
+                                        <div className="flex-shrink-0 mr-4">
+                                            <div className="relative overflow-hidden rounded-full">
+                                                <img 
+                                                    src={shopSettings.logo_url} 
+                                                    alt="Restaurant logo"
+                                                    className="object-contain"
+                                                    style={getLogoStyle()}
+                                                />
+                                                {headerScrolled && (
+                                                    <div 
+                                                        className="absolute inset-0 rounded-full"
+                                                        style={{
+                                                            background: `radial-gradient(circle, ${shopSettings?.primary_color || '#3b82f6'}20 0%, transparent 70%)`,
+                                                            animation: 'pulse 2s infinite'
+                                                        }}
+                                                    />
+                                                )}
+                                            </div>
+                                        </div>
+                                    )}
+                                    
+                                    {shopSettings?.display_name && (
+                                        <div>
+                                            <h1 
+                                                className="font-bold" 
+                                                style={getTitleStyle()}
+                                            >
+                                                {shopSettings.display_name}
+                                            </h1>
+                                            {shopSettings?.description && (
+                                                <p 
+                                                    className="text-sm text-gray-600"
+                                                    style={{
+                                                        transition: 'all 0.4s cubic-bezier(0.4, 0, 0.2, 1)',
+                                                        opacity: headerScrolled ? 0.7 : 1,
+                                                        fontSize: headerScrolled ? '1.2rem' : '1.3125rem' // Smart size: 1.5x from original 0.8rem/0.875rem
+                                                    }}
+                                                >
+                                                    {shopSettings.description}
+                                                </p>
+                                            )}
+                                        </div>
+                                    )}
+                                </div>
+
+                                {/* Right: Cart Button */}
+                                <div className="flex justify-end">
+                                    <Button 
+                                        variant="outline" 
+                                        onClick={() => setShowCart(true)}
+                                        className="relative"
+                                        style={{
+                                            ...getButtonStyleLocal(),
+                                            transform: headerScrolled ? 'scale(0.95)' : 'scale(1)',
+                                            transition: 'all 0.4s cubic-bezier(0.4, 0, 0.2, 1)'
+                                        }}
+                                    >
+                                        <ShoppingCart className="w-4 h-4 mr-2" style={{ color: 'white' }} />
+                                        <span style={{
+                                            transition: 'all 0.4s ease',
+                                            fontSize: headerScrolled ? '0.875rem' : '1rem', // Smaller: reduced from 1.275rem/1.5rem
+                                            color: 'white' // White text color
+                                        }}>
+                                            {cart.length} • £{getTotalPrice().toFixed(2)}
+                                        </span>
+                                        {cart.length > 0 && (
+                                            <Badge 
+                                                className="absolute -top-2 -right-2 h-5 w-5 flex items-center justify-center text-xs"
+                                                style={{ 
+                                                    backgroundColor: shopSettings?.accent_color || '#f97316',
+                                                    transform: headerScrolled ? 'scale(0.9)' : 'scale(1)',
+                                                    transition: 'all 0.4s cubic-bezier(0.4, 0, 0.2, 1)',
+                                                    animation: cart.length > 0 ? 'bounce 1s' : 'none'
+                                                }}
+                                            >
+                                                {cart.reduce((total, item) => total + item.quantity, 0)}
+                                            </Badge>
+                                        )}
+                                    </Button>
+                                </div>
+                            </>
+                        ) : (
+                            /* If no shopSettings data, show only cart button */
+                            <div className="w-full flex justify-end">
+                                <Button 
+                                    variant="outline" 
+                                    onClick={() => setShowCart(true)}
+                                    className="relative"
+                                    style={{
+                                        ...getButtonStyleLocal(),
+                                        transform: headerScrolled ? 'scale(0.95)' : 'scale(1)',
+                                        transition: 'all 0.4s cubic-bezier(0.4, 0, 0.2, 1)'
+                                    }}
+                                >
+                                    <ShoppingCart className="w-4 h-4 mr-2" style={{ color: 'white' }} />
+                                    <span style={{
+                                        transition: 'all 0.4s ease',
+                                        fontSize: headerScrolled ? '0.875rem' : '1rem', // Smaller: reduced from 1.275rem/1.5rem
+                                        color: 'white' // White text color
+                                    }}>
+                                        {cart.length} • £{getTotalPrice().toFixed(2)}
+                                    </span>
+                                    {cart.length > 0 && (
+                                        <Badge 
+                                            className="absolute -top-2 -right-2 h-5 w-5 flex items-center justify-center text-xs"
+                                            style={{ 
+                                                backgroundColor: shopSettings?.accent_color || '#f97316',
+                                                transform: headerScrolled ? 'scale(0.9)' : 'scale(1)',
+                                                transition: 'all 0.4s cubic-bezier(0.4, 0, 0.2, 1)',
+                                                animation: cart.length > 0 ? 'bounce 1s' : 'none'
+                                            }}
+                                        >
+                                            {cart.reduce((total, item) => total + item.quantity, 0)}
+                                        </Badge>
+                                    )}
+                                </Button>
+                            </div>
+                        )}
+                    </div>
+                </div>
+            </header>
+
+            {/* Cover Image with Parallax Effect */}
             {shopSettings?.cover_image_url && (
-                <div className="w-full h-64 bg-gray-200 mb-6">
-                    <img 
-                        src={shopSettings.cover_image_url} 
-                        alt="Shop Cover" 
-                        className="w-full h-full object-cover"
+                <div className="relative h-64 sm:h-80 md:h-96 overflow-hidden">
+                    <div 
+                        className="absolute inset-0 bg-cover bg-center bg-fixed"
+                        style={{
+                            backgroundImage: `url(${shopSettings.cover_image_url})`,
+                            transform: headerScrolled ? 'scale(1.05)' : 'scale(1)',
+                            transition: 'transform 0.8s cubic-bezier(0.4, 0, 0.2, 1)'
+                        }}
                     />
+                    <div className="absolute inset-0 bg-black/20"></div>
                 </div>
             )}
 
-            {/* Header */}
-            <div className="bg-transparent backdrop-blur-sm">
-                <div className="max-w-7xl mx-auto px-6 sm:px-8 lg:px-12">
-                    <div className="flex flex-col sm:flex-row items-center justify-between py-8 sm:py-10 space-y-6 sm:space-y-0">
-                        {/* Logo Section - Clean borderless design */}
-                        <div className="flex items-center space-x-5 order-2 sm:order-1 min-w-0 sm:min-w-[200px]">
-                            {tenantInfo?.logo_url && (
-                                <div className="relative">
-                                    <img 
-                                        src={tenantInfo.logo_url} 
-                                        alt={tenantInfo.name} 
-                                        className="h-12 w-12 sm:h-14 sm:w-14 rounded-2xl transition-transform duration-300 hover:scale-105" 
-                                    />
-                                    <div className="absolute inset-0 rounded-2xl bg-gradient-to-br from-white/10 to-transparent pointer-events-none"></div>
-                                </div>
-                            )}
-                        </div>
-                        
-                        {/* Shop Name - Clean typography without borders */}
-                        <div className="text-center order-1 sm:order-2 flex-1 px-4 sm:px-8">
-                            <h1 
-                                className="text-4xl sm:text-5xl lg:text-6xl font-bold tracking-tight mb-3"
-                                style={{
-                                    color: shopSettings?.text_color || '#1f2937',
-                                    background: `linear-gradient(135deg, ${shopSettings?.text_color || '#1f2937'} 0%, ${shopSettings?.primary_color || '#3b82f6'} 100%)`,
-                                    backgroundClip: 'text',
-                                    WebkitBackgroundClip: 'text',
-                                    WebkitTextFillColor: 'transparent'
+            {/* Gift Cards Section */}
+            <div className="bg-gray-50 py-16">
+                <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+                    {/* Header with Scroll Animation */}
+                    <div className="text-center mb-12 fade-in-up">
+                        {/* Gift Icon */}
+                        <div className="flex justify-center mb-6">
+                            <div 
+                                className="w-16 h-16 rounded-full flex items-center justify-center transform transition-all duration-500 hover:scale-110 hover:rotate-12"
+                                style={{ 
+                                    backgroundColor: shopSettings?.gift_card_button_color || shopSettings?.primary_color || '#dc2626',
+                                    boxShadow: `0 10px 30px ${(shopSettings?.gift_card_button_color || shopSettings?.primary_color || '#dc2626')}40`
                                 }}
                             >
-                                {shopSettings?.display_name || tenantInfo?.name || 'Shop'}
-                            </h1>
-                            <div className="flex items-center justify-center space-x-3">
-                                <div 
-                                    className="h-px w-12 opacity-60"
-                                    style={{
-                                        background: `linear-gradient(to right, transparent, ${shopSettings?.primary_color || '#9ca3af'}, transparent)`
-                                    }}
-                                ></div>
-                                <p 
-                                    className="text-base sm:text-lg font-medium tracking-wide"
-                                    style={{ color: shopSettings?.text_color || '#4b5563' }}
-                                >
-                                    The Premium Online Store
-                                </p>
-                                <div 
-                                    className="h-px w-12 opacity-60"
-                                    style={{
-                                        background: `linear-gradient(to right, transparent, ${shopSettings?.primary_color || '#9ca3af'}, transparent)`
-                                    }}
-                                ></div>
+                                <Gift className="w-8 h-8 text-white" />
                             </div>
                         </div>
                         
-                        {/* Cart Button - Smart modern design */}
-                        <div className="order-3 sm:order-3 min-w-0 sm:min-w-[200px] flex justify-end">
-                            <Button 
-                                variant="outline" 
-                                onClick={() => setCartOpen(true)}
-                                className="relative transition-all duration-500 group px-10 py-5 font-bold tracking-wide rounded-2xl backdrop-blur-md shadow-lg hover:shadow-2xl transform hover:-translate-y-1 hover:scale-105"
-                                style={{
-                                    background: `linear-gradient(135deg, rgba(255,255,255,0.9) 0%, rgba(255,255,255,0.7) 100%)`,
-                                    backdropFilter: 'blur(20px)',
-                                    border: `2px solid ${shopSettings?.primary_color || '#3b82f6'}40`,
-                                    boxShadow: `0 8px 32px rgba(0,0,0,0.1), 0 2px 8px ${shopSettings?.primary_color || '#3b82f6'}25`,
-                                    color: shopSettings?.primary_color || '#3b82f6'
-                                }}
-                                onMouseEnter={(e) => {
-                                    const primaryColor = shopSettings?.primary_color || '#3b82f6';
-                                    Object.assign(e.currentTarget.style, {
-                                        background: `linear-gradient(135deg, rgba(255,255,255,0.95) 0%, rgba(255,255,255,0.85) 100%)`,
-                                        backdropFilter: 'blur(25px)',
-                                        boxShadow: `0 16px 40px rgba(0,0,0,0.15), 0 8px 16px ${primaryColor}40`,
-                                        transform: 'translateY(-4px) scale(1.05)',
-                                        border: `2px solid ${primaryColor}66`
-                                    });
-                                }}
-                                onMouseLeave={(e) => {
-                                    const primaryColor = shopSettings?.primary_color || '#3b82f6';
-                                    Object.assign(e.currentTarget.style, {
-                                        background: `linear-gradient(135deg, rgba(255,255,255,0.9) 0%, rgba(255,255,255,0.7) 100%)`,
-                                        backdropFilter: 'blur(20px)',
-                                        boxShadow: `0 8px 32px rgba(0,0,0,0.1), 0 2px 8px ${primaryColor}25`,
-                                        transform: 'translateY(0px) scale(1)',
-                                        border: `2px solid ${primaryColor}40`
-                                    });
-                                }}
-                            >
-                                <div className="flex items-center space-x-3">
-                                    <div className="relative">
-                                        <ShoppingCart className="h-6 w-6 transition-all duration-500 group-hover:scale-125 group-hover:rotate-12" />
-                                        <div className="absolute -inset-1 bg-gradient-to-r from-blue-400 to-purple-400 rounded-full opacity-0 group-hover:opacity-20 transition-opacity duration-500 blur-sm"></div>
-                                    </div>
-                                    <div className="flex flex-col items-start">
-                                        <span className="hidden sm:inline font-bold text-lg tracking-tight">Cart</span>
-                                        <span className="sm:hidden font-bold text-lg tracking-tight">({cart.length})</span>
-                                        {cart.length > 0 && (
-                                            <span className="hidden sm:inline text-xs opacity-70 font-medium">
-                                                {cart.reduce((sum, item) => sum + item.quantity, 0)} items
-                                            </span>
+                        {/* Title */}
+                        <h2 
+                            className="text-3xl font-bold mb-4 transform transition-all duration-700"
+                            style={{ 
+                                color: shopSettings?.text_color || '#1f2937',
+                                animation: 'fadeInUp 0.8s ease-out 0.2s both'
+                            }}
+                        >
+                            Gift Cards
+                        </h2>
+                        
+                        {/* Description */}
+                        <p 
+                            className="text-lg text-gray-600 max-w-2xl mx-auto transform transition-all duration-700"
+                            style={{ animation: 'fadeInUp 0.8s ease-out 0.4s both' }}
+                        >
+                            Treat your loved ones to delicious flavors and memorable meals
+                        </p>
+                    </div>
+
+                    {/* Unified Gift Cards Container */}
+                    <div 
+                        className="rounded-lg shadow-lg p-8"
+                        style={{ backgroundColor: shopSettings?.gift_card_background_color || '#ffffff' }}
+                    >
+                        {/* Preset Gift Card Options */}
+                        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+                            {[25, 50, 75, 100].map((amount, index) => (
+                                <div 
+                                    key={amount}
+                                    className="cursor-pointer transform transition-all duration-300 hover:scale-105 hover:-translate-y-2"
+                                    onClick={() => addGiftCardToCart(amount)}
+                                    style={{ 
+                                        animation: `fadeInUp 0.6s ease-out ${0.1 * (index + 1)}s both`
+                                    }}
+                                >
+                                    <div 
+                                        className={`bg-white rounded-lg p-6 text-center border-2 transition-all duration-300 hover:shadow-xl ${
+                                            selectedGiftCard === amount ? 'border-green-500 shadow-md' : 'border-gray-200 hover:border-gray-300'
+                                        }`}
+                                        style={{
+                                            boxShadow: selectedGiftCard === amount 
+                                                ? `0 10px 30px ${(shopSettings?.gift_card_button_color || '#dc2626')}30` 
+                                                : undefined
+                                        }}
+                                    >
+                                        {/* Success checkmark */}
+                                        {selectedGiftCard === amount && (
+                                            <div className="flex justify-center mb-2">
+                                                <div className="w-6 h-6 bg-green-500 rounded-full flex items-center justify-center animate-bounce">
+                                                    <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"></path>
+                                                    </svg>
+                                                </div>
+                                            </div>
                                         )}
+                                        
+                                        <div 
+                                            className="text-2xl font-bold mb-4 transition-all duration-300"
+                                            style={{ 
+                                                color: shopSettings?.gift_card_text_color || shopSettings?.primary_color || '#dc2626',
+                                                transform: selectedGiftCard === amount ? 'scale(1.1)' : 'scale(1)'
+                                            }}
+                                        >
+                                            £{amount}
+                                        </div>
+                                        <Button 
+                                            className="w-full py-2 font-semibold rounded-md text-white transition-all duration-300 hover:shadow-lg transform hover:scale-105"
+                                            style={selectedGiftCard === amount ? {
+                                                backgroundColor: '#10b981',
+                                                borderColor: '#10b981'
+                                            } : {
+                                                backgroundColor: getUnifiedButtonColorLocal(),
+                                                borderColor: getUnifiedBorderColorLocal()
+                                            }}
+                                        >
+                                            {selectedGiftCard === amount ? 'Added!' : 'Add to Cart'}
+                                        </Button>
                                     </div>
                                 </div>
-                                {cart.length > 0 && (
-                                    <div className="absolute -top-2 -right-2">
-                                        <div className="relative">
-                                            <Badge 
-                                                className="h-7 w-7 rounded-full p-0 flex items-center justify-center font-bold text-xs border-0 animate-pulse"
-                                                style={{
-                                                    background: `linear-gradient(135deg, ${shopSettings?.primary_color || '#3b82f6'} 0%, ${shopSettings?.secondary_color || '#1e40af'} 100%)`,
-                                                    color: 'white',
-                                                    boxShadow: `0 4px 15px ${shopSettings?.primary_color || '#3b82f6'}66, 0 0 20px ${shopSettings?.secondary_color || '#1e40af'}4d`
-                                                }}
-                                            >
-                                                {cart.reduce((sum, item) => sum + item.quantity, 0)}
-                                            </Badge>
-                                            <div 
-                                                className="absolute -inset-1 rounded-full opacity-30 blur-sm animate-pulse"
-                                                style={{
-                                                    background: `linear-gradient(135deg, ${shopSettings?.primary_color || '#3b82f6'} 0%, ${shopSettings?.secondary_color || '#1e40af'} 100%)`
-                                                }}
-                                            ></div>
+                            ))}
+                        </div>
+
+                        {/* Separator */}
+                        <div className="relative mb-8">
+                            <div className="absolute inset-0 flex items-center">
+                                <div className="w-full border-t border-gray-200"></div>
+                            </div>
+                            <div className="relative flex justify-center">
+                                <span className="px-6 py-2 bg-white text-gray-600 text-base font-medium italic rounded-full shadow-sm border border-gray-100">
+                                    Or choose your own amount
+                                </span>
+                            </div>
+                        </div>
+
+                        {/* Custom Amount Section */}
+                        <div className="max-w-lg mx-auto">
+                            <div 
+                                className="rounded-lg p-10"
+                                style={{ backgroundColor: shopSettings?.gift_card_background_color || '#f9fafb' }}
+                            >
+                                <h3 
+                                    className="text-2xl font-bold text-center mb-3"
+                                    style={{ color: shopSettings?.gift_card_text_color || shopSettings?.text_color || '#1f2937' }}
+                                >
+                                    Custom Amount
+                                </h3>
+                                <p className="text-gray-600 text-center mb-6 text-base">
+                                    Enter your preferred gift card amount
+                                </p>
+                                
+                                <div className="space-y-6">
+                                    <div className="relative">
+                                        <div 
+                                            className="absolute left-4 top-1/2 transform -translate-y-1/2 text-2xl font-bold"
+                                            style={{ color: shopSettings?.gift_card_text_color || shopSettings?.primary_color || '#dc2626' }}
+                                        >
+                                            £
                                         </div>
+                                        <Input
+                                            type="number"
+                                            min="5"
+                                            max="500"
+                                            step="0.01"
+                                            placeholder="0.00"
+                                            value={customGiftCardAmount}
+                                            onChange={(e) => setCustomGiftCardAmount(e.target.value)}
+                                            className="pl-12 pr-6 py-5 text-2xl text-center font-semibold rounded-lg border-2 focus:border-2"
+                                            style={{
+                                                borderColor: customGiftCardAmount && parseFloat(customGiftCardAmount) >= 5 && parseFloat(customGiftCardAmount) <= 500
+                                                    ? (shopSettings?.gift_card_border_color || shopSettings?.primary_color || '#dc2626')
+                                                    : '#d1d5db',
+                                            }}
+                                        />
                                     </div>
-                                )}
-                            </Button>
+                                    
+                                    <p className="text-sm text-gray-500 text-center">
+                                        Minimum £5 - Maximum £500
+                                    </p>
+                                    
+                                    <Button 
+                                        onClick={addCustomGiftCardToCart}
+                                        className="w-full py-4 text-lg font-semibold rounded-lg text-white"
+                                        disabled={!customGiftCardAmount || parseFloat(customGiftCardAmount) < 5 || parseFloat(customGiftCardAmount) > 500}
+                                        style={(!customGiftCardAmount || parseFloat(customGiftCardAmount) < 5 || parseFloat(customGiftCardAmount) > 500) 
+                                            ? {
+                                                backgroundColor: '#9ca3af',
+                                                borderColor: '#9ca3af'
+                                            }
+                                            : getButtonStyleLocal()
+                                        }
+                                    >
+                                        {customGiftCardAmount && parseFloat(customGiftCardAmount) >= 5 && parseFloat(customGiftCardAmount) <= 500
+                                            ? `Add £${parseFloat(customGiftCardAmount).toFixed(2)} Gift Card`
+                                            : 'Enter Valid Amount'
+                                        }
+                                    </Button>
+                                    
+                                    {/* Check Balance Button */}
+                                    <div className="mt-4 pt-4 border-t border-gray-200">
+                                        <Button 
+                                            onClick={() => setShowBalanceCheck(true)}
+                                            variant="outline"
+                                            className="w-full py-3 text-base font-medium rounded-lg border-2"
+                                            style={{
+                                                borderColor: getUnifiedBorderColorLocal(),
+                                                color: shopSettings?.gift_card_text_color || getUnifiedButtonColorLocal(),
+                                            }}
+                                        >
+                                            Check Gift Card Balance
+                                        </Button>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
             </div>
 
-            {/* Gift Cards Section - Premium Professional Design */}
-            <div className="max-w-7xl mx-auto px-6 sm:px-8 lg:px-12 py-8 sm:py-12">
-                {giftCardSettings && (
-                    <div className="mb-12">
-                        {/* Section Header with Elegant Typography */}
-                        <div className="text-center mb-10">
+            {/* Products Section - Only show if items exist */}
+            {items.length > 0 && (
+                <div className="bg-white py-20">
+                    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                        {/* Header with Animation */}
+                        <div className="text-center mb-16 fade-in-up">
                             <h2 
-                                className="text-3xl sm:text-4xl lg:text-5xl font-bold mb-3 tracking-tight"
-                                style={{
+                                className="text-4xl font-bold mb-4 transform transition-all duration-700"
+                                style={{ 
                                     color: shopSettings?.text_color || '#1f2937',
-                                    background: `linear-gradient(135deg, ${shopSettings?.text_color || '#1f2937'} 0%, ${shopSettings?.primary_color || '#3b82f6'} 100%)`,
-                                    backgroundClip: 'text',
-                                    WebkitBackgroundClip: 'text',
-                                    WebkitTextFillColor: 'transparent'
+                                    animation: 'fadeInUp 0.8s ease-out 0.2s both'
                                 }}
                             >
-                                Gift Cards
+                                Our Products
                             </h2>
                             <p 
-                                className="text-lg font-medium max-w-2xl mx-auto leading-relaxed"
-                                style={{ color: shopSettings?.text_color || '#4b5563' }}
+                                className="text-lg text-gray-600 max-w-2xl mx-auto transform transition-all duration-700"
+                                style={{ animation: 'fadeInUp 0.8s ease-out 0.4s both' }}
                             >
-                                Share the joy of exceptional dining with our premium gift cards
+                                Explore our selection of premium quality products and specialty items
                             </p>
                         </div>
 
-                        {/* Main Gift Card Container */}
-                        <div className="relative">
-                            <Card 
-                                className="overflow-hidden backdrop-blur-xl border-0 shadow-2xl"
-                                style={{
-                                    background: `linear-gradient(135deg, rgba(255,255,255,0.95) 0%, rgba(255,255,255,0.85) 100%)`,
-                                    backdropFilter: 'blur(20px)',
-                                    boxShadow: '0 32px 64px rgba(0,0,0,0.1), 0 16px 32px rgba(63, 75, 248, 0.1), inset 0 1px 0 rgba(255,255,255,0.8)',
-                                    borderRadius: '24px'
-                                }}
-                            >
-                                <div className="p-8 sm:p-10 lg:p-12">
-                                    {/* Primary Action Section */}
-                                    <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between space-y-8 lg:space-y-0 lg:space-x-12">
-                                        {/* Gift Card Info */}
-                                        <div className="flex-1 space-y-6">
-                                            <div className="flex items-start space-x-6">
+                        {/* Items Grid with Staggered Animation */}
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-8">
+                            {items.map((item: ShopItem, index: number) => (
+                                <div 
+                                    key={item.id}
+                                    className="bg-white rounded-2xl shadow-lg hover:shadow-2xl transition-all duration-500 transform hover:-translate-y-4 hover:scale-105 overflow-hidden border border-gray-100 group"
+                                    style={{ 
+                                        animation: `fadeInUp 0.6s ease-out ${0.1 * (index + 1)}s both`
+                                    }}
+                                >
+                                    {/* Item Image with Hover Effects */}
+                                    <div className="relative h-48 overflow-hidden">
+                                        {item.image_url ? (
+                                            <img 
+                                                src={item.image_url} 
+                                                alt={item.name}
+                                                className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
+                                            />
+                                        ) : (
+                                            <div className="w-full h-full bg-gray-100 flex items-center justify-center group-hover:bg-gray-200 transition-colors duration-300">
+                                                <Package className="w-12 h-12 text-gray-400 group-hover:text-gray-500 transition-colors duration-300" />
+                                            </div>
+                                        )}
+                                        {item.is_featured && (
+                                            <div className="absolute top-3 left-3">
                                                 <div 
-                                                    className="w-20 h-20 rounded-3xl flex items-center justify-center shadow-xl relative overflow-hidden"
-                                                    style={{
-                                                        background: `linear-gradient(135deg, ${shopSettings?.primary_color || '#3b82f6'} 0%, ${shopSettings?.secondary_color || '#1e40af'} 100%)`,
-                                                        boxShadow: `0 20px 40px ${shopSettings?.primary_color || '#3b82f6'}40, 0 8px 16px ${shopSettings?.secondary_color || '#1e40af'}33`
+                                                    className="px-3 py-1 rounded-full text-xs font-semibold text-white animate-pulse"
+                                                    style={{ 
+                                                        backgroundColor: shopSettings?.accent_color || '#f97316',
+                                                        boxShadow: `0 4px 15px ${(shopSettings?.accent_color || '#f97316')}40`
                                                     }}
                                                 >
-                                                    <CreditCard className="w-10 h-10 text-white z-10" />
-                                                    <div className="absolute inset-0 bg-gradient-to-br from-white/20 to-transparent"></div>
-                                                    <div 
-                                                        className="absolute -inset-1 rounded-3xl opacity-30 blur-sm"
-                                                        style={{
-                                                            background: `linear-gradient(135deg, ${shopSettings?.primary_color || '#3b82f6'} 0%, ${shopSettings?.secondary_color || '#1e40af'} 100%)`
-                                                        }}
-                                                    ></div>
-                                                </div>
-                                                <div className="flex-1 space-y-3">
-                                                    <h3 className="text-2xl sm:text-3xl font-bold text-gray-900 tracking-tight">
-                                                        Premium Gift Experience
-                                                    </h3>
-                                                    <p className="text-base sm:text-lg text-gray-600 leading-relaxed">
-                                                        The perfect gift for food lovers and special occasions
-                                                    </p>
-                                                    <div className="inline-flex items-center px-4 py-2 rounded-full bg-gradient-to-r from-blue-50 to-purple-50 border border-blue-200/50">
-                                                        <span className="text-sm font-semibold text-gray-700">
-                                                            Amount range: £{giftCardSettings.min_custom_amount} - £{giftCardSettings.max_custom_amount}
-                                                        </span>
-                                                    </div>
+                                                    Featured
                                                 </div>
                                             </div>
-                                        </div>
-                                        
-                                        {/* Purchase Button */}
-                                        <div className="flex-shrink-0">
-                                            <Button 
-                                                onClick={() => setGiftCardDialogOpen(true)}
-                                                className="relative group px-8 py-6 font-bold text-lg tracking-wide transition-all duration-500 border-0 rounded-2xl shadow-2xl"
-                                                style={{
-                                                    background: `linear-gradient(135deg, ${shopSettings?.primary_color || '#3b82f6'} 0%, ${shopSettings?.secondary_color || '#1e40af'} 100%)`,
-                                                    color: 'white',
-                                                    boxShadow: `0 20px 40px ${shopSettings?.primary_color || '#3b82f6'}4d, 0 8px 16px ${shopSettings?.secondary_color || '#1e40af'}33`
-                                                }}
-                                                onMouseEnter={(e) => {
-                                                    const primaryColor = shopSettings?.primary_color || '#3b82f6';
-                                                    const secondaryColor = shopSettings?.secondary_color || '#1e40af';
-                                                    Object.assign(e.currentTarget.style, {
-                                                        transform: 'translateY(-4px) scale(1.05)',
-                                                        boxShadow: `0 32px 64px ${primaryColor}66, 0 16px 32px ${secondaryColor}4d`
-                                                    });
-                                                }}
-                                                onMouseLeave={(e) => {
-                                                    const primaryColor = shopSettings?.primary_color || '#3b82f6';
-                                                    const secondaryColor = shopSettings?.secondary_color || '#1e40af';
-                                                    Object.assign(e.currentTarget.style, {
-                                                        transform: 'translateY(0px) scale(1)',
-                                                        boxShadow: `0 20px 40px ${primaryColor}4d, 0 8px 16px ${secondaryColor}33`
-                                                    });
-                                                }}
-                                            >
-                                                <div className="flex items-center space-x-3">
-                                                    <Gift className="w-5 h-5 transition-transform duration-500 group-hover:scale-110 group-hover:rotate-12" />
-                                                    <span>Purchase Gift Card</span>
-                                                </div>
-                                                <div className="absolute inset-0 bg-gradient-to-r from-white/10 to-transparent rounded-2xl"></div>
-                                            </Button>
-                                        </div>
-                                    </div>
-                                    
-                                    {/* Elegant Divider */}
-                                    <div className="my-10">
-                                        <div className="relative">
-                                            <div className="absolute inset-0 flex items-center">
-                                                <div className="w-full border-t border-gradient-to-r from-transparent via-gray-200 to-transparent opacity-60"></div>
-                                            </div>
-                                            <div className="relative flex justify-center">
-                                                <div className="bg-white px-6 py-2 rounded-full border border-gray-200/50">
-                                                    <span className="text-sm font-medium text-gray-500 tracking-wide">OR</span>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                    
-                                    {/* Balance Checker Section */}
-                                    <div className="bg-gradient-to-br from-gray-50/80 to-blue-50/40 rounded-2xl p-6 sm:p-8 border border-gray-200/50">
-                                        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between space-y-6 sm:space-y-0 sm:space-x-8">
-                                            <div className="flex-1">
-                                                <div className="flex items-center space-x-3 mb-3">
-                                                    <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center shadow-lg">
-                                                        <CreditCard className="w-5 h-5 text-white" />
-                                                    </div>
-                                                    <h4 className="text-xl font-bold text-gray-900">Check Gift Card Balance</h4>
-                                                </div>
-                                                <p className="text-gray-600 leading-relaxed">
-                                                    Enter your gift card code to check remaining balance and transaction history
-                                                </p>
-                                            </div>
-                                            <Button 
-                                                variant="outline"
-                                                onClick={() => setBalanceDialogOpen(true)}
-                                                className="group px-6 py-4 font-semibold text-base transition-all duration-300 rounded-xl border-2 shadow-lg"
-                                                style={{
-                                                    borderColor: 'rgb(63, 75, 248)',
-                                                    color: 'rgb(63, 75, 248)',
-                                                    background: 'rgba(255,255,255,0.9)',
-                                                    backdropFilter: 'blur(12px)',
-                                                    boxShadow: '0 8px 25px rgba(63, 75, 248, 0.15)'
-                                                }}
-                                                onMouseEnter={(e) => {
-                                                    Object.assign(e.currentTarget.style, {
-                                                        background: 'rgb(63, 75, 248)',
-                                                        color: 'white',
-                                                        transform: 'translateY(-2px)',
-                                                        boxShadow: '0 16px 40px rgba(63, 75, 248, 0.25)'
-                                                    });
-                                                }}
-                                                onMouseLeave={(e) => {
-                                                    Object.assign(e.currentTarget.style, {
-                                                        borderColor: 'rgb(63, 75, 248)',
-                                                        color: 'rgb(63, 75, 248)',
-                                                        background: 'rgba(255,255,255,0.9)',
-                                                        transform: 'translateY(0px)',
-                                                        boxShadow: '0 8px 25px rgba(63, 75, 248, 0.15)'
-                                                    });
-                                                }}
-                                            >
-                                                <div className="flex items-center space-x-2">
-                                                    <CreditCard className="w-4 h-4 transition-transform duration-300 group-hover:scale-110" />
-                                                    <span>Check Balance</span>
-                                                </div>
-                                            </Button>
-                                        </div>
-                                    </div>
-                                </div>
-                            </Card>
-                            
-                            {/* Floating Background Elements */}
-                            <div className="absolute -top-6 -right-6 w-32 h-32 bg-gradient-to-br from-blue-400/10 to-purple-400/10 rounded-full blur-3xl"></div>
-                            <div className="absolute -bottom-6 -left-6 w-24 h-24 bg-gradient-to-br from-purple-400/10 to-pink-400/10 rounded-full blur-2xl"></div>
-                        </div>
-                    </div>
-                )}
-            </div>
-
-            {/* Products Section - Premium Professional Design */}
-            <div className="max-w-7xl mx-auto px-6 sm:px-8 lg:px-12 py-8 sm:py-12">
-                {/* Section Header with Elegant Typography */}
-                <div className="text-center mb-10">
-                    <h2 className="text-3xl sm:text-4xl lg:text-5xl font-bold mb-3 bg-gradient-to-r from-gray-900 via-gray-700 to-gray-900 bg-clip-text text-transparent tracking-tight">
-                        {selectedCategory === 'all' ? 'Our Premium Products' : 
-                         categories.find(c => c.id === selectedCategory)?.name || 'Products'}
-                    </h2>
-                    <p className="text-lg text-gray-600 font-medium max-w-2xl mx-auto leading-relaxed">
-                        Discover our carefully curated selection of exceptional items
-                    </p>
-                    <div className="mt-4 inline-flex items-center px-4 py-2 rounded-full bg-gradient-to-r from-blue-50 to-purple-50 border border-blue-200/50">
-                        <span className="text-sm font-semibold text-gray-700">
-                            {getFilteredItems().length} items available
-                        </span>
-                    </div>
-                </div>
-
-                <div className="mb-6">
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 sm:gap-8">
-                        {getFilteredItems().map((item) => (
-                            <Card 
-                                key={item.id} 
-                                className="overflow-hidden backdrop-blur-xl border-0 shadow-2xl"
-                                style={{
-                                    background: `linear-gradient(135deg, rgba(255,255,255,0.95) 0%, rgba(255,255,255,0.85) 100%)`,
-                                    backdropFilter: 'blur(20px)',
-                                    boxShadow: '0 25px 50px rgba(0,0,0,0.1), 0 12px 25px rgba(63, 75, 248, 0.1), inset 0 1px 0 rgba(255,255,255,0.8)',
-                                    borderRadius: '20px'
-                                }}
-                            >
-                                <div className="w-full h-48 sm:h-56 relative overflow-hidden rounded-t-[20px]">
-                                    <ImageGallery 
-                                        images={item.gallery_images}
-                                        className="rounded-t-[20px]"
-                                    />
-                                </div>
-
-                                <div className="absolute top-4 right-4">
-                                    <Badge 
-                                        className="bg-white/90 backdrop-blur-sm text-gray-700 shadow-xl border-0 font-semibold"
-                                        style={{
-                                            boxShadow: '0 8px 25px rgba(0,0,0,0.1), 0 4px 12px rgba(0,0,0,0.05)'
-                                        }}
-                                    >
-                                        {item.type === 'gift_card' ? (
-                                            <><Gift className="w-3 h-3 mr-1" />Gift Card</>
-                                        ) : item.type === 'digital' ? (
-                                            <>📱 Digital</>
-                                        ) : (
-                                            <>📦 Physical</>
                                         )}
-                                    </Badge>
-                                </div>
-
-                                <CardContent className="p-6 sm:p-8">
-                                    <div className="space-y-4">
-                                        <div>
-                                            <h3 className="font-bold text-xl text-gray-900 mb-2 tracking-tight leading-tight">
-                                                {item.name}
-                                            </h3>
-                                            <p className="text-gray-600 text-sm leading-relaxed line-clamp-2">
-                                                {item.short_description}
-                                            </p>
-                                        </div>
                                         
-                                        <div className="flex items-center justify-between pt-2">
-                                            <div className="space-y-1">
-                                                <span className="text-2xl font-bold text-gray-900 tracking-tight">
-                                                    £{Number(item.price).toFixed(2)}
-                                                </span>
-                                                {item.track_inventory && (
-                                                    <p className="text-xs text-gray-500">
-                                                        {item.stock_quantity > 0 ? 
-                                                            `${item.stock_quantity} in stock` : 
-                                                            'Out of stock'
-                                                        }
-                                                    </p>
-                                                )}
+                                        {/* Hover overlay */}
+                                        <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+                                    </div>
+
+                                    {/* Item Content with Hover Effects */}
+                                    <div className="p-6 group-hover:bg-gray-50 transition-colors duration-300">
+                                        <h3 
+                                            className="text-xl font-bold mb-2 line-clamp-1 group-hover:text-opacity-90 transition-all duration-300"
+                                            style={{ color: shopSettings?.text_color || '#1f2937' }}
+                                        >
+                                            {item.name}
+                                        </h3>
+                                        
+                                        {item.description && (
+                                            <p className="text-gray-600 text-sm mb-4 line-clamp-2 group-hover:text-gray-700 transition-colors duration-300">
+                                                {item.description}
+                                            </p>
+                                        )}
+                                        
+                                        <div className="flex items-center justify-between">
+                                            <div 
+                                                className="text-2xl font-bold transition-all duration-300 group-hover:scale-110"
+                                                style={{ color: shopSettings?.primary_color || '#dc2626' }}
+                                            >
+                                                £{Number(item.price).toFixed(2)}
                                             </div>
                                             
                                             <Button 
-                                                size="sm"
                                                 onClick={() => addToCart(item)}
-                                                disabled={item.track_inventory && item.stock_quantity <= 0}
-                                                className="group relative px-6 py-3 font-bold text-sm tracking-wide transition-all duration-500 border-0 rounded-xl shadow-xl hover:shadow-2xl transform hover:scale-105"
+                                                className="px-6 py-2 font-semibold rounded-lg text-white transition-all duration-300 hover:scale-110 hover:shadow-lg transform"
                                                 style={{
-                                                    background: `linear-gradient(135deg, rgb(63, 75, 248) 0%, rgb(139, 92, 246) 100%)`,
-                                                    color: 'white',
-                                                    boxShadow: '0 8px 25px rgba(63, 75, 248, 0.3), 0 4px 12px rgba(139, 92, 246, 0.2)'
+                                                    backgroundColor: getUnifiedButtonColorLocal(),
+                                                    borderColor: getUnifiedBorderColorLocal(),
+                                                    boxShadow: `0 4px 15px ${getUnifiedButtonColorLocal()}30`
                                                 }}
                                             >
-                                                <Plus className="h-4 w-4 mr-2 transition-transform duration-300 group-hover:scale-110" />
                                                 Add to Cart
-                                                <div className="absolute inset-0 bg-gradient-to-r from-white/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 rounded-xl"></div>
                                             </Button>
                                         </div>
                                     </div>
-                                </CardContent>
-                            </Card>
+                                </div>
                             ))}
                         </div>
+
+                        {/* Empty State - This won't show due to the condition above, but keeping for completeness */}
+                        {items.length === 0 && (
+                            <div className="text-center py-12">
+                                <Package className="w-16 h-16 text-gray-400 mx-auto mb-4" />
+                                <p className="text-gray-500 text-lg">No items available at the moment</p>
+                            </div>
+                        )}
+                    </div>
                 </div>
-            </div>
+            )}
 
-            {/* Item Detail Dialog - Premium Design */}
-            <Dialog open={itemDetailOpen} onOpenChange={setItemDetailOpen}>
-                <DialogContent 
-                    className="max-w-4xl border-0 shadow-3xl overflow-hidden"
-                    style={{
-                        background: `linear-gradient(135deg, rgba(255,255,255,0.95) 0%, rgba(255,255,255,0.85) 100%)`,
-                        backdropFilter: 'blur(20px)',
-                        boxShadow: '0 32px 64px rgba(0,0,0,0.15), 0 16px 32px rgba(63, 75, 248, 0.1)',
-                        borderRadius: '24px'
-                    }}
-                >
-                    {selectedItem && (
-                        <>
-                            <DialogHeader className="text-center pb-6">
-                                <DialogTitle className="text-3xl font-bold bg-gradient-to-r from-gray-900 via-gray-700 to-gray-900 bg-clip-text text-transparent tracking-tight">
-                                    {selectedItem.name}
-                                </DialogTitle>
-                                <DialogDescription className="text-lg text-gray-600 font-medium">
-                                    Premium Product Details
-                                </DialogDescription>
-                            </DialogHeader>
-                            
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                                {/* Product Image */}
-                                <div className="relative">
-                                    <div className="w-full h-80 rounded-2xl overflow-hidden shadow-2xl"
-                                         style={{
-                                             boxShadow: '0 25px 50px rgba(63, 75, 248, 0.25), 0 12px 25px rgba(139, 92, 246, 0.2)'
-                                         }}
-                                    >
-                                        <ImageGallery 
-                                            images={selectedItem.gallery_images && selectedItem.gallery_images.length > 0 ? selectedItem.gallery_images : []}
-                                            className="rounded-2xl"
-                                        />
-                                    </div>
-                                    
-                                    {/* Floating Background Elements */}
-                                    <div className="absolute -top-4 -right-4 w-20 h-20 bg-gradient-to-br from-blue-400/20 to-purple-400/20 rounded-full blur-2xl"></div>
-                                    <div className="absolute -bottom-4 -left-4 w-16 h-16 bg-gradient-to-br from-purple-400/20 to-pink-400/20 rounded-full blur-xl"></div>
-                                </div>
-                                
-                                {/* Product Details */}
-                                <div className="space-y-6">
-                                    <div className="space-y-4">
-                                        {/* Badges */}
-                                        <div className="flex items-center space-x-3">
-                                            {selectedItem.is_featured && (
-                                                <Badge 
-                                                    className="text-white border-none shadow-lg font-bold px-4 py-2"
-                                                    style={{
-                                                        background: `linear-gradient(135deg, rgb(255, 165, 0) 0%, rgb(255, 140, 0) 100%)`,
-                                                        boxShadow: '0 8px 25px rgba(255, 165, 0, 0.4)'
-                                                    }}
-                                                >
-                                                    ⭐ Featured
-                                                </Badge>
-                                            )}
-                                            <Badge 
-                                                className="bg-white/90 backdrop-blur-sm text-gray-700 shadow-xl border-0 font-semibold px-4 py-2"
-                                                style={{
-                                                    boxShadow: '0 8px 25px rgba(0,0,0,0.1), 0 4px 12px rgba(0,0,0,0.05)'
-                                                }}
-                                            >
-                                                {selectedItem.type === 'gift_card' ? (
-                                                    <><Gift className="w-3 h-3 mr-1" />Gift Card</>
-                                                ) : selectedItem.type === 'digital' ? (
-                                                    <>📱 Digital</>
-                                                ) : (
-                                                    <>📦 Physical</>
-                                                )}
-                                            </Badge>
-                                        </div>
-                                        
-                                        {/* Price */}
-                                        <div className="space-y-2">
-                                            <p className="text-4xl font-bold text-gray-900 tracking-tight">
-                                                £{Number(selectedItem.price).toFixed(2)}
-                                            </p>
-                                            {selectedItem.track_inventory && (
-                                                <div className="inline-flex items-center px-3 py-1 rounded-full bg-gradient-to-r from-green-50 to-emerald-50 border border-green-200/50">
-                                                    <span className="text-sm font-semibold text-green-700">
-                                                        {selectedItem.stock_quantity > 0 ? 
-                                                            `${selectedItem.stock_quantity} in stock` : 
-                                                            'Out of stock'
-                                                        }
-                                                    </span>
-                                                </div>
-                                            )}
-                                        </div>
-                                        
-                                        {/* Description */}
-                                        <div className="space-y-3">
-                                            <h4 className="text-lg font-semibold text-gray-900">Description</h4>
-                                            <p className="text-gray-600 leading-relaxed text-base">
-                                                {selectedItem.description || selectedItem.short_description}
-                                            </p>
-                                        </div>
-                                    </div>
-                                    
-                                    {/* Add to Cart Button */}
-                                    <div className="pt-4">
-                                        <Button 
-                                            className="w-full group relative px-8 py-6 font-bold text-lg tracking-wide transition-all duration-500 border-0 rounded-2xl shadow-2xl transform hover:scale-105"
-                                            onClick={() => {
-                                                addToCart(selectedItem);
-                                                setItemDetailOpen(false);
-                                            }}
-                                            disabled={selectedItem.track_inventory && selectedItem.stock_quantity <= 0}
-                                            style={{
-                                                background: `linear-gradient(135deg, rgb(63, 75, 248) 0%, rgb(139, 92, 246) 100%)`,
-                                                color: 'white',
-                                                boxShadow: '0 20px 40px rgba(63, 75, 248, 0.3), 0 8px 16px rgba(139, 92, 246, 0.2)'
-                                            }}
-                                        >
-                                            <Plus className="h-5 w-5 mr-3 transition-transform duration-300 group-hover:scale-110" />
-                                            Add to Cart
-                                            <div className="absolute inset-0 bg-gradient-to-r from-white/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 rounded-2xl"></div>
-                                        </Button>
-                                    </div>
-                                </div>
-                            </div>
-                        </>
-                    )}
-                </DialogContent>
-            </Dialog>
-
-            {/* Gift Card Purchase Dialog */}
-            <Dialog open={giftCardDialogOpen} onOpenChange={setGiftCardDialogOpen}>
-                <DialogContent className="max-w-md">
+            {/* Cart Dialog */}
+            <Dialog open={showCart} onOpenChange={setShowCart}>
+                <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
                     <DialogHeader>
-                        <DialogTitle className="flex items-center space-x-2">
-                            <Gift className="w-5 h-5 text-purple-500" />
-                            <span>Purchase Gift Card</span>
-                        </DialogTitle>
-                        <DialogDescription>
-                            Choose an amount for your digital gift card
-                        </DialogDescription>
-                    </DialogHeader>
-                    
-                    <div className="space-y-6">
-                        {/* Preset Amounts */}
-                        {giftCardSettings?.fixed_amounts && giftCardSettings.fixed_amounts.length > 0 && (
-                            <div>
-                                <h4 className="font-medium mb-3">Popular Amounts</h4>
-                                <div className="grid grid-cols-2 gap-3">
-                                    {giftCardSettings.fixed_amounts.map((amount: number) => (
-                                        <Button
-                                            key={amount}
-                                            variant={selectedGiftCardAmount === amount ? "default" : "outline"}
-                                            onClick={() => {
-                                                setSelectedGiftCardAmount(amount);
-                                                setGiftCardAmount(amount.toString());
-                                            }}
-                                            className="h-12 text-lg font-semibold"
-                                        >
-                                            £{amount}
-                                        </Button>
-                                    ))}
-                                </div>
-                            </div>
-                        )}
-                        
-                        {/* Custom Amount */}
-                        {giftCardSettings?.allow_custom_amount && (
-                            <div>
-                                <h4 className="font-medium mb-3">Custom Amount</h4>
-                                <div className="space-y-2">
-                                    <div className="relative">
-                                        <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500">£</span>
-                                        <Input
-                                            type="number"
-                                            placeholder="Enter amount"
-                                            value={giftCardAmount}
-                                            onChange={(e) => {
-                                                setGiftCardAmount(e.target.value);
-                                                setSelectedGiftCardAmount(null);
-                                            }}
-                                            className="pl-8 text-lg h-12"
-                                            min={giftCardSettings?.min_custom_amount || 5}
-                                            max={giftCardSettings?.max_custom_amount || 500}
-                                            step="0.01"
-                                        />
-                                    </div>
-                                    {giftCardSettings && (
-                                        <p className="text-xs text-gray-500">
-                                            Minimum: £{giftCardSettings.min_custom_amount} • Maximum: £{giftCardSettings.max_custom_amount}
-                                        </p>
-                                    )}
-                                </div>
-                            </div>
-                        )}
-                        
-                        {/* Terms */}
-                        {giftCardSettings?.terms_and_conditions && (
-                            <div className="text-xs text-gray-500 p-3 bg-gray-50 rounded">
-                                <p className="font-medium mb-1">Terms & Conditions:</p>
-                                <p>{giftCardSettings.terms_and_conditions}</p>
-                            </div>
-                        )}
-                        
-                        {/* Action Buttons */}
-                        <div className="flex space-x-3">
-                            <Button 
-                                variant="outline" 
-                                onClick={() => {
-                                    setGiftCardDialogOpen(false);
-                                    setGiftCardAmount('');
-                                    setSelectedGiftCardAmount(null);
-                                }}
-                                className="flex-1 transition-all duration-300 shadow-lg group"
-                                style={getButtonOutlineStyle()}
-                                onMouseEnter={(e) => {
-                                    Object.assign(e.currentTarget.style, getButtonOutlineHoverStyle());
-                                }}
-                                onMouseLeave={(e) => {
-                                    Object.assign(e.currentTarget.style, getButtonOutlineStyle());
-                                }}
-                            >
-                                Cancel
-                            </Button>
-                            <Button 
-                                onClick={() => {
-                                    const amount = selectedGiftCardAmount || parseFloat(giftCardAmount);
-                                    if (amount && amount >= (giftCardSettings?.min_custom_amount || 5) && 
-                                        amount <= (giftCardSettings?.max_custom_amount || 500)) {
-                                        addGiftCardToCart(amount);
-                                    } else {
-                                        toast({
-                                            title: "Invalid Amount",
-                                            description: `Please enter an amount between £${giftCardSettings?.min_custom_amount || 5} and £${giftCardSettings?.max_custom_amount || 500}`,
-                                            variant: "destructive"
-                                        });
-                                    }
-                                }}
-                                disabled={!giftCardAmount && !selectedGiftCardAmount}
-                                className="flex-1 transition-all duration-300 shadow-lg group"
-                                style={getButtonStyle()}
-                                onMouseEnter={(e) => {
-                                    if (!e.currentTarget.disabled) {
-                                        Object.assign(e.currentTarget.style, getButtonHoverStyle());
-                                    }
-                                }}
-                                onMouseLeave={(e) => {
-                                    if (!e.currentTarget.disabled) {
-                                        Object.assign(e.currentTarget.style, getButtonStyle());
-                                    }
-                                }}
-                            >
-                                <ShoppingCart className="w-4 h-4 mr-2 transition-transform duration-300 group-hover:scale-110" />
-                                Add to Cart
-                            </Button>
-                        </div>
-                    </div>
-                </DialogContent>
-            </Dialog>
-
-            {/* Gift Card Balance Check Dialog - Premium Design */}
-            <Dialog open={balanceDialogOpen} onOpenChange={setBalanceDialogOpen}>
-                <DialogContent 
-                    className="max-w-lg border-0 shadow-3xl overflow-hidden"
-                    style={{
-                        background: `linear-gradient(135deg, rgba(255,255,255,0.95) 0%, rgba(255,255,255,0.85) 100%)`,
-                        backdropFilter: 'blur(20px)',
-                        boxShadow: '0 32px 64px rgba(0,0,0,0.15), 0 16px 32px rgba(63, 75, 248, 0.1)',
-                        borderRadius: '24px'
-                    }}
-                >
-                    <DialogHeader className="text-center pb-6">
-                        <DialogTitle className="flex items-center justify-center space-x-3 text-2xl font-bold bg-gradient-to-r from-gray-900 via-gray-700 to-gray-900 bg-clip-text text-transparent tracking-tight">
-                            <div 
-                                className="w-10 h-10 rounded-xl flex items-center justify-center shadow-xl"
-                                style={{
-                                    background: `linear-gradient(135deg, rgb(63, 75, 248) 0%, rgb(139, 92, 246) 100%)`,
-                                    boxShadow: '0 8px 25px rgba(63, 75, 248, 0.3)'
-                                }}
-                            >
-                                <CreditCard className="w-5 h-5 text-white" />
-                            </div>
-                            <span>Check Gift Card Balance</span>
-                        </DialogTitle>
-                        <DialogDescription className="text-base text-gray-600 font-medium">
-                            Enter your gift card code to check the remaining balance
-                        </DialogDescription>
-                    </DialogHeader>
-                    
-                    <div className="space-y-6">
-                        <div className="space-y-3">
-                            <label className="text-sm font-semibold text-gray-700 block">
-                                Gift Card Code
-                            </label>
-                            <Input
-                                placeholder="Enter gift card code"
-                                value={balanceCheckCode}
-                                onChange={(e) => setBalanceCheckCode(e.target.value.toUpperCase())}
-                                className="text-center text-lg font-mono tracking-wider border-2 focus:border-blue-500 focus:ring-blue-500 rounded-xl h-14 shadow-lg"
-                                style={{
-                                    borderColor: 'rgb(63, 75, 248)',
-                                    background: 'rgba(255, 255, 255, 0.8)',
-                                    backdropFilter: 'blur(10px)'
-                                }}
-                            />
-                        </div>
-                        
-                        {balanceResult && (
-                            <div 
-                                className="p-6 rounded-2xl shadow-xl relative overflow-hidden"
-                                style={{
-                                    background: `linear-gradient(135deg, rgba(63, 75, 248, 0.1) 0%, rgba(139, 92, 246, 0.1) 100%)`,
-                                    border: '2px solid rgba(63, 75, 248, 0.2)',
-                                    boxShadow: '0 20px 40px rgba(63, 75, 248, 0.1)'
-                                }}
-                            >
-                                <div className="text-center relative z-10">
-                                    <p className="text-sm text-gray-600 mb-2 font-medium">Current Balance</p>
-                                    <p className="text-4xl font-bold bg-gradient-to-r from-blue-700 to-green-600 bg-clip-text text-transparent mb-3">
-                                        £{balanceResult.balance.toFixed(2)}
-                                    </p>
-                                    <div className="inline-flex items-center px-4 py-2 rounded-full bg-white/80 backdrop-blur-sm shadow-lg">
-                                        <p className="text-sm text-gray-600 font-mono">
-                                            Code: <span className="font-bold">{balanceResult.code}</span>
-                                        </p>
-                                    </div>
-                                    {balanceResult.balance <= 0 && (
-                                        <p className="text-sm text-red-600 mt-3 font-semibold bg-red-50 px-4 py-2 rounded-xl">
-                                            This gift card has been fully used and will be removed from the system.
-                                        </p>
-                                    )}
-                                </div>
-                                <div className="absolute -top-2 -right-2 w-16 h-16 bg-gradient-to-br from-blue-400/20 to-purple-400/20 rounded-full blur-xl"></div>
-                            </div>
-                        )}
-                        
-                        <div className="flex space-x-4 pt-2">
-                            <Button 
-                                variant="outline" 
-                                onClick={() => {
-                                    setBalanceDialogOpen(false);
-                                    setBalanceCheckCode('');
-                                    setBalanceResult(null);
-                                }}
-                                className="flex-1 group px-6 py-4 font-semibold text-base transition-all duration-500 rounded-xl border-2 shadow-lg"
-                                style={{
-                                    borderColor: 'rgb(63, 75, 248)',
-                                    color: 'rgb(63, 75, 248)',
-                                    background: 'rgba(255, 255, 255, 0.9)',
-                                    backdropFilter: 'blur(12px)',
-                                    boxShadow: '0 8px 25px rgba(63, 75, 248, 0.15)'
-                                }}
-                            >
-                                Close
-                            </Button>
-                            <Button 
-                                onClick={checkGiftCardBalance}
-                                disabled={!balanceCheckCode.trim() || balanceLoading}
-                                className="flex-1 group px-6 py-4 font-bold text-base tracking-wide transition-all duration-500 border-0 rounded-xl shadow-xl transform hover:scale-105"
-                                style={{
-                                    background: `linear-gradient(135deg, rgb(63, 75, 248) 0%, rgb(139, 92, 246) 100%)`,
-                                    color: 'white',
-                                    boxShadow: '0 12px 30px rgba(63, 75, 248, 0.3), 0 6px 15px rgba(139, 92, 246, 0.2)'
-                                }}
-                            >
-                                {balanceLoading ? (
-                                    <div className="flex items-center">
-                                        <div className="animate-spin w-4 h-4 border-2 border-white border-t-transparent rounded-full mr-2"></div>
-                                        Checking...
-                                    </div>
-                                ) : (
-                                    <>
-                                        <CreditCard className="w-4 h-4 mr-2" />
-                                        Check Balance
-                                    </>
-                                )}
-                            </Button>
-                        </div>
-                    </div>
-                </DialogContent>
-            </Dialog>
-
-            {/* Shopping Cart Dialog */}
-            <Dialog open={cartOpen} onOpenChange={setCartOpen}>
-                <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
-                    <DialogHeader>
-                        <DialogTitle>Shopping Cart</DialogTitle>
-                        <DialogDescription>
-                            {cart.length === 0 ? 'Your cart is empty' : `${cart.length} items in your cart`}
-                        </DialogDescription>
+                        <DialogTitle>Your Cart</DialogTitle>
                     </DialogHeader>
                     
                     {cart.length === 0 ? (
                         <div className="text-center py-8">
-                            <ShoppingCart className="mx-auto h-12 w-12 text-gray-400 mb-4" />
-                            <p className="text-gray-500 mb-4">Your cart is empty</p>
-                            <Button 
-                                className="mt-4 hover:scale-105 hover:shadow-lg transition-all duration-300 font-semibold"
-                                onClick={() => setCartOpen(false)}
-                                style={getButtonStyle()}
-                            >
-                                Continue Shopping
-                            </Button>
+                            <ShoppingCart className="w-16 h-16 text-gray-400 mx-auto mb-4" />
+                            <p className="text-gray-500">Your cart is empty</p>
                         </div>
                     ) : (
                         <div className="space-y-4">
                             {cart.map((item) => (
-                                <div key={item.id} className="flex items-center space-x-4 border-b pb-4">
-                                    {item.type === 'gift_card' ? (
-                                        <div className="w-16 h-16 rounded-lg flex items-center justify-center" style={getButtonStyle()}>
-                                            <Gift className="w-8 h-8" />
-                                        </div>
-                                    ) : (
-                                        <div 
-                                            className="w-16 h-16 rounded-lg flex items-center justify-center"
-                                            style={{
-                                                background: `linear-gradient(135deg, rgb(63, 75, 248) 0%, rgb(139, 92, 246) 100%)`
-                                            }}
-                                        >
-                                            <Package className="w-6 h-6 text-white" />
-                                        </div>
-                                    )}
+                                <div key={item.id} className="flex items-center justify-between border-b pb-4">
                                     <div className="flex-1">
-                                        <h4 className="font-medium">{item.name}</h4>
-                                        <p className="text-sm text-gray-600">£{Number(item.price).toFixed(2)} each</p>
-                                        {item.type === 'gift_card' && (
-                                            <Badge variant="secondary" className="mt-1">
-                                                Digital Gift Card
-                                            </Badge>
-                                        )}
+                                        <h4 className="font-semibold">{item.name}</h4>
+                                        <p className="text-sm text-gray-600">£{item.price.toFixed(2)} each</p>
                                     </div>
                                     <div className="flex items-center space-x-2">
-                                        {item.type !== 'gift_card' ? (
-                                            <>
-                                                <Button
-                                                    variant="outline"
-                                                    size="sm"
-                                                    onClick={() => updateCartQuantity(item.id, item.quantity - 1)}
-                                                    className="transition-all duration-300 shadow-md group"
-                                                    style={getButtonOutlineStyle()}
-                                                    onMouseEnter={(e) => {
-                                                        Object.assign(e.currentTarget.style, getButtonOutlineHoverStyle());
-                                                    }}
-                                                    onMouseLeave={(e) => {
-                                                        Object.assign(e.currentTarget.style, getButtonOutlineStyle());
-                                                    }}
-                                                >
-                                                    <Minus className="h-4 w-4 transition-transform duration-300 group-hover:scale-110" />
-                                                </Button>
-                                                <span className="w-8 text-center font-semibold">{item.quantity}</span>
-                                                <Button
-                                                    variant="outline"
-                                                    size="sm"
-                                                    onClick={() => updateCartQuantity(item.id, item.quantity + 1)}
-                                                    className="transition-all duration-300 shadow-md group"
-                                                    style={getButtonOutlineStyle()}
-                                                    onMouseEnter={(e) => {
-                                                        Object.assign(e.currentTarget.style, getButtonOutlineHoverStyle());
-                                                    }}
-                                                    onMouseLeave={(e) => {
-                                                        Object.assign(e.currentTarget.style, getButtonOutlineStyle());
-                                                    }}
-                                                >
-                                                    <Plus className="h-4 w-4 transition-transform duration-300 group-hover:scale-110" />
-                                                </Button>
-                                            </>
-                                        ) : (
-                                            <span className="w-20 text-center text-sm text-gray-500 font-medium">Qty: 1</span>
-                                        )}
-                                    </div>
-                                    <div className="text-right">
-                                        <p className="font-medium">£{(Number(item.price) * item.quantity).toFixed(2)}</p>
                                         <Button
-                                            variant="ghost"
                                             size="sm"
-                                            onClick={() => removeFromCart(item.id)}
-                                            className="text-red-600 hover:text-red-700 hover:bg-red-50 transition-all duration-300 shadow-sm group"
-                                            onMouseEnter={(e) => {
-                                                e.currentTarget.style.transform = 'translateY(-2px) scale(1.05)';
-                                                e.currentTarget.style.boxShadow = '0 4px 12px 0 rgba(239, 68, 68, 0.25)';
-                                            }}
-                                            onMouseLeave={(e) => {
-                                                e.currentTarget.style.transform = 'translateY(0px) scale(1)';
-                                                e.currentTarget.style.boxShadow = '0 1px 3px 0 rgba(0, 0, 0, 0.1)';
-                                            }}
+                                            variant="outline"
+                                            onClick={() => updateCartQuantity(item.id, item.quantity - 1)}
                                         >
-                                            Remove
+                                            <Minus className="w-3 h-3" />
+                                        </Button>
+                                        <span className="w-8 text-center">{item.quantity}</span>
+                                        <Button
+                                            size="sm"
+                                            variant="outline"
+                                            onClick={() => updateCartQuantity(item.id, item.quantity + 1)}
+                                        >
+                                            <Plus className="w-3 h-3" />
+                                        </Button>
+                                        <Button
+                                            size="sm"
+                                            variant="destructive"
+                                            onClick={() => removeFromCart(item.id)}
+                                        >
+                                            <X className="w-3 h-3" />
                                         </Button>
                                     </div>
                                 </div>
                             ))}
                             
-                            <div className="border-t pt-4">
-                                <div className="flex justify-between items-center mb-4">
-                                    <span className="text-lg font-medium">Total:</span>
-                                    <span className="text-2xl font-bold">£{getTotalPrice().toFixed(2)}</span>
+                            <div className="border-t pt-4 space-y-2">
+                                <div className="flex justify-between">
+                                    <span>Subtotal:</span>
+                                    <span>£{cart.reduce((total, item) => total + (item.price * item.quantity), 0).toFixed(2)}</span>
                                 </div>
-                                <div className="flex space-x-2">
-                                    <Button 
-                                        variant="outline" 
-                                        className="flex-1 transition-all duration-300 shadow-lg group"
-                                        onClick={() => setCartOpen(false)}
-                                        style={getButtonOutlineStyle()}
-                                        onMouseEnter={(e) => {
-                                            Object.assign(e.currentTarget.style, getButtonOutlineHoverStyle());
-                                        }}
-                                        onMouseLeave={(e) => {
-                                            Object.assign(e.currentTarget.style, getButtonOutlineStyle());
-                                        }}
-                                    >
-                                        Continue Shopping
-                                    </Button>
-                                    <Button 
-                                        className="flex-1 transition-all duration-300 shadow-lg font-semibold group" 
-                                        style={getButtonStyle()}
-                                        onClick={proceedToCheckout}
-                                        onMouseEnter={(e) => {
-                                            Object.assign(e.currentTarget.style, getButtonHoverStyle());
-                                        }}
-                                        onMouseLeave={(e) => {
-                                            Object.assign(e.currentTarget.style, getButtonStyle());
-                                        }}
-                                    >
-                                        Checkout
-                                    </Button>
+                                {deliveryType === 'delivery' && (
+                                    <div className="flex justify-between">
+                                        <span>Delivery:</span>
+                                        <span>£2.50</span>
+                                    </div>
+                                )}
+                                <div className="flex justify-between font-bold text-lg">
+                                    <span>Total:</span>
+                                    <span>£{getTotalPrice().toFixed(2)}</span>
                                 </div>
                             </div>
+                            
+                            <Button
+                                onClick={() => {
+                                    setShowCart(false);
+                                    setCheckoutOpen(true);
+                                    setCurrentStep('delivery');
+                                }}
+                                className="w-full"
+                                style={getButtonStyleLocal()}
+                            >
+                                Proceed to Checkout
+                            </Button>
                         </div>
                     )}
                 </DialogContent>
@@ -1783,381 +1317,902 @@ export default function ShopPage() {
 
             {/* Checkout Dialog */}
             <Dialog open={checkoutOpen} onOpenChange={setCheckoutOpen}>
-                <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+                <DialogContent className="sm:max-w-lg max-h-[85vh] overflow-y-auto">
                     <DialogHeader>
                         <DialogTitle>Checkout</DialogTitle>
-                        <DialogDescription>
-                            Complete your order - Total: £{getTotalPrice().toFixed(2)}
-                        </DialogDescription>
                     </DialogHeader>
                     
-                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                        {/* Order Summary */}
-                        <div className="space-y-4">
-                            <h3 className="text-lg font-semibold">Order Summary</h3>
-                            <div className="space-y-2 max-h-60 overflow-y-auto">
-                                {cart.map((item) => (
-                                    <div key={item.id} className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
-                                        <div className="flex-1">
-                                            <h4 className="font-medium">{item.name}</h4>
-                                            <p className="text-sm text-gray-600">Qty: {item.quantity}</p>
-                                            {item.type === 'gift_card' && (
-                                                <Badge variant="secondary" className="mt-1">
-                                                    Digital Gift Card
-                                                </Badge>
-                                            )}
+                    <div className="space-y-6">
+                        {/* Customer Information Section */}
+                        {currentStep === 'customer-info' && (
+                            <Card className="backdrop-blur-sm bg-gradient-to-br from-emerald-500/10 to-teal-500/10 border border-emerald-200/50">
+                                <CardHeader className="pb-4">
+                                    <CardTitle className="flex items-center gap-3 text-emerald-700">
+                                        <div className="p-2 bg-emerald-100 rounded-lg">
+                                            <User className="w-5 h-5" />
                                         </div>
-                                        <div className="text-right">
-                                            <p className="font-medium">£{(item.price * item.quantity).toFixed(2)}</p>
-                                        </div>
-                                    </div>
-                                ))}
-                            </div>
-                            <div className="border-t pt-4 space-y-2">
-                                <div className="flex justify-between items-center">
-                                    <span>Subtotal:</span>
-                                    <span>£{getSubtotal().toFixed(2)}</span>
-                                </div>
-                                {orderType === 'delivery' && (
-                                    <div className="flex justify-between items-center text-sm text-gray-600">
-                                        <span>Delivery ({deliveryType}):</span>
-                                        <span>£{getDeliveryFee().toFixed(2)}</span>
-                                    </div>
-                                )}
-                                <div className="flex justify-between items-center text-lg font-bold border-t pt-2">
-                                    <span>Total:</span>
-                                    <span>£{getTotalPrice().toFixed(2)}</span>
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* Customer Information & Payment */}
-                        <div className="space-y-6">
-                            {/* Order Type Selection */}
-                            <div className="space-y-3">
-                                <h3 className="text-lg font-semibold">Order Type</h3>
-                                <div className="grid grid-cols-3 gap-3">
-                                    <Button
-                                        variant={orderType === 'email' ? 'default' : 'outline'}
-                                        onClick={() => setOrderType('email')}
-                                        className="flex items-center justify-center p-4 h-auto"
-                                    >
-                                        <Mail className="w-4 h-4 mr-2" />
-                                        Email (Free)
-                                    </Button>
-                                    <Button
-                                        variant={orderType === 'collection' ? 'default' : 'outline'}
-                                        onClick={() => setOrderType('collection')}
-                                        className="flex items-center justify-center p-4 h-auto"
-                                    >
-                                        <Package className="w-4 h-4 mr-2" />
-                                        Collection (Free)
-                                    </Button>
-                                    <Button
-                                        variant={orderType === 'delivery' ? 'default' : 'outline'}
-                                        onClick={() => setOrderType('delivery')}
-                                        className="flex items-center justify-center p-4 h-auto"
-                                    >
-                                        <Truck className="w-4 h-4 mr-2" />
-                                        Delivery
-                                    </Button>
-                                </div>
-                                
-                                {/* Delivery Type Selection */}
-                                {orderType === 'delivery' && (
-                                    <div className="mt-4 space-y-3">
-                                        <h4 className="font-medium text-gray-700">Delivery Options</h4>
-                                        <div className="grid grid-cols-2 gap-3">
-                                            <Button
-                                                variant={deliveryType === 'normal' ? 'default' : 'outline'}
-                                                onClick={() => setDeliveryType('normal')}
-                                                className="flex flex-col items-center justify-center p-4 h-auto"
-                                            >
-                                                <Truck className="w-4 h-4 mb-1" />
-                                                <span className="text-sm font-medium">Normal</span>
-                                                <span className="text-xs text-gray-600">£{deliveryFees.normal.toFixed(2)}</span>
-                                            </Button>
-                                            <Button
-                                                variant={deliveryType === 'express' ? 'default' : 'outline'}
-                                                onClick={() => setDeliveryType('express')}
-                                                className="flex flex-col items-center justify-center p-4 h-auto"
-                                            >
-                                                <Clock className="w-4 h-4 mb-1" />
-                                                <span className="text-sm font-medium">Express</span>
-                                                <span className="text-xs text-gray-600">£{deliveryFees.express.toFixed(2)}</span>
-                                            </Button>
-                                        </div>
-                                    </div>
-                                )}
-                            </div>
-
-                            {/* Customer Information */}
-                            <div className="space-y-4">
-                                <h3 className="text-lg font-semibold">Customer Information</h3>
-                                <div className="grid grid-cols-1 gap-4">
-                                    <Input
-                                        placeholder="Full Name *"
-                                        value={customerInfo.name}
-                                        onChange={(e) => handleCustomerInfoChange('name', e.target.value)}
-                                    />
-                                    <Input
-                                        placeholder="Email Address *"
-                                        type="email"
-                                        value={customerInfo.email}
-                                        onChange={(e) => handleCustomerInfoChange('email', e.target.value)}
-                                    />
-                                    <Input
-                                        placeholder={orderType === 'email' ? "Phone Number (Optional)" : "Phone Number *"}
-                                        type="tel"
-                                        value={customerInfo.phone}
-                                        onChange={(e) => handleCustomerInfoChange('phone', e.target.value)}
-                                    />
-                                </div>
-
-                                {/* Delivery Address Fields */}
-                                {orderType === 'delivery' && (
-                                    <div className="space-y-4 p-4 bg-blue-50 rounded-lg">
-                                        <h4 className="font-medium text-blue-900">Delivery Address</h4>
-                                        <div className="grid grid-cols-1 gap-4">
+                                        Customer Information
+                                    </CardTitle>
+                                    <CardDescription className="text-emerald-600">
+                                        Please provide your details for the order
+                                    </CardDescription>
+                                </CardHeader>
+                                <CardContent className="space-y-4">
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                        <div>
+                                            <Label htmlFor="customer-name">Full Name *</Label>
                                             <Input
-                                                placeholder="Street Address *"
-                                                value={customerInfo.address}
-                                                onChange={(e) => handleCustomerInfoChange('address', e.target.value)}
+                                                id="customer-name"
+                                                placeholder="Your full name"
+                                                value={customerInfo.name}
+                                                onChange={(e) => handleCustomerInfoChange('name', e.target.value)}
+                                                className="focus:ring-2 focus:ring-emerald-500"
                                             />
-                                            <div className="grid grid-cols-2 gap-4">
-                                                <Input
-                                                    placeholder="City *"
-                                                    value={customerInfo.city}
-                                                    onChange={(e) => handleCustomerInfoChange('city', e.target.value)}
-                                                />
-                                                <Input
-                                                    placeholder="Postcode *"
-                                                    value={customerInfo.postcode}
-                                                    onChange={(e) => handleCustomerInfoChange('postcode', e.target.value)}
-                                                />
+                                        </div>
+                                        <div>
+                                            <Label htmlFor="customer-phone">Phone Number</Label>
+                                            <Input
+                                                id="customer-phone"
+                                                type="tel"
+                                                placeholder="Your phone number"
+                                                value={customerInfo.phone}
+                                                onChange={(e) => handleCustomerInfoChange('phone', e.target.value)}
+                                                className="focus:ring-2 focus:ring-emerald-500"
+                                            />
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <Label htmlFor="customer-email">Email Address *</Label>
+                                        <Input
+                                            id="customer-email"
+                                            type="email"
+                                            placeholder="your.email@example.com"
+                                            value={customerInfo.email}
+                                            onChange={(e) => handleCustomerInfoChange('email', e.target.value)}
+                                            className="focus:ring-2 focus:ring-emerald-500"
+                                        />
+                                    </div>
+                                    
+                                    <div className="flex justify-between pt-6">
+                                        <Button
+                                            variant="outline"
+                                            onClick={() => setCheckoutOpen(false)}
+                                        >
+                                            Back to Cart
+                                        </Button>
+                                        <Button
+                                            onClick={() => setCurrentStep('delivery')}
+                                            disabled={!customerInfo.name || !customerInfo.email}
+                                            style={getButtonStyleLocal()}
+                                        >
+                                            Continue to Delivery
+                                        </Button>
+                                    </div>
+                                </CardContent>
+                            </Card>
+                        )}
+
+                        {/* Delivery Information Section */}
+                        {currentStep === 'delivery' && (
+                            <Card className="border-0 shadow-lg bg-white rounded-xl overflow-hidden">
+                                <CardHeader className="pb-4 bg-gray-50 border-b border-gray-100">
+                                    <CardTitle className="flex items-center gap-3 text-gray-900 text-lg font-bold">
+                                        <div className="p-2 bg-white rounded-lg shadow-sm border border-gray-200">
+                                            <Truck className="w-5 h-5 text-gray-700" />
+                                        </div>
+                                        <div>
+                                            <div>Delivery Information</div>
+                                            <div className="text-xs font-normal text-gray-500 mt-1">Step 1 of 2</div>
+                                        </div>
+                                    </CardTitle>
+                                </CardHeader>
+                                <CardContent className="space-y-4 p-4">
+                                    {/* Personal Message Section */}
+                                    {(() => {
+                                        const hasGiftCards = cart.some(item => 
+                                            item.category === 'gift-cards' || 
+                                            item.name.toLowerCase().includes('gift card')
+                                        );
+                                        
+                                        if (!hasGiftCards) return null;
+                                        
+                                        return (
+                                            <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
+                                                <button
+                                                    onClick={() => setShowPersonalMessage(true)}
+                                                    className="w-full p-4 text-left flex items-center justify-between hover:bg-gray-50 transition-all duration-300"
+                                                >
+                                                    <div className="flex items-center space-x-3">
+                                                        <div className="p-2 bg-amber-100 rounded-lg">
+                                                            <Gift className="w-5 h-5 text-amber-600" />
+                                                        </div>
+                                                        <div>
+                                                            <h3 className="font-bold text-gray-900">Add Personal Message</h3>
+                                                            <p className="text-xs text-gray-600">Include a message with your gift card</p>
+                                                        </div>
+                                                    </div>
+                                                    <div className="p-1 rounded-lg bg-gray-100">
+                                                        <Plus className="w-4 h-4 text-gray-600" />
+                                                    </div>
+                                                </button>
+                                            </div>
+                                        );
+                                    })()}
+                                    {/* Delivery Type Selection */}
+                                    <div className="space-y-4">
+                                        <div className="border-b border-gray-100 pb-2">
+                                            <h3 className="text-lg font-bold text-gray-900 mb-1 flex items-center gap-2">
+                                                <span className="w-6 h-6 bg-gray-800 rounded-full flex items-center justify-center text-white text-xs font-bold">2</span>
+                                                Choose Delivery Method
+                                            </h3>
+                                        </div>
+                                        
+                                        {/* Check if cart has gift cards or regular items */}
+                                        {(() => {
+                                            const hasGiftCards = cart.some(item => 
+                                                item.category === 'gift-cards' || 
+                                                item.name.toLowerCase().includes('gift card')
+                                            );
+
+                                            return (
+                                                <div className="space-y-3">
+                                                    {/* Email Collection - Only for Gift Cards */}
+                                                    {hasGiftCards && (
+                                                        <button
+                                                            onClick={() => setDeliveryType('email')}
+                                                            className={`w-full p-4 rounded-lg border-2 text-left transition-all duration-300 ${
+                                                                deliveryType === 'email' 
+                                                                    ? 'border-gray-800 bg-gray-50 shadow-md' 
+                                                                    : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
+                                                            }`}
+                                                        >
+                                                            <div className="flex items-center justify-between">
+                                                                <div className="flex items-center space-x-3">
+                                                                    <div className={`p-2 rounded-lg shadow-sm transition-all duration-300 ${
+                                                                        deliveryType === 'email' 
+                                                                            ? 'bg-gray-800 text-white' 
+                                                                            : 'bg-gray-100 text-gray-600'
+                                                                    }`}>
+                                                                        <Mail className="w-5 h-5" />
+                                                                    </div>
+                                                                    <div>
+                                                                        <div className="font-bold text-gray-900">Email Collection</div>
+                                                                        <div className="text-xs text-gray-600">Digital delivery to inbox</div>
+                                                                    </div>
+                                                                </div>
+                                                                <div className="text-right">
+                                                                    <div className="text-sm font-bold text-green-600">FREE</div>
+                                                                </div>
+                                                            </div>
+                                                        </button>
+                                                    )}
+
+                                                    {/* Collection - Available for all products */}
+                                                    <button
+                                                        onClick={() => setDeliveryType('collection')}
+                                                        className={`w-full p-4 rounded-lg border-2 text-left transition-all duration-300 ${
+                                                            deliveryType === 'collection' 
+                                                                ? 'border-gray-800 bg-gray-50 shadow-md' 
+                                                                : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
+                                                        }`}
+                                                    >
+                                                        <div className="flex items-center justify-between">
+                                                            <div className="flex items-center space-x-3">
+                                                                <div className={`p-2 rounded-lg shadow-sm transition-all duration-300 ${
+                                                                    deliveryType === 'collection' 
+                                                                        ? 'bg-gray-800 text-white' 
+                                                                        : 'bg-gray-100 text-gray-600'
+                                                                }`}>
+                                                                    <Store className="w-5 h-5" />
+                                                                </div>
+                                                                <div>
+                                                                    <div className="font-bold text-gray-900">Collection</div>
+                                                                    <div className="text-xs text-gray-600">Pick up from restaurant</div>
+                                                                </div>
+                                                            </div>
+                                                            <div className="text-right">
+                                                                <div className="text-sm font-bold text-green-600">FREE</div>
+                                                            </div>
+                                                        </div>
+                                                    </button>
+                                                    
+                                                    {/* Delivery Options - Available for all products */}
+                                                    <button
+                                                        onClick={() => setDeliveryType('delivery')}
+                                                        className={`w-full p-4 rounded-lg border-2 text-left transition-all duration-300 ${
+                                                            deliveryType === 'delivery' 
+                                                                ? 'border-gray-800 bg-gray-50 shadow-md' 
+                                                                : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
+                                                        }`}
+                                                    >
+                                                        <div className="flex items-center justify-between">
+                                                            <div className="flex items-center space-x-3">
+                                                                <div className={`p-2 rounded-lg shadow-sm transition-all duration-300 ${
+                                                                    deliveryType === 'delivery' 
+                                                                        ? 'bg-gray-800 text-white' 
+                                                                        : 'bg-gray-100 text-gray-600'
+                                                                }`}>
+                                                                    <Truck className="w-5 h-5" />
+                                                                </div>
+                                                                <div>
+                                                                    <div className="font-bold text-gray-900">Home Delivery</div>
+                                                                    <div className="text-xs text-gray-600">To your doorstep</div>
+                                                                </div>
+                                                            </div>
+                                                            <div className="text-right">
+                                                                <div className="text-xs font-medium text-gray-700">Choose speed →</div>
+                                                            </div>
+                                                        </div>
+                                                    </button>
+                                                </div>
+                                            );
+                                        })()}
+                                    </div>
+
+                                    {/* Delivery Speed Selection */}
+                                    {deliveryType === 'delivery' && (
+                                        <div className="bg-white rounded-lg border-2 border-gray-200 overflow-hidden">
+                                            <div className="p-3 bg-gray-50 border-b border-gray-200">
+                                                <h3 className="text-lg font-bold text-gray-900 flex items-center gap-2">
+                                                    <span className="w-6 h-6 bg-gray-800 rounded-full flex items-center justify-center text-white text-xs font-bold">3</span>
+                                                    Select Delivery Speed
+                                                </h3>
+                                            </div>
+                                            <div className="p-3 space-y-3">
+                                                <button
+                                                    onClick={() => setDeliverySpeed('normal')}
+                                                    className={`w-full p-3 rounded-lg border-2 text-left transition-all duration-300 ${
+                                                        deliverySpeed === 'normal' 
+                                                            ? 'border-gray-800 bg-gray-50 shadow-md' 
+                                                            : 'border-gray-200 hover:border-gray-300 bg-white'
+                                                    }`}
+                                                >
+                                                    <div className="flex items-center justify-between">
+                                                        <div className="flex items-center space-x-3">
+                                                            <div className={`p-2 rounded-lg ${
+                                                                deliverySpeed === 'normal' 
+                                                                    ? 'bg-gray-800 text-white' 
+                                                                    : 'bg-gray-100 text-gray-600'
+                                                            }`}>
+                                                                <Clock className="w-4 h-4" />
+                                                            </div>
+                                                            <div>
+                                                                <div className="font-bold text-gray-900">Normal Delivery</div>
+                                                                <div className="text-xs text-gray-600">45-60 minutes</div>
+                                                            </div>
+                                                        </div>
+                                                        <div className="text-right">
+                                                            <div className="text-lg font-bold text-gray-900">
+                                                                £{getDeliveryFee(shopSettings?.delivery_normal_fee, 2.50).toFixed(2)}
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </button>
+                                                
+                                                <button
+                                                    onClick={() => setDeliverySpeed('express')}
+                                                    className={`w-full p-3 rounded-lg border-2 text-left transition-all duration-300 ${
+                                                        deliverySpeed === 'express' 
+                                                            ? 'border-gray-800 bg-gray-50 shadow-md' 
+                                                            : 'border-gray-200 hover:border-gray-300 bg-white'
+                                                    }`}
+                                                >
+                                                    <div className="flex items-center justify-between">
+                                                        <div className="flex items-center space-x-3">
+                                                            <div className={`p-2 rounded-lg ${
+                                                                deliverySpeed === 'express' 
+                                                                    ? 'bg-gray-800 text-white' 
+                                                                    : 'bg-gray-100 text-gray-600'
+                                                            }`}>
+                                                                <Zap className="w-4 h-4" />
+                                                            </div>
+                                                            <div>
+                                                                <div className="font-bold text-gray-900 flex items-center gap-2">
+                                                                    Express Delivery
+                                                                    <span className="bg-orange-500 text-white text-xs px-1.5 py-0.5 rounded-full font-bold">FAST</span>
+                                                                </div>
+                                                                <div className="text-xs text-gray-600">20-30 minutes</div>
+                                                            </div>
+                                                        </div>
+                                                        <div className="text-right">
+                                                            <div className="text-lg font-bold text-gray-900">
+                                                                £{getDeliveryFee(shopSettings?.delivery_express_fee, 4.50).toFixed(2)}
+                                                            </div>
+                                                            <div className="text-xs text-gray-600">Premium option</div>
+                                                        </div>
+                                                    </div>
+                                                </button>
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {/* Recipient Information for Email Collection */}
+                                    {deliveryType === 'email' && (
+                                        <div className="bg-white rounded-lg border-2 border-gray-200 overflow-hidden">
+                                            <div className="p-3 bg-gray-50 border-b border-gray-200">
+                                                <h3 className="text-lg font-bold text-gray-900 flex items-center gap-2">
+                                                    <span className="w-6 h-6 bg-gray-800 rounded-full flex items-center justify-center text-white text-xs font-bold">3</span>
+                                                    Email Recipient Details
+                                                </h3>
+                                            </div>
+                                            
+                                            <div className="p-4 space-y-4">
+                                                <div>
+                                                    <Label htmlFor="recipient-name" className="text-sm font-bold text-gray-700 mb-1 block">Recipient's Full Name *</Label>
+                                                    <Input
+                                                        id="recipient-name"
+                                                        placeholder="Enter recipient's full name"
+                                                        value={customerInfo.recipientName}
+                                                        onChange={(e) => handleCustomerInfoChange('recipientName', e.target.value)}
+                                                        className="focus:ring-2 focus:ring-gray-500 focus:border-gray-500"
+                                                    />
+                                                </div>
+                                                <div>
+                                                    <Label htmlFor="recipient-email" className="text-sm font-bold text-gray-700 mb-1 block">Recipient's Email Address *</Label>
+                                                    <Input
+                                                        id="recipient-email"
+                                                        type="email"
+                                                        placeholder="recipient@example.com"
+                                                        value={customerInfo.recipientEmail}
+                                                        onChange={(e) => handleCustomerInfoChange('recipientEmail', e.target.value)}
+                                                        className="focus:ring-2 focus:ring-gray-500 focus:border-gray-500"
+                                                    />
+                                                </div>
+                                                <div className="bg-gray-50 rounded-lg p-3 border border-gray-200">
+                                                    <div className="flex items-start gap-2">
+                                                        <Mail className="w-4 h-4 text-gray-600 mt-0.5" />
+                                                        <div>
+                                                            <p className="text-xs font-medium text-gray-900">Digital Delivery</p>
+                                                            <p className="text-xs text-gray-700">Gift card sent instantly to recipient's email</p>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {/* Recipient Information for Collection */}
+                                    {deliveryType === 'collection' && (
+                                        <div className="bg-white rounded-lg border-2 border-gray-200 overflow-hidden">
+                                            <div className="p-3 bg-gray-50 border-b border-gray-200">
+                                                <h3 className="text-lg font-bold text-gray-900 flex items-center gap-2">
+                                                    <span className="w-6 h-6 bg-gray-800 rounded-full flex items-center justify-center text-white text-xs font-bold">3</span>
+                                                    Collection Information
+                                                </h3>
+                                            </div>
+                                            
+                                            <div className="p-4 space-y-4">
+                                                <div>
+                                                    <Label htmlFor="collection-name" className="text-sm font-bold text-gray-700 mb-1 block">Full Name for Collection *</Label>
+                                                    <Input
+                                                        id="collection-name"
+                                                        placeholder="Enter name for pickup"
+                                                        value={customerInfo.recipientName}
+                                                        onChange={(e) => handleCustomerInfoChange('recipientName', e.target.value)}
+                                                        className="focus:ring-2 focus:ring-gray-500 focus:border-gray-500"
+                                                    />
+                                                </div>
+                                                <div>
+                                                    <Label htmlFor="collection-email" className="text-sm font-bold text-gray-700 mb-1 block">Email Address *</Label>
+                                                    <Input
+                                                        id="collection-email"
+                                                        type="email"
+                                                        placeholder="your@example.com"
+                                                        value={customerInfo.recipientEmail}
+                                                        onChange={(e) => handleCustomerInfoChange('recipientEmail', e.target.value)}
+                                                        className="focus:ring-2 focus:ring-gray-500 focus:border-gray-500"
+                                                    />
+                                                </div>
+                                                <div>
+                                                    <Label htmlFor="collection-phone" className="text-sm font-bold text-gray-700 mb-1 block">Phone Number *</Label>
+                                                    <Input
+                                                        id="collection-phone"
+                                                        type="tel"
+                                                        placeholder="Your phone number"
+                                                        value={customerInfo.recipientPhone}
+                                                        onChange={(e) => handleCustomerInfoChange('recipientPhone', e.target.value)}
+                                                        className="focus:ring-2 focus:ring-gray-500 focus:border-gray-500"
+                                                    />
+                                                </div>
+                                                <div className="bg-gray-50 rounded-lg p-3 border border-gray-200">
+                                                    <div className="flex items-start gap-2">
+                                                        <Store className="w-4 h-4 text-gray-600 mt-0.5" />
+                                                        <div>
+                                                            <p className="text-xs font-medium text-gray-900">Pickup Information</p>
+                                                            <p className="text-xs text-gray-700">We'll notify you when ready. Bring valid ID.</p>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {/* Address Fields for Delivery */}
+                                    {deliveryType === 'delivery' && deliverySpeed && (
+                                        <div className="bg-white rounded-lg border-2 border-gray-200 overflow-hidden">
+                                            <div className="p-3 bg-gray-50 border-b border-gray-200">
+                                                <h3 className="text-lg font-bold text-gray-900 flex items-center gap-2">
+                                                    <span className="w-6 h-6 bg-gray-800 rounded-full flex items-center justify-center text-white text-xs font-bold">4</span>
+                                                    Delivery Details
+                                                </h3>
+                                            </div>
+                                            
+                                            <div className="p-4 space-y-4">
+                                                {/* Contact Information */}
+                                                <div>
+                                                    <h4 className="text-sm font-bold text-gray-900 mb-3 pb-2 border-b border-gray-200">Contact Information</h4>
+                                                    <div className="space-y-3">
+                                                        <div>
+                                                            <Label htmlFor="delivery-name" className="text-sm font-bold text-gray-700 mb-1 block">Recipient's Full Name *</Label>
+                                                            <Input
+                                                                id="delivery-name"
+                                                                placeholder="Enter recipient's full name"
+                                                                value={customerInfo.recipientName}
+                                                                onChange={(e) => handleCustomerInfoChange('recipientName', e.target.value)}
+                                                                className="focus:ring-2 focus:ring-gray-500 focus:border-gray-500"
+                                                            />
+                                                        </div>
+                                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                                            <div>
+                                                                <Label htmlFor="delivery-email" className="text-sm font-bold text-gray-700 mb-1 block">Email Address *</Label>
+                                                                <Input
+                                                                    id="delivery-email"
+                                                                    type="email"
+                                                                    placeholder="recipient@example.com"
+                                                                    value={customerInfo.recipientEmail}
+                                                                    onChange={(e) => handleCustomerInfoChange('recipientEmail', e.target.value)}
+                                                                    className="focus:ring-2 focus:ring-gray-500 focus:border-gray-500"
+                                                                />
+                                                            </div>
+                                                            <div>
+                                                                <Label htmlFor="delivery-phone" className="text-sm font-bold text-gray-700 mb-1 block">Phone Number *</Label>
+                                                                <Input
+                                                                    id="delivery-phone"
+                                                                    type="tel"
+                                                                    placeholder="Recipient's phone number"
+                                                                    value={customerInfo.recipientPhone}
+                                                                    onChange={(e) => handleCustomerInfoChange('recipientPhone', e.target.value)}
+                                                                    className="focus:ring-2 focus:ring-gray-500 focus:border-gray-500"
+                                                                />
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+
+                                                {/* Address Information */}
+                                                <div>
+                                                    <h4 className="text-sm font-bold text-gray-900 mb-3 pb-2 border-b border-gray-200">Delivery Address</h4>
+                                                    
+                                                    <div className="space-y-3">
+                                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                                            <div>
+                                                                <Label htmlFor="door-name" className="text-sm font-bold text-gray-700 mb-1 block">Door Name/Number</Label>
+                                                                <Input
+                                                                    id="door-name"
+                                                                    placeholder="e.g., Red Door, Blue House, 42"
+                                                                    value={customerInfo.doorName}
+                                                                    onChange={(e) => handleCustomerInfoChange('doorName', e.target.value)}
+                                                                    className="focus:ring-2 focus:ring-gray-500 focus:border-gray-500"
+                                                                />
+                                                            </div>
+                                                            <div>
+                                                                <Label htmlFor="flat-number" className="text-sm font-bold text-gray-700 mb-1 block">Flat/Apartment (Optional)</Label>
+                                                                <Input
+                                                                    id="flat-number"
+                                                                    placeholder="e.g., Flat 2B, Apt 105"
+                                                                    value={customerInfo.flatNumber}
+                                                                    onChange={(e) => handleCustomerInfoChange('flatNumber', e.target.value)}
+                                                                    className="focus:ring-2 focus:ring-gray-500 focus:border-gray-500"
+                                                                />
+                                                            </div>
+                                                        </div>
+
+                                                        <div>
+                                                            <Label htmlFor="road-name" className="text-sm font-bold text-gray-700 mb-1 block">Street Address *</Label>
+                                                            <Input
+                                                                id="road-name"
+                                                                placeholder="Enter street name and number"
+                                                                value={customerInfo.roadName}
+                                                                onChange={(e) => handleCustomerInfoChange('roadName', e.target.value)}
+                                                                className="focus:ring-2 focus:ring-gray-500 focus:border-gray-500"
+                                                            />
+                                                        </div>
+                                                        
+                                                        <div>
+                                                            <Label htmlFor="postcode" className="text-sm font-bold text-gray-700 mb-1 block">Postcode *</Label>
+                                                            <Input
+                                                                id="postcode"
+                                                                placeholder="e.g., SW1A 1AA"
+                                                                value={customerInfo.postcode}
+                                                                onChange={(e) => handleCustomerInfoChange('postcode', e.target.value)}
+                                                                className="focus:ring-2 focus:ring-gray-500 focus:border-gray-500"
+                                                            />
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                                
+                                                <div className="bg-gray-50 rounded-lg p-3 border border-gray-200">
+                                                    <div className="flex items-start gap-2">
+                                                        <Truck className="w-4 h-4 text-gray-600 mt-0.5" />
+                                                        <div>
+                                                            <p className="text-xs font-medium text-gray-900">Delivery Information</p>
+                                                            <p className="text-xs text-gray-700">
+                                                                {deliverySpeed === 'express' 
+                                                                    ? 'Express delivery: 20-30 minutes • We\'ll call when nearby'
+                                                                    : 'Standard delivery: 45-60 minutes • We\'ll call when nearby'
+                                                                }
+                                                            </p>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    )}
+                                    
+                                    {/* Order Summary at Bottom */}
+                                    <div className="bg-gray-50 rounded-lg p-4 mt-6 border border-gray-200">
+                                        <div className="space-y-2">
+                                            <div className="flex justify-between text-sm">
+                                                <span className="text-gray-600">Items Total:</span>
+                                                <span className="font-semibold">£{cart.reduce((total, item) => total + (item.price * item.quantity), 0).toFixed(2)}</span>
+                                            </div>
+                                            
+                                            {deliveryType === 'delivery' && deliverySpeed && (
+                                                <div className="flex justify-between text-sm">
+                                                    <span className="text-gray-600">{deliverySpeed === 'express' ? 'Express' : 'Normal'} Delivery:</span>
+                                                    <span className="font-semibold">£{(deliverySpeed === 'express' 
+                                                        ? getDeliveryFee(shopSettings?.delivery_express_fee, 4.50)
+                                                        : getDeliveryFee(shopSettings?.delivery_normal_fee, 2.50)
+                                                    ).toFixed(2)}</span>
+                                                </div>
+                                            )}
+                                            
+                                            {(deliveryType === 'collection' || deliveryType === 'email') && (
+                                                <div className="flex justify-between text-sm">
+                                                    <span className="text-gray-600">{deliveryType === 'email' ? 'Email Delivery' : 'Collection'}:</span>
+                                                    <span className="font-semibold text-green-600">FREE</span>
+                                                </div>
+                                            )}
+                                            
+                                            <div className="border-t pt-2 flex justify-between font-bold text-lg">
+                                                <span className="text-gray-900">Total:</span>
+                                                <span className="text-gray-900">£{getTotalPrice().toFixed(2)}</span>
                                             </div>
                                         </div>
                                     </div>
-                                )}
-                            </div>
-
-                            {/* Payment Section */}
-                            {stripePromise && clientSecret && (
-                                <div className="space-y-4">
-                                    <h3 className="text-lg font-semibold">Payment</h3>
-                                    <Elements stripe={stripePromise} options={{ clientSecret }}>
-                                        <CheckoutForm 
-                                            onSuccess={() => {
-                                                setPaymentSuccess(true);
-                                                setCart([]);
+                                    
+                                    <div className="flex justify-between pt-6 mt-4 border-t border-gray-200">
+                                        <Button
+                                            variant="outline"
+                                            onClick={() => {
                                                 setCheckoutOpen(false);
-                                                toast({
-                                                    title: "Order Successful!",
-                                                    description: "Your order has been placed successfully. You will receive a confirmation email shortly.",
-                                                });
+                                                setShowCart(true);
                                             }}
-                                            onError={(error: string) => {
-                                                toast({
-                                                    title: "Payment Failed",
-                                                    description: error,
-                                                    variant: "destructive"
-                                                });
-                                            }}
-                                            customerInfo={customerInfo}
-                                            orderType={orderType}
-                                            deliveryType={deliveryType}
-                                            total={getTotalPrice()}
-                                            subtotal={getSubtotal()}
-                                            deliveryFee={getDeliveryFee()}
-                                            cart={cart}
-                                            tenant={tenant}
-                                        />
-                                    </Elements>
-                                </div>
-                            )}
+                                            className="px-6 py-3 border-2 border-gray-300 text-gray-700 hover:bg-gray-50 hover:border-gray-400 rounded-lg font-semibold transition-all duration-300"
+                                        >
+                                            ← Back to Cart
+                                        </Button>
+                                        <Button
+                                            onClick={() => setCurrentStep('payment')}
+                                            disabled={
+                                                !deliveryType || 
+                                                (deliveryType === 'email' && (!customerInfo.recipientName || !customerInfo.recipientEmail)) ||
+                                                (deliveryType === 'collection' && (!customerInfo.recipientName || !customerInfo.recipientEmail || !customerInfo.recipientPhone)) ||
+                                                (deliveryType === 'delivery' && (!deliverySpeed || !customerInfo.recipientName || !customerInfo.recipientEmail || !customerInfo.recipientPhone || !customerInfo.roadName || !customerInfo.postcode))
+                                            }
+                                            className="px-6 py-3 bg-gray-800 hover:bg-gray-900 text-white disabled:bg-gray-300 disabled:text-gray-500 rounded-lg font-bold transition-all duration-300 shadow-lg hover:shadow-xl"
+                                        >
+                                            Continue to Payment →
+                                        </Button>
+                                    </div>
+                                </CardContent>
+                            </Card>
+                        )}
 
-                            {/* Initialize Payment Button */}
-                            {!clientSecret && (
-                                <Button
-                                    onClick={async () => {
-                                        if (!validateCustomerInfo()) return;
-                                        
-                                        setPaymentLoading(true);
-                                        try {
-                                            await createPaymentIntent();
-                                        } catch (error) {
-                                            toast({
-                                                title: "Payment Error",
-                                                description: "Failed to initialize payment. Please try again.",
-                                                variant: "destructive"
-                                            });
-                                        } finally {
-                                            setPaymentLoading(false);
-                                        }
+                        {/* Payment Section */}
+                        {currentStep === 'payment' && !showStripePayment && (
+                            <Card>
+                                <CardHeader>
+                                    <CardTitle>Payment</CardTitle>
+                                    <CardDescription>Complete your order</CardDescription>
+                                </CardHeader>
+                                <CardContent>
+                                    <div className="space-y-4">
+                                        <div className="text-center">
+                                            <p className="text-lg font-semibold">Order Summary</p>
+                                            
+                                            {/* Order breakdown */}
+                                            <div className="bg-gray-50 rounded-lg p-4 mt-4 space-y-2">
+                                                <div className="flex justify-between">
+                                                    <span>Items Total:</span>
+                                                    <span>£{cart.reduce((total, item) => total + (item.price * item.quantity), 0).toFixed(2)}</span>
+                                                </div>
+                                                
+                                                {deliveryType === 'delivery' && deliverySpeed && (
+                                                    <div className="flex justify-between">
+                                                        <span>{deliverySpeed === 'express' ? 'Express' : 'Normal'} Delivery:</span>
+                                                        <span>£{(deliverySpeed === 'express' 
+                                                            ? getDeliveryFee(shopSettings?.delivery_express_fee, 4.50)
+                                                            : getDeliveryFee(shopSettings?.delivery_normal_fee, 2.50)
+                                                        ).toFixed(2)}</span>
+                                                    </div>
+                                                )}
+                                                
+                                                {(deliveryType === 'collection' || deliveryType === 'email') && (
+                                                    <div className="flex justify-between">
+                                                        <span>{deliveryType === 'email' ? 'Email Delivery:' : 'Collection:'}</span>
+                                                        <span>FREE</span>
+                                                    </div>
+                                                )}
+                                                
+                                                <div className="border-t pt-2 flex justify-between font-bold text-lg">
+                                                    <span>Total:</span>
+                                                    <span>£{getTotalPrice().toFixed(2)}</span>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        {paymentError && (
+                                            <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+                                                <p className="text-red-600 text-sm">{paymentError}</p>
+                                            </div>
+                                        )}
+
+                                        <div className="flex gap-4">
+                                            <Button
+                                                variant="outline"
+                                                onClick={() => setCurrentStep('delivery')}
+                                                className="flex-1"
+                                            >
+                                                ← Back to Delivery
+                                            </Button>
+                                            <Button
+                                                onClick={startPayment}
+                                                disabled={paymentLoading}
+                                                className="flex-1"
+                                                style={getButtonStyleLocal()}
+                                            >
+                                                {paymentLoading ? 'Processing...' : 'Pay with Card'}
+                                            </Button>
+                                        </div>
+                                    </div>
+                                </CardContent>
+                            </Card>
+                        )}
+
+                        {/* Stripe Payment Form */}
+                        {currentStep === 'payment' && showStripePayment && (
+                            <div className="space-y-4">
+                                <Card>
+                                    <CardHeader>
+                                        <CardTitle>Secure Card Payment</CardTitle>
+                                        <CardDescription>
+                                            Complete your order of £{getTotalPrice().toFixed(2)}
+                                        </CardDescription>
+                                    </CardHeader>
+                                </Card>
+                                
+                                <StripePaymentProvider
+                                    tenant={tenant}
+                                    orderDetails={{
+                                        orderId: `SHOP-${Date.now()}`,
+                                        amount: getTotalPrice(),
+                                        currency: 'gbp',
+                                        customerEmail: customerInfo.recipientEmail || customerInfo.email,
+                                        customerName: customerInfo.recipientName || customerInfo.name,
+                                        description: `Shop order - ${cart.length} item(s)`
                                     }}
-                                    disabled={paymentLoading}
-                                    className="w-full"
-                                    style={getButtonStyle()}
-                                >
-                                    {paymentLoading ? (
-                                        <>
-                                            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                                            Preparing Payment...
-                                        </>
-                                    ) : (
-                                        <>
-                                            <CreditCard className="w-4 h-4 mr-2" />
-                                            Continue to Payment
-                                        </>
+                                    onPaymentSuccess={handlePaymentSuccess}
+                                    onPaymentError={handlePaymentError}
+                                    onPaymentCancel={handlePaymentCancel}
+                                />
+                            </div>
+                        )}
+                    </div>
+                </DialogContent>
+            </Dialog>
+
+            {/* Gift Card Balance Check Modal */}
+            <Dialog open={showBalanceCheck} onOpenChange={handleBalanceCheckClose}>
+                <DialogContent className="sm:max-w-md">
+                    <DialogHeader>
+                        <DialogTitle className="text-center">Check Gift Card Balance</DialogTitle>
+                    </DialogHeader>
+                    <div className="space-y-6 p-4">
+                        {!giftCardInfo && (
+                            <>
+                                <div className="space-y-4">
+                                    <div>
+                                        <Label htmlFor="gift-card-code">Gift Card Code</Label>
+                                        <Input
+                                            id="gift-card-code"
+                                            type="text"
+                                            placeholder="Enter your gift card code"
+                                            value={giftCardCode}
+                                            onChange={(e) => {
+                                                setGiftCardCode(e.target.value.toUpperCase());
+                                                setBalanceError(null);
+                                            }}
+                                            className="mt-2 text-center font-mono text-lg tracking-wider"
+                                            style={{
+                                                borderColor: balanceError ? '#ef4444' : '#d1d5db',
+                                            }}
+                                        />
+                                    </div>
+                                    
+                                    {balanceError && (
+                                        <div className="bg-red-50 border border-red-200 rounded-md p-3">
+                                            <p className="text-red-800 text-sm text-center">{balanceError}</p>
+                                        </div>
                                     )}
-                                </Button>
-                            )}
+                                    
+                                    <Button 
+                                        onClick={checkGiftCardBalance}
+                                        disabled={!giftCardCode.trim() || checkingBalance}
+                                        className="w-full py-3 text-white"
+                                        style={(!giftCardCode.trim() || checkingBalance) 
+                                            ? {
+                                                backgroundColor: '#9ca3af',
+                                                borderColor: '#9ca3af'
+                                            }
+                                            : getButtonStyleLocal()
+                                        }
+                                    >
+                                        {checkingBalance ? 'Checking...' : 'Check Balance'}
+                                    </Button>
+                                </div>
+                            </>
+                        )}
+                        
+                        {giftCardInfo && (
+                            <div className="space-y-4">
+                                <div className="bg-green-50 border-2 border-green-200 rounded-lg p-6 text-center">
+                                    <div className="mb-4">
+                                        <div className="w-12 h-12 bg-green-500 rounded-full flex items-center justify-center mx-auto mb-3">
+                                            <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"></path>
+                                            </svg>
+                                        </div>
+                                        <h3 className="text-lg font-semibold text-green-800 mb-2">Gift Card Found!</h3>
+                                    </div>
+                                    
+                                    <div className="space-y-3 text-left">
+                                        <div className="flex justify-between items-center py-2 border-b border-green-200">
+                                            <span className="font-medium text-green-700">Card Number:</span>
+                                            <span className="font-mono text-green-800">{giftCardInfo.cardNumber}</span>
+                                        </div>
+                                        <div className="flex justify-between items-center py-2 border-b border-green-200">
+                                            <span className="font-medium text-green-700">Balance:</span>
+                                            <span className="text-xl font-bold text-green-800">£{giftCardInfo.balance.toFixed(2)}</span>
+                                        </div>
+                                        <div className="flex justify-between items-center py-2 border-b border-green-200">
+                                            <span className="font-medium text-green-700">Status:</span>
+                                            <span className="text-green-800">{giftCardInfo.status}</span>
+                                        </div>
+                                        <div className="flex justify-between items-center py-2">
+                                            <span className="font-medium text-green-700">Expires:</span>
+                                            <span className="text-green-800">{giftCardInfo.expiryDate}</span>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <div className="flex space-x-3">
+                                    <Button 
+                                        onClick={() => {
+                                            setGiftCardInfo(null);
+                                            setGiftCardCode('');
+                                        }}
+                                        variant="outline"
+                                        className="flex-1"
+                                    >
+                                        Check Another
+                                    </Button>
+                                    <Button 
+                                        onClick={handleBalanceCheckClose}
+                                        className="flex-1 text-white"
+                                        style={getButtonStyleLocal()}
+                                    >
+                                        Close
+                                    </Button>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                </DialogContent>
+            </Dialog>
+
+            {/* Personal Message Popup */}
+            <Dialog open={showPersonalMessage} onOpenChange={setShowPersonalMessage}>
+                <DialogContent className="sm:max-w-md">
+                    <DialogHeader>
+                        <DialogTitle className="flex items-center gap-3">
+                            <div className="p-2 bg-amber-100 rounded-lg">
+                                <Gift className="w-5 h-5 text-amber-600" />
+                            </div>
+                            Personal Message
+                        </DialogTitle>
+                    </DialogHeader>
+                    
+                    <div className="space-y-4">
+                        <div className="grid grid-cols-2 gap-4">
+                            <div>
+                                <Label htmlFor="popup-message-to" className="text-sm font-bold text-gray-700 mb-2 block">To</Label>
+                                <Input
+                                    id="popup-message-to"
+                                    placeholder="Recipient's name"
+                                    value={personalMessage.to}
+                                    onChange={(e) => handlePersonalMessageChange('to', e.target.value)}
+                                    className="focus:ring-2 focus:ring-gray-500 focus:border-gray-500"
+                                />
+                            </div>
+                            <div>
+                                <Label htmlFor="popup-message-from" className="text-sm font-bold text-gray-700 mb-2 block">From</Label>
+                                <Input
+                                    id="popup-message-from"
+                                    placeholder="Your name"
+                                    value={personalMessage.from}
+                                    onChange={(e) => handlePersonalMessageChange('from', e.target.value)}
+                                    className="focus:ring-2 focus:ring-gray-500 focus:border-gray-500"
+                                />
+                            </div>
+                        </div>
+                        
+                        <div>
+                            <Label htmlFor="popup-message-text" className="text-sm font-bold text-gray-700 mb-2 block">Your Message</Label>
+                            <Textarea
+                                id="popup-message-text"
+                                placeholder="Write your heartfelt message here..."
+                                value={personalMessage.message}
+                                onChange={(e) => handlePersonalMessageChange('message', e.target.value)}
+                                className="min-h-[100px] focus:ring-2 focus:ring-gray-500 focus:border-gray-500 resize-none"
+                                maxLength={500}
+                            />
+                            <div className="flex justify-between items-center mt-2">
+                                <p className="text-xs text-gray-500">
+                                    {personalMessage.message.length}/500 characters
+                                </p>
+                            </div>
+                        </div>
+                        
+                        {(personalMessage.to || personalMessage.from || personalMessage.message) && (
+                            <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
+                                <h5 className="text-sm font-bold text-gray-900 mb-2">Preview:</h5>
+                                <div className="space-y-2">
+                                    {personalMessage.to && personalMessage.from && (
+                                        <div className="flex justify-between text-sm">
+                                            <span className="font-medium text-gray-600">To: <span className="text-gray-900">{personalMessage.to}</span></span>
+                                            <span className="font-medium text-gray-600">From: <span className="text-gray-900">{personalMessage.from}</span></span>
+                                        </div>
+                                    )}
+                                    {personalMessage.message && (
+                                        <div className="bg-white rounded p-3 border-l-4 border-amber-400">
+                                            <p className="text-gray-700 italic text-sm">"{personalMessage.message}"</p>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        )}
+                        
+                        <div className="flex justify-end gap-3 pt-4">
+                            <Button
+                                variant="outline"
+                                onClick={() => setShowPersonalMessage(false)}
+                                className="px-4 py-2"
+                            >
+                                Cancel
+                            </Button>
+                            <Button
+                                onClick={() => setShowPersonalMessage(false)}
+                                className="bg-gray-800 hover:bg-gray-900 text-white px-6 py-2"
+                            >
+                                Save Message
+                            </Button>
                         </div>
                     </div>
                 </DialogContent>
             </Dialog>
-        </div>
-    );
-}
 
-// Stripe Checkout Form Component
-function CheckoutForm({ 
-    onSuccess, 
-    onError, 
-    customerInfo, 
-    orderType,
-    deliveryType,
-    total,
-    subtotal,
-    deliveryFee,
-    cart,
-    tenant
-}: { 
-    onSuccess: () => void;
-    onError: (error: string) => void;
-    customerInfo: any;
-    orderType: string;
-    deliveryType?: string;
-    total: number;
-    subtotal: number;
-    deliveryFee: number;
-    cart: CartItem[];
-    tenant: string;
-}) {
-    const stripe = useStripe();
-    const elements = useElements();
-    const [isProcessing, setIsProcessing] = useState(false);
-
-    const handleSubmit = async (event: React.FormEvent) => {
-        event.preventDefault();
-
-        if (!stripe || !elements) {
-            return;
-        }
-
-        setIsProcessing(true);
-
-        try {
-            const { error, paymentIntent } = await stripe.confirmPayment({
-                elements,
-                confirmParams: {
-                    return_url: `${window.location.origin}/payment-success`,
-                    receipt_email: customerInfo.email,
-                },
-                redirect: 'if_required'
-            });
-
-            if (error) {
-                onError(error.message || 'Payment failed');
-            } else if (paymentIntent && paymentIntent.status === 'succeeded') {
-                // Confirm payment with backend
-                try {
-                    const confirmResponse = await fetch(`/api/tenant/${tenant}/payments/stripe`, {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                        },
-                        body: JSON.stringify({
-                            action: 'confirm_payment',
-                            paymentIntentId: paymentIntent.id
-                        })
-                    });
-
-                    if (confirmResponse.ok) {
-                        const confirmData = await confirmResponse.json();
-                        console.log('Payment confirmed:', confirmData);
-                        onSuccess();
-                    } else {
-                        const errorData = await confirmResponse.json();
-                        console.error('Payment confirmation failed:', errorData);
-                        throw new Error(errorData.error || 'Failed to confirm payment');
-                    }
-                } catch (confirmError) {
-                    console.error('Error confirming payment:', confirmError);
-                    // Payment succeeded but confirmation failed
-                    onError('Payment successful but confirmation failed. Please contact support with payment ID: ' + paymentIntent.id);
-                }
-            }
-        } catch (error) {
-            onError('An unexpected error occurred');
-        } finally {
-            setIsProcessing(false);
-        }
-    };
-
-    return (
-        <form onSubmit={handleSubmit} className="space-y-4">
-            <div className="p-4 border rounded-lg">
-                <PaymentElement />
             </div>
-            
-            <div className="bg-gray-50 p-4 rounded-lg space-y-2">
-                <div className="flex justify-between items-center">
-                    <span className="font-medium">Order Type:</span>
-                    <span className="capitalize">
-                        {orderType}
-                        {orderType === 'delivery' && deliveryType && ` (${deliveryType})`}
-                    </span>
-                </div>
-                <div className="flex justify-between items-center">
-                    <span className="font-medium">Customer:</span>
-                    <span>{customerInfo.name}</span>
-                </div>
-                <div className="border-t pt-2 space-y-1">
-                    <div className="flex justify-between items-center">
-                        <span>Subtotal:</span>
-                        <span>£{subtotal.toFixed(2)}</span>
-                    </div>
-                    {deliveryFee > 0 && (
-                        <div className="flex justify-between items-center text-sm text-gray-600">
-                            <span>Delivery Fee:</span>
-                            <span>£{deliveryFee.toFixed(2)}</span>
-                        </div>
-                    )}
-                    <div className="flex justify-between items-center font-bold text-lg border-t pt-1">
-                        <span>Total:</span>
-                        <span>£{total.toFixed(2)}</span>
-                    </div>
-                </div>
-            </div>
-
-            <Button
-                type="submit"
-                disabled={!stripe || isProcessing}
-                className="w-full"
-            >
-                {isProcessing ? (
-                    <>
-                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                        Processing Payment...
-                    </>
-                ) : (
-                    <>
-                        <CheckCircle className="w-4 h-4 mr-2" />
-                        Pay £{total.toFixed(2)}
-                    </>
-                )}
-            </Button>
-        </form>
+        </>
     );
 }

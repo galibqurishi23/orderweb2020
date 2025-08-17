@@ -51,6 +51,7 @@ const PaymentForm: React.FC<PaymentFormProps> = ({
     event.preventDefault();
 
     if (!stripe || !elements) {
+      setError('Payment system not ready. Please try again.');
       return;
     }
 
@@ -58,6 +59,12 @@ const PaymentForm: React.FC<PaymentFormProps> = ({
     setError(null);
 
     try {
+      // Validate elements before confirming
+      const { error: submitError } = await elements.submit();
+      if (submitError) {
+        throw new Error(submitError.message);
+      }
+
       // Confirm the payment
       const { error: confirmError, paymentIntent } = await stripe.confirmPayment({
         elements,
@@ -74,8 +81,11 @@ const PaymentForm: React.FC<PaymentFormProps> = ({
 
       if (paymentIntent && paymentIntent.status === 'succeeded') {
         onPaymentSuccess(paymentIntent.id);
+      } else if (paymentIntent) {
+        throw new Error(`Payment ${paymentIntent.status}. Please try again.`);
       }
     } catch (error) {
+      console.error('Payment error:', error);
       const errorMessage = error instanceof Error ? error.message : 'An unexpected error occurred';
       setError(errorMessage);
       onPaymentError(errorMessage);
@@ -109,10 +119,7 @@ const PaymentForm: React.FC<PaymentFormProps> = ({
               options={{
                 layout: "tabs",
                 fields: {
-                  billingDetails: {
-                    name: orderDetails.customerName ? 'never' : 'auto',
-                    email: orderDetails.customerEmail ? 'never' : 'auto',
-                  }
+                  billingDetails: 'auto'
                 }
               }}
             />
@@ -176,16 +183,31 @@ const StripePaymentProvider: React.FC<StripePaymentProviderProps> = ({
   useEffect(() => {
     const initializeStripe = async () => {
       try {
+        console.log('Initializing Stripe for tenant:', tenant);
+        
         // Get Stripe configuration
         const configResponse = await fetch(`/api/tenant/${tenant}/payments/stripe`);
         if (!configResponse.ok) {
           throw new Error('Failed to load Stripe configuration');
         }
         const config = await configResponse.json();
+        
+        console.log('Stripe config received:', { 
+          configured: config.configured, 
+          hasPublishableKey: !!config.publishableKey,
+          error: config.error 
+        });
+
+        // Check if Stripe is properly configured
+        if (!config.configured || !config.publishableKey) {
+          throw new Error(config.error || 'Stripe payment system not configured');
+        }
 
         // Initialize Stripe with publishable key
         const stripe = loadStripe(config.publishableKey);
         setStripePromise(stripe);
+
+        console.log('Creating payment intent for order:', orderDetails.orderId);
 
         // Create payment intent
         const paymentResponse = await fetch(`/api/tenant/${tenant}/payments/stripe`, {
@@ -200,13 +222,16 @@ const StripePaymentProvider: React.FC<StripePaymentProviderProps> = ({
         });
 
         if (!paymentResponse.ok) {
-          throw new Error('Failed to create payment intent');
+          const errorData = await paymentResponse.json();
+          throw new Error(errorData.error || 'Failed to create payment intent');
         }
 
         const paymentData = await paymentResponse.json();
+        console.log('Payment intent created:', paymentData.paymentIntentId);
         setClientSecret(paymentData.clientSecret);
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : 'Failed to initialize payment';
+        console.error('Stripe initialization error:', error);
         setError(errorMessage);
         onPaymentError(errorMessage);
       } finally {
@@ -260,6 +285,9 @@ const StripePaymentProvider: React.FC<StripePaymentProviderProps> = ({
   const options = {
     clientSecret,
     appearance,
+    fields: {
+      billingDetails: 'auto',
+    },
   };
 
   return (

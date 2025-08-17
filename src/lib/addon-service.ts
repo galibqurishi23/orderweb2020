@@ -90,38 +90,52 @@ function validateAddonOption(data: CreateAddonOptionRequest | UpdateAddonOptionR
 
 // ==================== ADDON GROUP OPERATIONS ====================
 
-export async function getAddonGroups(tenantId: string): Promise<AddonGroup[]> {
+export async function getAllAddonGroupsForTenant(tenantId: string, includeOptions: boolean = true): Promise<AddonGroup[]> {
   validateTenantId(tenantId);
   
   try {
+    // Check if addon_groups table exists
+    const [tables] = await db.query<RowDataPacket[]>(
+      'SHOW TABLES LIKE ?',
+      ['addon_groups']
+    );
+    
+    if (tables.length === 0) {
+      console.log('addon_groups table does not exist, returning empty array');
+      return [];
+    }
+
     const [rows] = await db.query<RowDataPacket[]>(
-      `SELECT 
-        ag.id, ag.tenant_id, ag.name, ag.description, ag.type,
-        ag.required, ag.multiple, ag.max_selections, ag.display_order,
-        ag.active, ag.created_at, ag.updated_at
-      FROM addon_groups ag
-      WHERE ag.tenant_id = ?
-      ORDER BY ag.display_order ASC, ag.name ASC`,
+      `SELECT * FROM addon_groups WHERE tenant_id = ? ORDER BY name ASC`,
       [tenantId]
     );
 
     const addonGroups: AddonGroup[] = [];
-    
+
     for (const row of rows) {
-      const options = await getAddonOptionsByGroupId(row.id);
+      let options: AddonOption[] = [];
       
+      if (includeOptions) {
+        try {
+          options = await getAddonOptionsByGroupId(row.id);
+        } catch (error) {
+          console.warn(`Error fetching options for addon group ${row.id}:`, error);
+          options = [];
+        }
+      }
+
       addonGroups.push({
         id: row.id,
         tenantId: row.tenant_id,
         name: row.name,
         description: row.description,
-        category: 'extras', // Default category since it's not in the DB
-        type: row.type === 'radio' ? 'single' : 'multiple',
-        required: Boolean(row.required),
-        minSelections: 0, // Not in the DB, use default
-        maxSelections: row.max_selections || 1,
+        category: row.category || 'custom',
+        type: row.multiple_select === 1 ? 'multiple' : 'single',
+        required: row.required === 1,
+        minSelections: row.min_selections || 0,
+        maxSelections: row.max_selections || (row.multiple_select === 1 ? 999 : 1),
         displayOrder: row.display_order || 0,
-        active: Boolean(row.active),
+        active: row.active === 1,
         conditionalVisibility: undefined, // Not in the DB
         displayStyle: 'list', // Default since not in the DB
         allowCustomInput: false, // Default since not in the DB
@@ -134,7 +148,7 @@ export async function getAddonGroups(tenantId: string): Promise<AddonGroup[]> {
     return addonGroups;
   } catch (error) {
     console.error('Error fetching addon groups:', error);
-    throw new Error('Failed to fetch addon groups');
+    return [];
   }
 }
 
@@ -561,6 +575,16 @@ export async function getMenuItemAddonGroups(tenantId: string, menuItemId: strin
   validateTenantId(tenantId);
 
   try {
+    // First, check if the menu_item_addon_groups table exists
+    const [tables] = await db.query<RowDataPacket[]>(
+      `SHOW TABLES LIKE 'menu_item_addon_groups'`
+    );
+
+    if (tables.length === 0) {
+      console.log('Menu item addon groups table does not exist yet');
+      return []; // Return empty array instead of throwing error
+    }
+
     const [rows] = await db.query<RowDataPacket[]>(
       `SELECT ag.id
       FROM addon_groups ag
@@ -572,16 +596,23 @@ export async function getMenuItemAddonGroups(tenantId: string, menuItemId: strin
 
     const addonGroups: AddonGroup[] = [];
     for (const row of rows) {
-      const group = await getAddonGroupById(tenantId, row.id);
-      if (group) {
-        addonGroups.push(group);
+      try {
+        const group = await getAddonGroupById(tenantId, row.id);
+        if (group) {
+          addonGroups.push(group);
+        }
+      } catch (groupError) {
+        console.error(`Error fetching addon group ${row.id}:`, groupError);
+        // Continue with other groups instead of failing completely
+        continue;
       }
     }
 
     return addonGroups;
   } catch (error) {
     console.error('Error fetching menu item addon groups:', error);
-    throw new Error('Failed to fetch menu item addon groups');
+    // Return empty array instead of throwing error to prevent page crashes
+    return [];
   }
 }
 

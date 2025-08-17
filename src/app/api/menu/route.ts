@@ -11,7 +11,9 @@ import {
     updateMenuItem,
     deleteMenuItem,
     getMenuWithCategories,
-    getMenuStats
+    getMenuStats,
+    reorderCategories,
+    reorderMenuItems
 } from '@/lib/new-menu-service';
 import { getTenantBySlug } from '@/lib/tenant-service';
 import { MenuApiResponse } from '@/lib/menu-types';
@@ -208,6 +210,16 @@ export async function PUT(request: NextRequest): Promise<NextResponse> {
             case 'update-menu-item':
                 const updatedMenuItem = await updateMenuItem(tenantUUID, requestBody);
                 return createSuccessResponse(updatedMenuItem, 'Menu item updated successfully');
+
+            case 'reorder_categories':
+                const { categoryIds } = requestBody;
+                await reorderCategories(tenantUUID, categoryIds);
+                return createSuccessResponse(null, 'Categories reordered successfully');
+
+            case 'reorder_items':
+                const { itemIds, categoryId } = requestBody;
+                await reorderMenuItems(tenantUUID, itemIds, categoryId);
+                return createSuccessResponse(null, 'Menu items reordered successfully');
 
             default:
                 return createErrorResponse('Invalid action specified', 400);

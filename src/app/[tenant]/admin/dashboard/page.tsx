@@ -105,19 +105,22 @@ export default function AdminDashboard({ params }: { params: Promise<{ tenant: s
   }
 
   return (
-    <div className="p-6 space-y-6">
-      {/* LICENSE BLOCKING REMOVED - Admin dashboard always accessible */}
-
-      <div className="flex items-center justify-between">
+    <div className="space-y-8 h-full">
+      {/* Professional Header Section */}
+      <div className="flex items-center justify-between border-b border-gray-200 pb-6">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
-          <p className="text-muted-foreground">
+          <h1 className="text-3xl font-bold text-gray-900">Dashboard</h1>
+          <p className="text-gray-600 mt-1">
             Welcome back! Here's what's happening at {tenantData.name}.
           </p>
         </div>
-        <div className="flex items-center space-x-2">
+        <div className="flex items-center space-x-3">
+          <Button variant="outline" size="sm" className="h-9">
+            <BarChart3 className="h-4 w-4 mr-2" />
+            View Reports
+          </Button>
           <Link href={`/${tenantData.slug}/admin/settings`}>
-            <Button variant="outline" size="sm">
+            <Button variant="outline" size="sm" className="h-9">
               <Settings className="h-4 w-4 mr-2" />
               Settings
             </Button>
@@ -125,92 +128,98 @@ export default function AdminDashboard({ params }: { params: Promise<{ tenant: s
         </div>
       </div>
 
-      {/* Stats Grid */}
+      {/* Enhanced Stats Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         {/* Today's Revenue */}
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Today's Revenue</CardTitle>
-            <Banknote className="h-4 w-4 text-muted-foreground" />
+        <Card className="border border-gray-200 shadow-sm hover:shadow-md transition-shadow">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
+            <CardTitle className="text-sm font-semibold text-gray-700">Today's Revenue</CardTitle>
+            <div className="w-10 h-10 bg-green-50 rounded-lg flex items-center justify-center">
+              <Banknote className="h-5 w-5 text-green-600" />
+            </div>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">
+            <div className="text-3xl font-bold text-gray-900 mb-1">
               {loading ? (
                 <div className="h-8 w-20 bg-gray-200 animate-pulse rounded" />
               ) : (
                 `£${stats?.todayRevenue?.toFixed(2) ?? '0.00'}`
               )}
             </div>
-            <p className="text-xs text-muted-foreground">
+            <p className="text-sm text-gray-500">
               From today's orders
             </p>
           </CardContent>
         </Card>
 
         {/* Today's Orders */}
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Today's Orders</CardTitle>
-            <ShoppingCart className="h-4 w-4 text-muted-foreground" />
+        <Card className="border border-gray-200 shadow-sm hover:shadow-md transition-shadow">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
+            <CardTitle className="text-sm font-semibold text-gray-700">Today's Orders</CardTitle>
+            <div className="w-10 h-10 bg-blue-50 rounded-lg flex items-center justify-center">
+              <ShoppingCart className="h-5 w-5 text-blue-600" />
+            </div>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">
+            <div className="text-3xl font-bold text-gray-900 mb-1">
               {loading ? (
-                <div className="h-8 w-12 bg-gray-200 animate-pulse rounded" />
+                <div className="h-8 w-16 bg-gray-200 animate-pulse rounded" />
               ) : (
-                stats?.todayOrders ?? 0
+                stats?.todayOrders ?? '0'
               )}
             </div>
-            <p className="text-xs text-muted-foreground">
+            <p className="text-sm text-gray-500">
               Orders placed today
             </p>
           </CardContent>
         </Card>
 
         {/* Pending Orders */}
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Pending Orders</CardTitle>
-            <Clock className="h-4 w-4 text-muted-foreground" />
+        <Card className="border border-gray-200 shadow-sm hover:shadow-md transition-shadow">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
+            <CardTitle className="text-sm font-semibold text-gray-700">Pending Orders</CardTitle>
+            <div className="w-10 h-10 bg-orange-50 rounded-lg flex items-center justify-center">
+              <Clock className="h-5 w-5 text-orange-600" />
+            </div>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">
+            <div className="text-3xl font-bold text-gray-900 mb-1">
               {loading ? (
-                <div className="h-8 w-8 bg-gray-200 animate-pulse rounded" />
+                <div className="h-8 w-16 bg-gray-200 animate-pulse rounded" />
               ) : (
-                stats?.pendingOrders ?? 0
+                stats?.pendingOrders ?? '0'
               )}
             </div>
-            <p className="text-xs text-muted-foreground">
-              Awaiting preparation
+            <p className="text-sm text-gray-500">
+              Orders awaiting preparation
             </p>
           </CardContent>
         </Card>
 
-        {/* Total Customers - Always show (license checks removed) */}
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Customers</CardTitle>
-            <Users className="h-4 w-4 text-muted-foreground" />
+        {/* Total Customers */}
+        <Card className="border border-gray-200 shadow-sm hover:shadow-md transition-shadow">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
+            <CardTitle className="text-sm font-semibold text-gray-700">Total Customers</CardTitle>
+            <div className="w-10 h-10 bg-purple-50 rounded-lg flex items-center justify-center">
+              <Users className="h-5 w-5 text-purple-600" />
+            </div>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">
+            <div className="text-3xl font-bold text-gray-900 mb-1">
               {loading ? (
                 <div className="h-8 w-16 bg-gray-200 animate-pulse rounded" />
               ) : (
-                stats?.totalCustomers ?? 0
+                stats?.totalCustomers ?? '0'
               )}
             </div>
-            <p className="text-xs text-muted-foreground">
-              Registered users
+            <p className="text-sm text-gray-500">
+              Registered customers
             </p>
           </CardContent>
         </Card>
       </div>
 
-      {/* LICENSE RENEWAL MODAL REMOVED */}
-
-      {/* Quick Actions */}
+      {/* Professional Quick Actions Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         <Card>
           <CardHeader>

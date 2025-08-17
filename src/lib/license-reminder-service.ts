@@ -25,7 +25,7 @@ interface ReminderSettings {
 }
 
 export class LicenseReminderService {
-  private defaultReminderDays = [7, 3, 1]; // Days before expiry
+  private defaultReminderDays = [3, 2, 1]; // Days before expiry
 
   async setupReminders(licenseId: string, expiresAt: Date) {
     try {
@@ -198,7 +198,7 @@ export class LicenseReminderService {
                 <h3>What happens next?</h3>
                 <ul>
                     <li>Your current license will expire on ${expiryDate}</li>
-                    <li>You have a 7-day grace period after expiration</li>
+                    <li>You have a 2-day grace period after expiration</li>
                     <li>During the grace period, your service will continue but with limitations</li>
                     <li>After the grace period, your service will be suspended</li>
                 </ul>

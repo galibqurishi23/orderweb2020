@@ -29,8 +29,8 @@ import {
   Key,
   AlertTriangle,
   CheckCircle,
-  Info,
   Loader2,
+  Info,
   Building,
   Server
 } from 'lucide-react';
@@ -83,6 +83,13 @@ interface SMTPSettings {
   password: string;
   from: string;
   testEmail: string;
+}
+
+interface StripeSettings {
+  publishableKey: string;
+  secretKey: string;
+  mode: 'test' | 'live';
+  webhookSecret: string;
 }
 
 export default function SuperAdminSettings() {
@@ -145,12 +152,21 @@ export default function SuperAdminSettings() {
     testEmail: '',
   });
 
+  const [stripeSettings, setStripeSettings] = useState<StripeSettings>({
+    publishableKey: '',
+    secretKey: '',
+    mode: 'test',
+    webhookSecret: '',
+  });
+
   const [isTestingEmail, setIsTestingEmail] = useState(false);
+  const [isTestingStripe, setIsTestingStripe] = useState(false);
 
   useEffect(() => {
     loadSettings();
     loadSystemStatus();
     loadSmtpSettings();
+    loadStripeSettings();
   }, []);
 
   const loadSettings = async () => {
@@ -286,6 +302,94 @@ export default function SuperAdminSettings() {
       });
     } finally {
       setIsTestingEmail(false);
+    }
+  };
+
+  const loadStripeSettings = async () => {
+    try {
+      const response = await fetch('/api/super-admin/stripe-settings');
+      if (response.ok) {
+        const data = await response.json();
+        setStripeSettings({
+          publishableKey: data.publishableKey || '',
+          secretKey: data.secretKey || '',
+          mode: data.mode || 'test',
+          webhookSecret: data.webhookSecret || '',
+        });
+      }
+    } catch (error) {
+      console.error('Failed to load Stripe settings:', error);
+    }
+  };
+
+  const saveStripeSettings = async () => {
+    setIsLoading(true);
+    try {
+      const response = await fetch('/api/super-admin/stripe-settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(stripeSettings)
+      });
+
+      if (response.ok) {
+        toast({
+          title: 'Stripe Settings Saved',
+          description: 'Payment configuration has been updated successfully',
+        });
+      } else {
+        const error = await response.json();
+        throw new Error(error.error || 'Failed to save Stripe settings');
+      }
+    } catch (error) {
+      toast({
+        variant: 'destructive',
+        title: 'Save Failed',
+        description: error instanceof Error ? error.message : 'Failed to save Stripe settings',
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const testStripeConnection = async () => {
+    if (!stripeSettings.secretKey) {
+      toast({
+        variant: 'destructive',
+        title: 'Missing Secret Key',
+        description: 'Please enter your Stripe secret key before testing',
+      });
+      return;
+    }
+
+    setIsTestingStripe(true);
+    try {
+      const response = await fetch('/api/super-admin/stripe-settings/test', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          secretKey: stripeSettings.secretKey,
+          publishableKey: stripeSettings.publishableKey 
+        })
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        toast({
+          title: 'Stripe Connection Successful',
+          description: `Connected to account: ${result.accountId}`,
+        });
+      } else {
+        const error = await response.json();
+        throw new Error(error.error || 'Failed to connect to Stripe');
+      }
+    } catch (error) {
+      toast({
+        variant: 'destructive',
+        title: 'Connection Failed',
+        description: error instanceof Error ? error.message : 'Failed to connect to Stripe',
+      });
+    } finally {
+      setIsTestingStripe(false);
     }
   };
 
@@ -535,7 +639,7 @@ export default function SuperAdminSettings() {
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-        <TabsList className="grid w-full grid-cols-6">
+        <TabsList className="grid w-full grid-cols-7">
           <TabsTrigger value="general" className="flex items-center gap-2">
             <Building className="h-4 w-4" />
             General
@@ -543,6 +647,10 @@ export default function SuperAdminSettings() {
           <TabsTrigger value="branding" className="flex items-center gap-2">
             <Palette className="h-4 w-4" />
             Branding
+          </TabsTrigger>
+          <TabsTrigger value="payments" className="flex items-center gap-2">
+            <Key className="h-4 w-4" />
+            Payments
           </TabsTrigger>
           <TabsTrigger value="smtp" className="flex items-center gap-2">
             <Mail className="h-4 w-4" />
@@ -794,6 +902,186 @@ export default function SuperAdminSettings() {
                       />
                     </div>
                   </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* Payments Settings */}
+        <TabsContent value="payments" className="space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Key className="h-5 w-5" />
+                Stripe Configuration
+              </CardTitle>
+              <CardDescription>
+                Configure Stripe payment gateway settings for processing payments across all restaurants
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="stripe_mode">Payment Mode</Label>
+                    <Select 
+                      value={stripeSettings.mode} 
+                      onValueChange={(value: 'test' | 'live') => 
+                        setStripeSettings(prev => ({ ...prev, mode: value }))
+                      }
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select payment mode" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="test">Test Mode</SelectItem>
+                        <SelectItem value="live">Live Mode</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <p className="text-sm text-gray-500">
+                      Test mode for development, Live mode for production
+                    </p>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="stripe_publishable_key">Publishable Key</Label>
+                    <Input
+                      id="stripe_publishable_key"
+                      type="text"
+                      placeholder="pk_test_... or pk_live_..."
+                      value={stripeSettings.publishableKey}
+                      onChange={(e) => setStripeSettings(prev => ({ 
+                        ...prev, 
+                        publishableKey: e.target.value 
+                      }))}
+                    />
+                    <p className="text-sm text-gray-500">
+                      Your Stripe publishable key (visible to clients)
+                    </p>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="stripe_secret_key">Secret Key</Label>
+                    <Input
+                      id="stripe_secret_key"
+                      type="password"
+                      placeholder="sk_test_... or sk_live_..."
+                      value={stripeSettings.secretKey}
+                      onChange={(e) => setStripeSettings(prev => ({ 
+                        ...prev, 
+                        secretKey: e.target.value 
+                      }))}
+                    />
+                    <p className="text-sm text-gray-500">
+                      Your Stripe secret key (keep secure, server-side only)
+                    </p>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="stripe_webhook_secret">Webhook Secret</Label>
+                    <Input
+                      id="stripe_webhook_secret"
+                      type="password"
+                      placeholder="whsec_..."
+                      value={stripeSettings.webhookSecret}
+                      onChange={(e) => setStripeSettings(prev => ({ 
+                        ...prev, 
+                        webhookSecret: e.target.value 
+                      }))}
+                    />
+                    <p className="text-sm text-gray-500">
+                      Webhook endpoint secret for secure event processing
+                    </p>
+                  </div>
+                </div>
+
+                <div className="space-y-4">
+                  <div className="bg-gray-50 rounded-lg p-4 border">
+                    <h4 className="font-medium text-gray-900 mb-2">Current Configuration</h4>
+                    <div className="space-y-2 text-sm">
+                      <div className="flex justify-between">
+                        <span>Mode:</span>
+                        <Badge variant={stripeSettings.mode === 'live' ? 'default' : 'secondary'}>
+                          {stripeSettings.mode === 'live' ? 'Live' : 'Test'}
+                        </Badge>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>Publishable Key:</span>
+                        <span className="font-mono text-xs">
+                          {stripeSettings.publishableKey ? 
+                            `${stripeSettings.publishableKey.substring(0, 12)}...` : 
+                            'Not configured'
+                          }
+                        </span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>Secret Key:</span>
+                        <span className="font-mono text-xs">
+                          {stripeSettings.secretKey ? 
+                            `${stripeSettings.secretKey.substring(0, 12)}...` : 
+                            'Not configured'
+                          }
+                        </span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>Webhook:</span>
+                        <span className="font-mono text-xs">
+                          {stripeSettings.webhookSecret ? 
+                            'Configured' : 
+                            'Not configured'
+                          }
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="space-y-3">
+                    <Button
+                      onClick={testStripeConnection}
+                      disabled={isTestingStripe || !stripeSettings.secretKey}
+                      variant="outline"
+                      className="w-full"
+                    >
+                      {isTestingStripe ? (
+                        <>
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          Testing Connection...
+                        </>
+                      ) : (
+                        <>
+                          <CheckCircle className="mr-2 h-4 w-4" />
+                          Test Stripe Connection
+                        </>
+                      )}
+                    </Button>
+
+                    <Button
+                      onClick={saveStripeSettings}
+                      disabled={isLoading}
+                      className="w-full"
+                    >
+                      {isLoading ? (
+                        <>
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          Saving...
+                        </>
+                      ) : (
+                        <>
+                          <Save className="mr-2 h-4 w-4" />
+                          Save Stripe Settings
+                        </>
+                      )}
+                    </Button>
+                  </div>
+
+                  <Alert>
+                    <AlertTriangle className="h-4 w-4" />
+                    <AlertDescription>
+                      <strong>Important:</strong> These settings apply to all restaurants on the platform. 
+                      Restaurants will configure their individual Connect Account IDs in their admin panels.
+                    </AlertDescription>
+                  </Alert>
                 </div>
               </div>
             </CardContent>
